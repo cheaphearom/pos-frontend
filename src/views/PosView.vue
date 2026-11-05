@@ -17,6 +17,7 @@ import { PricingError, priceCart, pointsValue } from '@/pos/pricing';
 import { applyPromotions, type PromoRule } from '@shared/promotions';
 import { enqueue, loadQueue, queue, removeFromQueue, retryQueued, syncingQueue, syncQueue } from '@/pos/queue';
 import { uuid } from '@/pos/uuid';
+import { displayChannel, openDisplayWindow, type DisplayState, type PaymentProgress } from '@/pos/display';
 import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
 import { dateTime, money, qty } from '@/utils/format';
@@ -283,6 +284,7 @@ async function complete(payments: { method: string; amount: number; reference?: 
 
     cart.lines.forEach((l) => catalog.deduct(l.productId, l.quantity));
     receipt.value = sale;
+    showDone(sale);
     payment.value = false;
     receiptDlg.value = true;
     Object.assign(cart, newCart());
@@ -322,6 +324,61 @@ function printReceipt() {
 function nextSale() {
   receiptDlg.value = false;
   focusSearch();
+}
+
+// ───────────── Customer display (second screen) ─────────────
+const display = displayChannel(app.currentStoreId!);
+const displayConnected = ref(false);
+const payProgress = ref<PaymentProgress | null>(null);
+const doneInfo = ref<DisplayState['done']>(null);
+let doneTimer: ReturnType<typeof setTimeout> | undefined;
+
+function showDone(sale: any) {
+  const paid = (sale.payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+  doneInfo.value = {
+    total: Number(sale.amountDue ?? sale.total), paid, change: Number(sale.changeDue ?? 0),
+    receiptNo: sale.receiptNo, pointsEarned: sale.pointsEarned ?? 0, offline: !!sale.offline,
+  };
+  clearTimeout(doneTimer);
+  doneTimer = setTimeout(() => (doneInfo.value = null), 20_000); // back to the welcome screen
+}
+
+const displayState = computed<DisplayState>(() => {
+  const t = totals.value;
+  const base = {
+    store: { name: store.value?.name ?? '', currency: cur.value },
+    cashier: auth.user?.fullName,
+    customer: cart.customer ? { name: cart.customer.name, points: cart.customer.points } : null,
+    lines: cart.lines.map((l, i) => ({
+      name: l.name, quantity: l.quantity, unit: l.unit, price: Number(l.price),
+      total: t?.lines[i]?.total ?? 0, promo: promos.value[i]?.discount ? `${promos.value[i].name} −${m(promos.value[i].discount)}` : null,
+    })),
+    totals: { subtotal: t?.subtotal ?? 0, discount: t?.discountTotal ?? 0, tax: t?.taxTotal ?? 0, points: pointsDiscount.value, total: amountDue.value, items: itemCount.value },
+  };
+  if (doneInfo.value && !cart.lines.length) return { ...base, mode: 'done', done: doneInfo.value };
+  if (payment.value && payProgress.value) return { ...base, mode: 'pay', payment: payProgress.value };
+  return { ...base, mode: cart.lines.length ? 'cart' : 'idle' };
+});
+
+watch(displayState, (state) => display.send({ type: 'state', state }), { deep: true });
+watch(() => cart.lines.length, (n) => n && (doneInfo.value = null));
+let displaySeen = 0;
+display.onMessage((msg) => {
+  if (msg.type === 'hello' || msg.type === 'ping') {
+    if (msg.type === 'hello' || !displayConnected.value) display.send({ type: 'state', state: displayState.value });
+    displayConnected.value = true;
+    displaySeen = Date.now();
+  } else if (msg.type === 'bye') displayConnected.value = false;
+});
+// No heartbeat for 10 s = the display window was closed or crashed.
+const displayWatch = setInterval(() => {
+  if (displayConnected.value && Date.now() - displaySeen > 10_000) displayConnected.value = false;
+}, 2000);
+display.send({ type: 'hello' }); // ask an already-open display to say hello back
+
+async function openDisplay() {
+  const w = await openDisplayWindow(app.currentStoreId!);
+  if (!w) notify.error('The browser blocked the window. Allow pop-ups for this site and try again.');
 }
 
 // ───────────── Offline queue panel ─────────────
@@ -382,6 +439,9 @@ onMounted(async () => {
   window.addEventListener('keydown', onKey);
 });
 onBeforeUnmount(() => {
+  display.close();
+  clearInterval(displayWatch);
+  clearTimeout(doneTimer);
   clearInterval(syncTimer);
   clearInterval(clock);
   window.removeEventListener('keydown', onKey);
@@ -407,6 +467,7 @@ async function logout() {
       <div class="spacer" />
       <Tag v-if="!online" severity="danger" icon="pi pi-wifi" value="OFFLINE" />
       <Tag v-else severity="success" value="Online" />
+      <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
       <Button v-if="shift" :label="'Shift since ' + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" text @click="router.push(`/shifts?open=${shift.id}`)" />
       <Button v-else label="Open shift" icon="pi pi-play" size="small" @click="shiftDlg = true" :disabled="!online" />
@@ -498,7 +559,7 @@ async function logout() {
       </section>
     </div>
 
-    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" :store-id="app.currentStoreId!" :khqr-enabled="!!(store as any)?.khqrAccountId" @pay="complete" />
+    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" :store-id="app.currentStoreId!" :khqr-enabled="!!(store as any)?.khqrAccountId" @pay="complete" @progress="payProgress = $event" />
 
     <!-- Receipt after sale -->
     <Dialog v-model:visible="receiptDlg" header="Sale complete" modal :style="{ width: '420px' }" :breakpoints="{ '480px': '100vw' }" @hide="focusSearch">

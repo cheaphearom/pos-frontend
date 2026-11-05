@@ -18,6 +18,8 @@ const A: Role[] = ['SUPER_ADMIN'];
 
 const routes: RouteRecordRaw[] = [
   { path: '/login', component: () => import('./views/LoginView.vue'), meta: { public: true, title: 'Log in' } },
+  // Customer-facing second screen: only listens to the POS window, so no login needed.
+  { path: '/display', component: () => import('./views/CustomerDisplayView.vue'), meta: { public: true, title: 'Customer display' } },
   { path: '/pos', component: () => import('./views/PosView.vue'), meta: { title: 'POS' } },
   {
     path: '/',

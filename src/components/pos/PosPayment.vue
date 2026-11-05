@@ -4,12 +4,13 @@ import QRCode from 'qrcode';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '@/api/client';
 import { useNotify } from '@/composables/useNotify';
+import type { PaymentProgress } from '@/pos/display';
 import { online } from '@/pos/network';
 import { humanize, money } from '@/utils/format';
 
 const props = defineProps<{ amountDue: number; currency: string; busy: boolean; storeId: string; khqrEnabled: boolean }>();
 const notify = useNotify();
-const emit = defineEmits<{ pay: [{ method: string; amount: number; reference?: string }[]] }>();
+const emit = defineEmits<{ pay: [{ method: string; amount: number; reference?: string }[]]; progress: [PaymentProgress | null] }>();
 const visible = defineModel<boolean>('visible', { default: false });
 
 const METHODS = [
@@ -144,6 +145,20 @@ const nonCashError = computed(
 function finish() {
   if (done.value && !props.busy) emit('pay', payments.value);
 }
+
+// Tell the POS (and so the customer display) what is happening in this dialog.
+watch(
+  () => [visible.value, paid.value, remaining.value, change.value, khqr.value?.md5, khqr.value?.status],
+  () => {
+    if (!visible.value) return emit('progress', null);
+    const k = khqr.value;
+    emit('progress', {
+      paid: paid.value, remaining: remaining.value, change: change.value,
+      khqr: k ? { qr: k.qr, amount: k.amount, expiresAt: k.expiresAt, status: k.status } : null,
+    });
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
