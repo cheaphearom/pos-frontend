@@ -8,7 +8,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { api, ApiError } from '@/api/client';
-import PosPayment from '@/components/pos/PosPayment.vue';
+import PosPayment, { type WalletCardInfo } from '@/components/pos/PosPayment.vue';
 import PosReceipt from '@/components/pos/PosReceipt.vue';
 import { useNotify } from '@/composables/useNotify';
 import { useCatalog, type CatalogItem } from '@/pos/catalog';
@@ -20,7 +20,7 @@ import { uuid } from '@/pos/uuid';
 import { displayChannel, openDisplayWindow, type DisplayState, type PaymentProgress } from '@/pos/display';
 import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
-import { dateTime, money, qty } from '@/utils/format';
+import { cardShort, dateTime, humanize, money, qty } from '@/utils/format';
 
 const app = useApp();
 const auth = useAuth();
@@ -39,6 +39,7 @@ interface Cart {
   startedAt: string;
   lines: Line[];
   customer: { id: string; name: string; code: string; phone: string | null; points: number } | null;
+  wallet?: WalletCardInfo | null;
   redeemPoints: number;
   discount: number;
   discountPercent: number;
@@ -46,7 +47,7 @@ interface Cart {
 }
 const CART_KEY = `pos.cart:${app.currentStoreId}`;
 const HELD_KEY = `pos.held:${app.currentStoreId}`;
-const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, redeemPoints: 0, discount: 0, discountPercent: 0, note: '' });
+const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, wallet: null, redeemPoints: 0, discount: 0, discountPercent: 0, note: '' });
 const readJson = <T,>(k: string, d: T): T => {
   try { return JSON.parse(localStorage.getItem(k) ?? '') ?? d; } catch { return d; }
 };
@@ -141,7 +142,74 @@ function onSearchEnter() {
   if (hit) {
     addProduct(hit, q);
     search.value = '';
+  } else if (/^\d{12,19}$/.test(code)) {
+    search.value = '';
+    scanWallet(code); // not a product: maybe a wallet card
   } else notify.error(`No product with code "${code}"`);
+}
+
+// ───────────── Wallet cards ─────────────
+async function scanWallet(code: string) {
+  if (!online.value) return notify.error('Wallet cards need an internet connection');
+  try {
+    const card = await api.get('/wallet/cards/lookup', { code });
+    if (card.status === 'INACTIVE') return startActivate(card);
+    if (card.status !== 'ACTIVE') return notify.error(`Wallet card ${cardShort(card.cardNumber)} is ${card.status.toLowerCase()}`);
+    attachWallet(card);
+    notify.success(`Wallet ${cardShort(card.cardNumber)}`, `${card.customer?.name ?? ''} · balance ${m(card.balance)}`);
+  } catch (e) {
+    notify.error(e instanceof ApiError && e.status === 404 ? `No product or wallet card with code "${code}"` : e);
+  }
+}
+function attachWallet(card: any) {
+  cart.wallet = { cardNumber: card.cardNumber, balance: card.balance, hasPin: card.hasPin, status: card.status, customer: card.customer };
+  if (card.customer) cart.customer = { id: card.customer.id, name: card.customer.name, code: card.customer.code, phone: card.customer.phone, points: card.customer.points };
+}
+
+// Activate a new card at the till
+const actDlg = ref(false);
+const act = reactive({ card: null as any, serial: '', name: '', phone: '', pin: '', busy: false });
+function startActivate(card: any) {
+  Object.assign(act, { card, serial: '', name: '', phone: '', pin: '', busy: false });
+  actDlg.value = true;
+}
+async function doActivate() {
+  act.busy = true;
+  try {
+    const card = await api.post(`/wallet/cards/${act.card.id}/activate`, { serialNumber: act.serial, name: act.name, phone: act.phone || undefined, pin: act.pin || undefined });
+    attachWallet(card);
+    actDlg.value = false;
+    notify.success('Card activated', `${card.customer?.name}. Top it up to use it.`);
+    openTopup(card);
+  } catch (e) { notify.error(e); } finally { act.busy = false; }
+}
+
+// Top up
+const topDlg = ref(false);
+const top = reactive({ code: '', card: null as any, amount: 10, method: 'CASH', reference: '', clientRef: '', busy: false });
+function openTopup(card?: any) {
+  if (!online.value) return notify.error('Top-ups need an internet connection');
+  if (!shift.value) { shiftDlg.value = true; return; } // the cash goes into this shift's drawer
+  Object.assign(top, { code: '', card: card ?? (cart.wallet ? { ...cart.wallet } : null), amount: 10, method: 'CASH', reference: '', clientRef: uuid(), busy: false });
+  topDlg.value = true;
+}
+async function findTopupCard() {
+  try {
+    const c = await api.get('/wallet/cards/lookup', { code: top.code.trim() });
+    if (c.status === 'INACTIVE') { topDlg.value = false; return startActivate(c); }
+    top.card = c;
+  } catch (e) { notify.error(e); }
+}
+async function doTopup() {
+  top.busy = true;
+  try {
+    const id = top.card.id ?? (await api.get('/wallet/cards/lookup', { code: top.card.cardNumber })).id;
+    const r = await api.post(`/wallet/cards/${id}/topup`, { storeId: app.currentStoreId, amount: top.amount, method: top.method, reference: top.reference || undefined, clientRef: top.clientRef });
+    if (cart.wallet && cart.wallet.cardNumber === r.card.cardNumber) cart.wallet.balance = r.card.balance;
+    topDlg.value = false;
+    notify.success(`Topped up ${m(top.amount)}`, `New balance ${m(r.card.balance)}`);
+    focusSearch();
+  } catch (e) { notify.error(e); } finally { top.busy = false; }
 }
 
 // ───────────── Customer & loyalty ─────────────
@@ -467,6 +535,7 @@ async function logout() {
       <div class="spacer" />
       <Tag v-if="!online" severity="danger" icon="pi pi-wifi" value="OFFLINE" />
       <Tag v-else severity="success" value="Online" />
+      <Button icon="pi pi-wallet" label="Top up" size="small" text :disabled="!online" v-tooltip.bottom="'Top up a wallet card'" @click="openTopup()" />
       <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
       <Button v-if="shift" :label="'Shift since ' + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" text @click="router.push(`/shifts?open=${shift.id}`)" />
@@ -510,8 +579,9 @@ async function logout() {
             <div style="flex: 1; min-width: 0">
               <b>{{ cart.customer.name }}</b>
               <div class="small muted">{{ cart.customer.code }} · {{ cart.customer.points }} points</div>
+              <div v-if="cart.wallet" class="small wallet-line"><i class="pi pi-wallet" /> {{ cardShort(cart.wallet.cardNumber) }} · {{ m(cart.wallet.balance) }}</div>
             </div>
-            <Button icon="pi pi-times" text rounded size="small" aria-label="Remove customer" @click="cart.customer = null; cart.redeemPoints = 0" />
+            <Button icon="pi pi-times" text rounded size="small" aria-label="Remove customer" @click="cart.customer = null; cart.wallet = null; cart.redeemPoints = 0" />
           </template>
           <Button v-else label="Add member (F4)" icon="pi pi-user-plus" text size="small" @click="custDlg = true" />
         </div>
@@ -559,7 +629,7 @@ async function logout() {
       </section>
     </div>
 
-    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" :store-id="app.currentStoreId!" :khqr-enabled="!!(store as any)?.khqrAccountId" @pay="complete" @progress="payProgress = $event" />
+    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" :store-id="app.currentStoreId!" :khqr-enabled="!!(store as any)?.khqrAccountId" :wallet-card="cart.wallet" @pay="complete" @progress="payProgress = $event" />
 
     <!-- Receipt after sale -->
     <Dialog v-model:visible="receiptDlg" header="Sale complete" modal :style="{ width: '420px' }" :breakpoints="{ '480px': '100vw' }" @hide="focusSearch">
@@ -641,6 +711,45 @@ async function logout() {
       </form>
     </Dialog>
 
+    <!-- Wallet: activate -->
+    <Dialog v-model:visible="actDlg" header="New wallet card" modal :style="{ width: '440px' }">
+      <form v-if="act.card" class="form" @submit.prevent="doActivate">
+        <Message severity="info" :closable="false">Card <span class="mono">{{ cardShort(act.card.cardNumber) }}</span> is not activated yet.</Message>
+        <div class="field"><label>Serial number on the back *</label><InputText v-model="act.serial" required autofocus /></div>
+        <div class="form-2">
+          <div class="field"><label>Customer name *</label><InputText v-model="act.name" required /></div>
+          <div class="field"><label>Phone</label><InputText v-model="act.phone" /></div>
+        </div>
+        <div class="field"><label>PIN (optional, 4-6 digits)</label><InputText v-model="act.pin" inputmode="numeric" maxlength="6" placeholder="The customer types it" /></div>
+        <Button type="submit" label="Activate card" icon="pi pi-check" :loading="act.busy" />
+      </form>
+    </Dialog>
+
+    <!-- Wallet: top up -->
+    <Dialog v-model:visible="topDlg" header="Top up wallet card" modal :style="{ width: '460px' }" @hide="focusSearch">
+      <form class="form" @submit.prevent="top.card ? doTopup() : findTopupCard()">
+        <template v-if="!top.card">
+          <div class="field"><label>Scan the wallet card</label><InputText v-model="top.code" autofocus placeholder="Card number" /></div>
+          <Button type="submit" label="Find card" icon="pi pi-search" />
+        </template>
+        <template v-else>
+          <div class="wallet-box row" style="justify-content: space-between">
+            <span><b>{{ top.card.customer?.name ?? 'Wallet card' }}</b> <span class="mono muted">{{ cardShort(top.card.cardNumber) }}</span></span>
+            <span>Balance <b>{{ m(top.card.balance) }}</b></span>
+          </div>
+          <div class="field"><label>Amount</label><InputNumber v-model="top.amount" :min="0.01" :min-fraction-digits="2" fluid autofocus /></div>
+          <div class="row" style="flex-wrap: wrap"><Button v-for="a in [5, 10, 20, 50, 100]" :key="a" :label="m(a)" size="small" severity="secondary" outlined @click="top.amount = a" /></div>
+          <div class="field"><label>Customer pays by</label><SelectButton v-model="top.method" :options="['CASH', 'KHQR', 'CARD', 'BANK_TRANSFER']" :option-label="(o: string) => humanize(o)" :allow-empty="false" /></div>
+          <div v-if="top.method !== 'CASH'" class="field"><label>Reference (after checking the payment)</label><InputText v-model="top.reference" /></div>
+          <div class="row" style="justify-content: space-between">
+            <Button label="Other card" text severity="secondary" @click="top.card = null" />
+            <Button type="submit" :label="`Top up ${m(top.amount)}`" icon="pi pi-check" :loading="top.busy" />
+          </div>
+          <small class="muted">New balance will be {{ m(Number(top.card.balance) + (top.amount || 0)) }}</small>
+        </template>
+      </form>
+    </Dialog>
+
     <!-- Offline queue -->
     <Dialog v-model:visible="queueDlg" header="Sales waiting to upload" modal :style="{ width: '560px' }" :breakpoints="{ '640px': '100vw' }">
       <p class="muted" style="margin-top: 0">These sales were made offline and are saved on this device. They upload automatically when the internet is back.</p>
@@ -690,6 +799,7 @@ async function logout() {
 .line.sel { background: color-mix(in srgb, var(--p-primary-color) 7%, transparent); }
 .ln-name { font-weight: 600; line-height: 1.25; }
 .promo { color: var(--p-primary-color); font-weight: 600; margin-top: 2px; }
+.wallet-line { color: var(--p-primary-color); font-weight: 600; }
 .qty { display: flex; align-items: center; gap: 4px; }
 .qty button, .ln-edit { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; display: grid; place-items: center; }
 .ln-edit { border: 0; background: transparent; width: 24px; }
@@ -705,6 +815,7 @@ async function logout() {
 .receipt-box { background: var(--bg); border-radius: 10px; padding: 16px; max-height: 50vh; overflow-y: auto; margin-top: 10px; }
 .change-big { text-align: center; font-size: 20px; padding: 10px; border-radius: 10px; background: color-mix(in srgb, var(--good) 14%, var(--surface)); margin-bottom: 6px; }
 .change-big b { font-size: 28px; display: block; }
+.wallet-box { background: color-mix(in srgb, var(--p-primary-color) 10%, var(--surface)); border-radius: 10px; padding: 12px 14px; }
 .held { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 #print-receipt { display: none; }
 @media (max-width: 900px) {

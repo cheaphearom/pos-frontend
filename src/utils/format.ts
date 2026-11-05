@@ -33,6 +33,11 @@ export const daysAgo = (n: number) => {
   return d;
 };
 
-const ACRONYMS: Record<string, string> = { KHQR: 'KHQR', E_WALLET: 'E-wallet' };
+const ACRONYMS: Record<string, string> = { KHQR: 'KHQR', E_WALLET: 'Other e-wallet', WALLET: 'Wallet card', TOPUP: 'Top-up', TRANSFER_IN: 'Moved in', TRANSFER_OUT: 'Moved out' };
 export const humanize = (s: string) =>
   ACRONYMS[s] ?? s.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+
+/** 8899 0000 0000 0015 */
+export const cardNo = (n: string) => n.replace(/(\d{4})(?=\d)/g, '$1 ');
+/** •••• 0015 */
+export const cardShort = (n: string) => `•••• ${n.slice(-4)}`;

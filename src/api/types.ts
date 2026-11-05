@@ -44,4 +44,4 @@ export const ROLE_LABEL: Record<Role, string> = {
   CASHIER: 'Cashier',
 };
 
-export const PAYMENT_METHODS = ['CASH', 'CARD', 'KHQR', 'BANK_TRANSFER', 'E_WALLET', 'OTHER'] as const;
+export const PAYMENT_METHODS = ['CASH', 'CARD', 'KHQR', 'BANK_TRANSFER', 'WALLET', 'E_WALLET', 'OTHER'] as const;

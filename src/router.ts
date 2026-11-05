@@ -35,6 +35,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'suppliers', component: () => import('./views/SuppliersView.vue'), meta: { title: 'Suppliers', roles: M } },
       { path: 'purchase-orders', component: () => import('./views/PurchaseOrdersView.vue'), meta: { title: 'Purchase orders', roles: M } },
       { path: 'promotions', component: () => import('./views/PromotionsView.vue'), meta: { title: 'Promotions', roles: M } },
+      { path: 'wallet-cards', component: () => import('./views/WalletCardsView.vue'), meta: { title: 'Wallet cards', roles: M } },
       { path: 'customers', component: () => import('./views/CustomersView.vue'), meta: { title: 'Customers' } },
       { path: 'reports', component: () => import('./views/ReportsView.vue'), meta: { title: 'Reports', roles: M } },
       { path: 'users', component: () => import('./views/UsersView.vue'), meta: { title: 'Users', roles: M } },

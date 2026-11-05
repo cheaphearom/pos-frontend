@@ -5,7 +5,7 @@ import { useNotify } from '@/composables/useNotify';
 import { usePagedList } from '@/composables/usePagedList';
 import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
-import { dateTime, humanize, money, num } from '@/utils/format';
+import { cardShort, dateTime, humanize, money, num } from '@/utils/format';
 
 const app = useApp();
 const auth = useAuth();
@@ -37,6 +37,7 @@ const detail = ref<any>(null);
 const showDetail = ref(false);
 const tab = ref<'purchases' | 'points'>('purchases');
 const purchases = ref<any[]>([]);
+const cards = ref<any[]>([]);
 const points = ref<any[]>([]);
 async function open(c: any) {
   try {
@@ -46,6 +47,7 @@ async function open(c: any) {
       api.get(`/customers/${c.id}/points`, { limit: 30 }),
     ]);
     detail.value = d;
+    cards.value = auth.isManager ? (await api.get('/wallet/cards', { customerId: c.id }).catch(() => ({ data: [] }))).data : [];
     purchases.value = p.data;
     points.value = h.data;
     showDetail.value = true;
@@ -113,6 +115,10 @@ async function adjust() {
           <dt>Email</dt><dd>{{ detail.email ?? '—' }}</dd>
           <dt>Member since</dt><dd>{{ dateTime(detail.createdAt) }}</dd>
         </dl>
+        <div v-for="w in cards" :key="w.id" class="row mt small" style="justify-content: space-between">
+          <span><i class="pi pi-credit-card" /> Wallet <RouterLink class="mono" :to="`/wallet-cards`">{{ cardShort(w.cardNumber) }}</RouterLink> · {{ humanize(w.status) }}</span>
+          <b>{{ m(w.balance) }}</b>
+        </div>
         <div class="row mt">
           <Button label="Edit" icon="pi pi-pencil" size="small" severity="secondary" @click="edit(detail)" />
           <Button v-if="auth.isManager" label="Adjust points" icon="pi pi-star" size="small" severity="secondary" @click="Object.assign(adj, { points: 0, reason: '' }); adjDlg = true" />

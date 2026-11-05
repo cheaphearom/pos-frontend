@@ -124,6 +124,7 @@ onMounted(() => {
         <dl class="kv">
           <template v-for="(v, k) in detail.summary.payments" :key="k"><dt>{{ humanize(String(k)) }}</dt><dd class="num">{{ m(v) }}</dd></template>
           <dt>Cash refunds</dt><dd class="num">−{{ m(detail.summary.cashRefunds) }}</dd>
+          <template v-for="(v, k) in detail.summary.walletTopups ?? {}" :key="'t' + k"><dt>Wallet top-ups · {{ humanize(String(k)) }}</dt><dd class="num">+{{ m(v) }}</dd></template>
         </dl>
         <div class="card mt">
           <dl class="kv">

@@ -6,24 +6,26 @@ import { api } from '@/api/client';
 import { useNotify } from '@/composables/useNotify';
 import type { PaymentProgress } from '@/pos/display';
 import { online } from '@/pos/network';
-import { humanize, money } from '@/utils/format';
+import { cardShort, humanize, money } from '@/utils/format';
 
-const props = defineProps<{ amountDue: number; currency: string; busy: boolean; storeId: string; khqrEnabled: boolean }>();
+export interface WalletCardInfo { cardNumber: string; balance: string | number; hasPin: boolean; status: string; customer?: { name: string } | null }
+const props = defineProps<{ amountDue: number; currency: string; busy: boolean; storeId: string; khqrEnabled: boolean; walletCard?: WalletCardInfo | null }>();
 const notify = useNotify();
-const emit = defineEmits<{ pay: [{ method: string; amount: number; reference?: string }[]]; progress: [PaymentProgress | null] }>();
+const emit = defineEmits<{ pay: [{ method: string; amount: number; reference?: string; pin?: string }[]]; progress: [PaymentProgress | null] }>();
 const visible = defineModel<boolean>('visible', { default: false });
 
 const METHODS = [
   { v: 'CASH', icon: 'pi pi-money-bill' },
   { v: 'KHQR', icon: 'pi pi-qrcode' },
   { v: 'CARD', icon: 'pi pi-credit-card' },
+  { v: 'WALLET', icon: 'pi pi-wallet' },
   { v: 'BANK_TRANSFER', icon: 'pi pi-building-columns' },
   { v: 'E_WALLET', icon: 'pi pi-mobile' },
 ];
 const method = ref('CASH');
 const amount = ref<number | null>(0);
 const reference = ref('');
-const payments = ref<{ method: string; amount: number; reference?: string }[]>([]);
+const payments = ref<{ method: string; amount: number; reference?: string; pin?: string }[]>([]);
 const input = ref<any>(null);
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -108,16 +110,50 @@ watch(method, (m) => m !== 'KHQR' && stopKhqr());
 watch(visible, (v) => !v && stopKhqr());
 onBeforeUnmount(stopKhqr);
 
+// ───── Wallet card ─────
+const wcard = ref<WalletCardInfo | null>(null);
+const wCode = ref('');
+const wPin = ref('');
+const wBusy = ref(false);
+const wBalance = computed(() => Number(wcard.value?.balance ?? 0) - payments.value.filter((x) => x.method === 'WALLET').reduce((s, x) => s + x.amount, 0));
+async function findWallet() {
+  if (!wCode.value.trim()) return;
+  wBusy.value = true;
+  try {
+    wcard.value = await api.get('/wallet/cards/lookup', { code: wCode.value.trim() });
+    if (wcard.value!.status !== 'ACTIVE') notify.error(`This card is ${wcard.value!.status.toLowerCase()}`);
+    amount.value = Math.min(remaining.value, r2(wBalance.value));
+  } catch (e) { notify.error(e); } finally { wBusy.value = false; }
+}
+function addWallet() {
+  const a = r2(amount.value ?? 0);
+  if (!wcard.value || a <= 0) return;
+  if (a > r2(wBalance.value) + 1e-9) return notify.error(`Card balance is only ${money(wBalance.value, props.currency)}`);
+  if (wcard.value.hasPin && !/^\d{4,6}$/.test(wPin.value)) return notify.error('Ask the customer to type the card PIN');
+  method.value = 'WALLET';
+  reference.value = wcard.value.cardNumber;
+  const pin = wPin.value || undefined;
+  if (nonCash.value + a > props.amountDue + 1e-9) return;
+  payments.value.push({ method: 'WALLET', amount: a, reference: wcard.value.cardNumber, pin });
+  reference.value = '';
+  wPin.value = '';
+  amount.value = remaining.value;
+  if (done.value) finish();
+}
+
 watch(visible, (v) => {
   if (!v) return;
+  wcard.value = props.walletCard ?? null;
+  wCode.value = '';
+  wPin.value = '';
   payments.value = [];
   method.value = 'CASH';
   reference.value = '';
   amount.value = props.amountDue;
   focus();
 });
-watch(method, () => {
-  amount.value = remaining.value;
+watch(method, (m) => {
+  amount.value = m === 'WALLET' && wcard.value ? Math.min(remaining.value, r2(wBalance.value)) : remaining.value;
   focus();
 });
 
@@ -199,7 +235,38 @@ watch(
         </template>
       </div>
 
-      <template v-if="!done && !useKhqr">
+      <div v-if="!done && method === 'WALLET'" class="form">
+        <Message v-if="!online" severity="warn" :closable="false">Wallet cards need an internet connection.</Message>
+        <template v-else-if="!wcard">
+          <div class="row" style="gap: 10px; align-items: flex-end">
+            <div class="field" style="flex: 1"><label>Scan the wallet card</label><InputText v-model="wCode" autofocus placeholder="Card number" @keydown.enter.prevent="findWallet" /></div>
+            <Button label="Find" icon="pi pi-search" :loading="wBusy" @click="findWallet" />
+          </div>
+        </template>
+        <template v-else>
+          <div class="wallet-box">
+            <div><b>{{ wcard.customer?.name ?? 'Wallet card' }}</b> <span class="mono muted">{{ cardShort(wcard.cardNumber) }}</span></div>
+            <div>Balance <b>{{ money(wBalance, currency) }}</b></div>
+          </div>
+          <div class="row" style="gap: 10px; align-items: flex-end">
+            <div class="field" style="flex: 1">
+              <label>Amount from card</label>
+              <InputNumber v-model="amount" :min="0" :max="Math.min(remaining, wBalance)" :min-fraction-digits="2" :max-fraction-digits="2" fluid input-class="amount-input" @keydown.enter.prevent="addWallet" />
+            </div>
+            <div v-if="wcard.hasPin" class="field" style="width: 130px">
+              <label>Customer PIN</label>
+              <Password v-model="wPin" :feedback="false" input-class="pin-input" :input-props="{ inputmode: 'numeric', maxlength: 6, autocomplete: 'off' }" fluid @keydown.enter.prevent="addWallet" />
+            </div>
+          </div>
+          <div class="row">
+            <Button label="Pay from card" icon="pi pi-wallet" size="large" :disabled="!amount || wcard.status !== 'ACTIVE'" @click="addWallet" />
+            <Button label="Other card" text severity="secondary" @click="wcard = null" />
+          </div>
+          <small v-if="wBalance < remaining" class="muted">The card covers {{ money(wBalance, currency) }}; pay the rest with another method.</small>
+        </template>
+      </div>
+
+      <template v-if="!done && !useKhqr && method !== 'WALLET'">
         <div class="row" style="gap: 10px; align-items: flex-end">
           <div class="field" style="flex: 1">
             <label>{{ humanize(method) }} amount</label>
@@ -220,7 +287,7 @@ watch(
 
       <div v-if="payments.length" class="paid">
         <div v-for="(p, i) in payments" :key="i" class="row" style="justify-content: space-between">
-          <span>{{ humanize(p.method) }} <span v-if="p.reference" class="muted small mono">{{ p.reference }}</span></span>
+          <span>{{ humanize(p.method) }} <span v-if="p.reference" class="muted small mono">{{ p.method === 'WALLET' ? cardShort(p.reference) : p.method === 'KHQR' && p.reference.length === 32 ? 'KHQR' : p.reference }}</span></span>
           <span class="row num">{{ money(p.amount, currency) }}
             <Button v-if="!busy" icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Remove payment" @click="payments.splice(i, 1)" />
           </span>
@@ -251,6 +318,7 @@ watch(
 .paid { display: grid; gap: 4px; border-top: 1px solid var(--border); padding-top: 10px; }
 .change { display: flex; justify-content: space-between; align-items: center; background: color-mix(in srgb, var(--good) 12%, var(--surface)); border-radius: 10px; padding: 14px 16px; }
 :deep(.amount-input) { font-size: 22px; font-weight: 650; }
+.wallet-box { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: color-mix(in srgb, var(--p-primary-color) 10%, var(--surface)); border-radius: 10px; padding: 12px 14px; }
 .khqr { display: grid; justify-items: center; gap: 10px; text-align: center; }
 .khqr-card { width: 270px; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .12); }
 .khqr-head { background: #e1232e; color: #fff; font-weight: 800; letter-spacing: .1em; padding: 10px; }

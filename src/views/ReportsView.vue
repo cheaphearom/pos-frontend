@@ -22,7 +22,7 @@ async function load() {
   loading.value = true;
   try {
     const p = params.value;
-    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions] = await Promise.all([
+    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet] = await Promise.all([
       api.get('/reports/sales-summary', { ...p, groupBy: f.groupBy }),
       api.get('/reports/profit', { ...p, groupBy: f.groupBy }),
       api.get('/reports/top-products', { ...p, limit: 20 }),
@@ -31,8 +31,9 @@ async function load() {
       api.get('/reports/loyalty', { ...p, limit: 10 }),
       api.get('/reports/inventory-value', { storeId: p.storeId }),
       api.get('/reports/promotions', p),
+      api.get('/reports/wallet', p),
     ]);
-    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions });
+    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet });
   } catch (e) {
     notify.error(e);
   } finally {
@@ -147,6 +148,20 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
             <Column header="Refunds" class="right"><template #body="{ data }">{{ m(data.refunds) }}</template></Column>
           </DataTable>
         </div>
+      </div>
+
+      <div class="card mt">
+        <h3>Wallet cards</h3>
+        <div class="grid grid-4">
+          <div><div class="muted">Held by customers now</div><div class="big num">{{ m(r.wallet.outstanding) }}</div><div class="small muted">money you owe on {{ r.wallet.activeCards }} active cards</div></div>
+          <div><div class="muted">Unused cards in stock</div><div class="big num">{{ r.wallet.unusedCards }}</div></div>
+        </div>
+        <DataTable :value="r.wallet.data" size="small" class="mt">
+          <template #empty><span class="muted">No wallet activity in this period</span></template>
+          <Column header="Type"><template #body="{ data }">{{ humanize(data.type) }}<span v-if="data.method" class="muted"> · {{ humanize(data.method) }}</span></template></Column>
+          <Column field="count" header="Count" class="right" />
+          <Column header="Amount" class="right"><template #body="{ data }">{{ m(data.amount) }}</template></Column>
+        </DataTable>
       </div>
 
       <div class="card mt">
