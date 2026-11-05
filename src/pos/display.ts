@@ -16,11 +16,14 @@ export interface PaymentProgress {
   remaining: number;
   change: number;
   khqr: { qr: string; amount: number; expiresAt: string; status: string } | null;
+  /** Dual currency: how the change is given */
+  changeUsd?: number;
+  changeKhr?: number;
 }
 
 export interface DisplayState {
   mode: 'idle' | 'cart' | 'pay' | 'done';
-  store: { name: string; currency: string };
+  store: { name: string; currency: string; khrRate?: number | null };
   cashier?: string;
   lines: DisplayLine[];
   totals: { subtotal: number; discount: number; tax: number; points: number; total: number; items: number };
@@ -28,7 +31,7 @@ export interface DisplayState {
   /** While paying */
   payment?: PaymentProgress | null;
   /** After the sale */
-  done?: { total: number; paid: number; change: number; receiptNo: string; pointsEarned: number; offline: boolean; queueNo?: string | null } | null;
+  done?: { total: number; paid: number; change: number; changeUsd?: number; changeKhr?: number; receiptNo: string; pointsEarned: number; offline: boolean; queueNo?: string | null } | null;
 }
 
 type Msg = { type: 'state'; state: DisplayState } | { type: 'hello' } | { type: 'ping' } | { type: 'bye' };

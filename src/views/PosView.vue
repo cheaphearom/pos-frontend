@@ -8,7 +8,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { api, ApiError } from '@/api/client';
-import PosPayment, { type WalletCardInfo } from '@/components/pos/PosPayment.vue';
+import PosPayment, { type PayLine, type WalletCardInfo } from '@/components/pos/PosPayment.vue';
+import { formatKhr, splitChange, usdToKhrUp, type ChangeMode } from '@shared/cash';
 import PosOptions, { type ChosenOption, type OptionGroup } from '@/components/pos/PosOptions.vue';
 import { optionsText } from '@/utils/modifiers';
 import PosReceipt from '@/components/pos/PosReceipt.vue';
@@ -399,6 +400,7 @@ function recall(i: number) {
 const shift = ref<any>(readJson(`pos.shift:${app.currentStoreId}`, null));
 const shiftDlg = ref(false);
 const openingCash = ref(0);
+const openingKhr = ref(0);
 async function loadShift() {
   try {
     shift.value = await api.get('/shifts/current', { storeId: app.currentStoreId });
@@ -409,7 +411,7 @@ async function loadShift() {
 }
 async function openShift() {
   try {
-    shift.value = await api.post('/shifts/open', { storeId: app.currentStoreId, openingCash: openingCash.value });
+    shift.value = await api.post('/shifts/open', { storeId: app.currentStoreId, openingCash: openingCash.value, openingKhr: khrRate.value ? openingKhr.value || 0 : undefined });
     localStorage.setItem(`pos.shift:${app.currentStoreId}`, JSON.stringify(shift.value));
     shiftDlg.value = false;
     notify.success('Shift opened');
@@ -439,7 +441,7 @@ function openPay() {
   payment.value = true;
 }
 
-async function complete(payments: { method: string; amount: number; reference?: string }[]) {
+async function complete(payments: PayLine[], changeIn: ChangeMode = 'MIXED') {
   paying.value = true;
   const body = {
     storeId: app.currentStoreId,
@@ -457,6 +459,7 @@ async function complete(payments: { method: string; amount: number; reference?: 
     discount: cart.discount || undefined,
     discountPercent: cart.discountPercent || undefined,
     approvalId: needsDiscountPin.value ? cart.approval?.id : undefined,
+    changeIn: khrRate.value ? changeIn : undefined,
     note: cart.note || undefined,
   };
   try {
@@ -504,6 +507,7 @@ async function saveOffline(body: any, payments: { method: string; amount: number
     subtotal: t.subtotal, discountTotal: t.discountTotal, taxTotal: t.taxTotal, total: t.total,
     pointsRedeemed: 0, pointsDiscount: 0, payments,
     changeDue: Math.round((paid - t.total) * 100) / 100,
+    ...((c) => ({ changeUsd: c.usd, changeKhr: c.khr }))(splitChange(Math.round((paid - t.total) * 100) / 100, khrRate.value, body.changeIn)),
   };
   await enqueue({ clientRef: body.clientRef, body: { ...body, offlineCreatedAt: local.createdAt }, createdAt: local.createdAt, attempts: 0, receipt: local });
   return local;
@@ -581,17 +585,20 @@ let doneTimer: ReturnType<typeof setTimeout> | undefined;
 function showDone(sale: any) {
   const paid = (sale.payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0);
   doneInfo.value = {
-    total: Number(sale.amountDue ?? sale.total), paid, change: Number(sale.changeDue ?? 0),
+    total: Number(sale.amountDue ?? sale.total), paid, change: Number(sale.changeDue ?? 0), changeUsd: Number(sale.changeUsd ?? sale.changeDue ?? 0), changeKhr: Number(sale.changeKhr ?? 0),
     receiptNo: sale.receiptNo, queueNo: sale.queueNo ?? null, pointsEarned: sale.pointsEarned ?? 0, offline: !!sale.offline,
   };
   clearTimeout(doneTimer);
   doneTimer = setTimeout(() => (doneInfo.value = null), 20_000); // back to the welcome screen
 }
 
+/** Riel per dollar for this store (null = no riel cash) */
+const khrRate = computed<number | null>(() => (store.value as any)?.khrRate ?? null);
+
 const displayState = computed<DisplayState>(() => {
   const t = totals.value;
   const base = {
-    store: { name: store.value?.name ?? '', currency: cur.value },
+    store: { name: store.value?.name ?? '', currency: cur.value, khrRate: khrRate.value },
     cashier: auth.user?.fullName,
     customer: cart.customer ? { name: cart.customer.name, points: cart.customer.points } : null,
     lines: cart.lines.map((l, i) => ({
@@ -815,6 +822,7 @@ async function logout() {
           </div>
           <div v-if="pointsDiscount" class="r"><span>Points</span><span class="num neg">−{{ m(pointsDiscount) }}</span></div>
           <div class="r total"><span>Total</span><span class="num">{{ m(amountDue) }}</span></div>
+          <div v-if="khrRate && amountDue > 0" class="r khr-total" data-test="khr-total"><span class="small muted">in riel ({{ khrRate.toLocaleString() }})</span><span class="num">{{ formatKhr(usdToKhrUp(amountDue, khrRate)) }}</span></div>
 
           <div class="actions">
             <Button icon="pi pi-percentage" label="Discount" severity="secondary" outlined :disabled="!cart.lines.length" @click="openDiscount" />
@@ -830,12 +838,12 @@ async function logout() {
     </div>
 
     <PosOptions v-model:visible="optDlg" :product="optProduct" :groups="optGroupsFor" :currency="cur" @add="onOptionsChosen" />
-    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" :store-id="app.currentStoreId!" :khqr-enabled="!!(store as any)?.khqrAccountId" :wallet-card="cart.wallet" :voucher="cart.voucher" @pay="complete" @progress="payProgress = $event" />
+    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" :store-id="app.currentStoreId!" :khqr-enabled="!!(store as any)?.khqrAccountId" :wallet-card="cart.wallet" :voucher="cart.voucher" :khr-rate="khrRate" @pay="complete" @progress="payProgress = $event" />
 
     <!-- Receipt after sale -->
     <Dialog v-model:visible="receiptDlg" header="Sale complete" modal :style="{ width: '420px' }" :breakpoints="{ '480px': '100vw' }" @hide="focusSearch">
       <div v-if="receipt">
-        <div v-if="Number(receipt.changeDue)" class="change-big">Change <b>{{ m(receipt.changeDue) }}</b></div>
+        <div v-if="Number(receipt.changeDue)" class="change-big" data-test="change-big">Change <b>{{ Number(receipt.changeKhr) ? [Number(receipt.changeUsd) ? m(receipt.changeUsd) : '', formatKhr(Number(receipt.changeKhr))].filter(Boolean).join(' + ') : m(receipt.changeDue) }}</b></div>
         <Message v-if="receipt.offline" severity="warn" :closable="false" size="small">Offline: saved on this device and will upload automatically.</Message>
         <div class="receipt-box"><PosReceipt :sale="receipt" :currency="cur" /></div>
         <div class="row mt">
@@ -910,7 +918,8 @@ async function logout() {
     <Dialog v-model:visible="shiftDlg" header="Open your shift" modal :style="{ width: '380px' }">
       <form class="form" @submit.prevent="openShift">
         <p class="muted" style="margin: 0">Count the cash in the drawer before you start selling.</p>
-        <div class="field"><label>Opening cash</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus /></div>
+        <div class="field"><label>{{ khrRate ? 'Opening cash (dollars)' : 'Opening cash' }}</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus /></div>
+        <div v-if="khrRate" class="field"><label>Opening riel</label><InputNumber v-model="openingKhr" :min="0" :step="100" prefix="៛" fluid /></div>
         <Button type="submit" label="Open shift" icon="pi pi-play" />
       </form>
     </Dialog>
@@ -1004,6 +1013,7 @@ async function logout() {
 </template>
 
 <style scoped>
+.khr-total { font-weight: 700; color: var(--text-2); }
 .pos-screen { height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
 .bar { height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .back { color: var(--text-2); padding: 6px; }

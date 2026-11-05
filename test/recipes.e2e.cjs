@@ -53,7 +53,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   const pos = await login('cashier1@pos.local');
   await pos.waitForSelector('.tile'); await pos.waitForTimeout(800);
   ok(!(await pos.locator('.chip', { hasText: 'Ingredients' }).count()), 'POS hides the Ingredients category');
-  if (await pos.getByRole('button', { name: 'Open shift' }).count()) { await pos.getByRole('button', { name: 'Open shift' }).click(); await pos.locator('.p-dialog input').fill('50'); await pos.locator('.p-dialog button[type=submit]').click(); await pos.waitForTimeout(600); }
+  if (await pos.getByRole('button', { name: 'Open shift' }).count()) { await pos.getByRole('button', { name: 'Open shift' }).click(); await pos.locator('.p-dialog input').first().fill('50'); await pos.locator('.p-dialog button[type=submit]').click(); await pos.waitForTimeout(600); }
   await pos.locator('.tile', { hasText: 'Cappuccino' }).click(); await pos.waitForTimeout(300);
   await pos.locator('.choice', { hasText: 'Extra shot' }).click();
   await pos.getByRole('button', { name: /^Add \$/ }).click();

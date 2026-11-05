@@ -12,7 +12,7 @@ const rows = ref<Store[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
 const saving = ref(false);
-const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true });
+const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true, khrOn: true, khrRate: 4100 as number | null });
 const form = reactive(empty());
 
 async function load() {
@@ -20,7 +20,7 @@ async function load() {
   try { rows.value = await api.get('/stores', { includeInactive: true }); } catch (e) { notify.error(e); } finally { loading.value = false; }
 }
 function open(s?: Store) {
-  Object.assign(form, s ? { ...empty(), ...Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v ?? ''])), taxPercent: Number(s.taxRate) * 100, cashierMaxDiscountPercent: Number((s as any).cashierMaxDiscountPercent ?? 10), refundNeedsApproval: (s as any).refundNeedsApproval !== false, voidNeedsApproval: (s as any).voidNeedsApproval !== false } : empty());
+  Object.assign(form, s ? { ...empty(), ...Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v ?? ''])), taxPercent: Number(s.taxRate) * 100, cashierMaxDiscountPercent: Number((s as any).cashierMaxDiscountPercent ?? 10), refundNeedsApproval: (s as any).refundNeedsApproval !== false, voidNeedsApproval: (s as any).voidNeedsApproval !== false, khrOn: !!(s as any).khrRate, khrRate: (s as any).khrRate || 4100 } : empty());
   dialog.value = true;
 }
 async function save() {
@@ -32,6 +32,7 @@ async function save() {
       khqrAccountId: form.khqrAccountId || null, khqrMerchantName: form.khqrMerchantName || null, khqrCity: form.khqrCity || null,
       khqrMerchantId: form.khqrMerchantId || null, khqrBank: form.khqrBank || null, hasKitchen: !!form.hasKitchen, onlineOrdering: !!form.onlineOrdering,
       cashierMaxDiscountPercent: Number(form.cashierMaxDiscountPercent ?? 0), refundNeedsApproval: !!form.refundNeedsApproval, voidNeedsApproval: !!form.voidNeedsApproval,
+      khrRate: form.khrOn && form.khrRate ? Math.round(form.khrRate) : null,
     };
     if (form.id) await api.patch(`/stores/${form.id}`, { ...body, isActive: form.isActive });
     else await api.post('/stores', body);
@@ -79,6 +80,7 @@ onMounted(load);
         <Column header="Tax" class="right"><template #body="{ data }">{{ (Number(data.taxRate) * 100).toFixed(2).replace(/\.?0+$/, '') }}%</template></Column>
         <Column header="Café"><template #body="{ data }"><i v-if="data.hasKitchen" class="pi pi-check" /></template></Column>
         <Column header="Online"><template #body="{ data }"><a v-if="data.onlineOrdering" :href="`/order/${data.code}`" target="_blank" @click.stop><i class="pi pi-external-link" /></a></template></Column>
+        <Column header="Riel"><template #body="{ data }"><span v-if="data.khrRate" class="num">{{ Number(data.khrRate).toLocaleString() }}</span><span v-else class="muted">off</span></template></Column>
         <Column header="KHQR"><template #body="{ data }"><span v-if="data.khqrAccountId" class="mono small">{{ data.khqrAccountId }}</span><span v-else class="muted">off</span></template></Column>
         <Column header="Status"><template #body="{ data }"><Tag :value="data.isActive ? 'active' : 'inactive'" :severity="data.isActive ? 'success' : 'secondary'" /></template></Column>
       </DataTable>
@@ -104,6 +106,11 @@ onMounted(load);
         <div v-if="form.onlineOrdering && form.code" class="small muted">
           Order page: <a :href="`/order/${form.code}`" target="_blank">{{ origin }}/order/{{ form.code }}</a>
           <Button v-if="form.id" label="Print table QR codes" icon="pi pi-qrcode" size="small" text @click="openQr" />
+        </div>
+        <h3 style="margin: 8px 0 0">Riel cash (USD / KHR)</h3>
+        <div class="form-2">
+          <label class="row" style="align-self: center"><ToggleSwitch v-model="form.khrOn" /> Take cash in riel and give change in riel</label>
+          <div v-if="form.khrOn" class="field"><label>Exchange rate</label><InputNumber v-model="form.khrRate" :min="1000" :max="10000" suffix=" ៛ = $1" fluid /><span class="hint">Prices stay in dollars; riel is rounded to 100</span></div>
         </div>
         <h3 style="margin: 8px 0 0">Cashier controls</h3>
         <div class="form-2">

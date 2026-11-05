@@ -7,15 +7,18 @@ import { useNotify } from '@/composables/useNotify';
 import type { PaymentProgress } from '@/pos/display';
 import { online } from '@/pos/network';
 import { cardShort, humanize, money } from '@/utils/format';
+import { formatKhr, khrToUsd, splitChange, usdToKhrUp, type ChangeMode } from '@shared/cash';
 
 export interface WalletCardInfo { cardNumber: string; balance: string | number; hasPin: boolean; status: string; customer?: { name: string } | null }
-const props = defineProps<{ amountDue: number; currency: string; busy: boolean; storeId: string; khqrEnabled: boolean; walletCard?: WalletCardInfo | null; voucher?: { code: string; balance: string } | null }>();
+const props = defineProps<{ amountDue: number; currency: string; busy: boolean; storeId: string; khqrEnabled: boolean; walletCard?: WalletCardInfo | null; voucher?: { code: string; balance: string } | null; khrRate?: number | null }>();
 const notify = useNotify();
-const emit = defineEmits<{ pay: [{ method: string; amount: number; reference?: string; pin?: string }[]]; progress: [PaymentProgress | null] }>();
+export interface PayLine { method: string; amount: number; reference?: string; pin?: string; currency?: 'KHR'; tendered?: number; rate?: number }
+const emit = defineEmits<{ pay: [PayLine[], ChangeMode]; progress: [PaymentProgress | null] }>();
 const visible = defineModel<boolean>('visible', { default: false });
 
-const METHODS = [
-  { v: 'CASH', icon: 'pi pi-money-bill' },
+const ALL_METHODS = [
+  { v: 'CASH', icon: 'pi pi-money-bill', l: 'Cash $' },
+  { v: 'CASH_KHR', icon: 'pi pi-money-bill', l: 'Cash ៛' },
   { v: 'KHQR', icon: 'pi pi-qrcode' },
   { v: 'CARD', icon: 'pi pi-credit-card' },
   { v: 'WALLET', icon: 'pi pi-wallet' },
@@ -23,10 +26,13 @@ const METHODS = [
   { v: 'BANK_TRANSFER', icon: 'pi pi-building-columns' },
   { v: 'E_WALLET', icon: 'pi pi-mobile' },
 ];
+/** Riel cash only when the store has a rate */
+const METHODS = computed(() => ALL_METHODS.filter((x) => x.v !== 'CASH_KHR' || props.khrRate).map((x) => ({ ...x, l: x.l ?? humanize(x.v) })).map((x) => (x.v === 'CASH' && !props.khrRate ? { ...x, l: 'Cash' } : x)));
+const isCash = computed(() => method.value === 'CASH' || method.value === 'CASH_KHR');
 const method = ref('CASH');
 const amount = ref<number | null>(0);
 const reference = ref('');
-const payments = ref<{ method: string; amount: number; reference?: string; pin?: string }[]>([]);
+const payments = ref<PayLine[]>([]);
 const input = ref<any>(null);
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -35,6 +41,27 @@ const remaining = computed(() => r2(Math.max(0, props.amountDue - paid.value)));
 const nonCash = computed(() => payments.value.filter((p) => p.method !== 'CASH').reduce((s, p) => s + p.amount, 0));
 const change = computed(() => r2(Math.max(0, paid.value - props.amountDue)));
 const done = computed(() => paid.value >= props.amountDue - 1e-9);
+
+// ───── Riel (dual currency) ─────
+const rate = computed(() => props.khrRate || 0);
+const dueKhr = computed(() => (rate.value ? usdToKhrUp(props.amountDue, rate.value) : 0));
+const remainingKhr = computed(() => (rate.value ? usdToKhrUp(remaining.value, rate.value) : 0));
+const CHANGE_KEY = 'pos.changeIn';
+const changeMode = ref<ChangeMode>(((): ChangeMode => { try { return (localStorage.getItem(CHANGE_KEY) as ChangeMode) || 'MIXED'; } catch { return 'MIXED'; } })());
+watch(changeMode, (v) => { try { localStorage.setItem(CHANGE_KEY, v); } catch { /* ignore */ } });
+const CHANGE_MODES = [{ v: 'MIXED', l: '$ + ៛' }, { v: 'KHR', l: 'All ៛' }, { v: 'USD', l: 'All $' }];
+const changeSplit = computed(() => splitChange(change.value, rate.value || null, changeMode.value));
+/** Riel notes above what is still to pay */
+const quickKhr = computed(() => {
+  const due = remainingKhr.value;
+  const set = new Set<number>([due]);
+  for (const n of [1000, 5000, 10000, 20000, 50000, 100000]) {
+    const up = Math.ceil(due / n) * n;
+    if (up > due) set.add(up);
+    if (set.size >= 6) break;
+  }
+  return [...set].filter((v) => v > 0).sort((a, b) => a - b);
+});
 
 /** Banknote shortcuts above the amount due. */
 const quick = computed(() => {
@@ -179,7 +206,8 @@ watch(visible, (v) => {
 });
 watch(method, (m) => {
   amount.value =
-    m === 'WALLET' && wcard.value ? Math.min(remaining.value, r2(wBalance.value)) : m === 'VOUCHER' && vinfo.value ? Math.min(remaining.value, r2(vLeft.value)) : remaining.value;
+    m === 'WALLET' && wcard.value ? Math.min(remaining.value, r2(wBalance.value)) : m === 'VOUCHER' && vinfo.value ? Math.min(remaining.value, r2(vLeft.value))
+      : m === 'CASH_KHR' ? remainingKhr.value : remaining.value;
   focus();
 });
 
@@ -188,12 +216,21 @@ function focus() {
 }
 
 function add(value?: number) {
+  if (method.value === 'CASH_KHR') {
+    const riel = Math.round((value ?? amount.value ?? 0) / 100) * 100;
+    if (riel <= 0) return;
+    payments.value.push({ method: 'CASH', amount: khrToUsd(riel, rate.value), currency: 'KHR', tendered: riel, rate: rate.value });
+    amount.value = remainingKhr.value;
+    if (done.value && payments.value.length === 1) finish();
+    else focus();
+    return;
+  }
   const a = r2(value ?? amount.value ?? 0);
   if (a <= 0) return;
   if (method.value !== 'CASH' && nonCash.value + a > props.amountDue + 1e-9) return;
   payments.value.push({ method: method.value, amount: a, reference: reference.value || undefined });
   reference.value = '';
-  amount.value = remaining.value;
+  amount.value = method.value === 'CASH_KHR' ? remainingKhr.value : remaining.value;
   if (done.value && method.value === 'CASH' && payments.value.length === 1) {
     // Single cash payment: finish straight away, like a real till.
     finish();
@@ -201,22 +238,23 @@ function add(value?: number) {
 }
 
 const nonCashError = computed(
-  () => method.value !== 'CASH' && (amount.value ?? 0) + nonCash.value > props.amountDue + 1e-9 ? 'Card / QR / transfer cannot be more than the amount due' : '',
+  () => !isCash.value && (amount.value ?? 0) + nonCash.value > props.amountDue + 1e-9 ? 'Card / QR / transfer cannot be more than the amount due' : '',
 );
 
 function finish() {
-  if (done.value && !props.busy) emit('pay', payments.value);
+  if (done.value && !props.busy) emit('pay', payments.value, changeMode.value);
 }
 
 // Tell the POS (and so the customer display) what is happening in this dialog.
 watch(
-  () => [visible.value, paid.value, remaining.value, change.value, khqr.value?.md5, khqr.value?.status],
+  () => [visible.value, paid.value, remaining.value, change.value, khqr.value?.md5, khqr.value?.status, changeMode.value],
   () => {
     if (!visible.value) return emit('progress', null);
     const k = khqr.value;
     emit('progress', {
       paid: paid.value, remaining: remaining.value, change: change.value,
       khqr: k ? { qr: k.qr, amount: k.amount, expiresAt: k.expiresAt, status: k.status } : null,
+      changeKhr: rate.value ? changeSplit.value.khr : undefined, changeUsd: rate.value ? changeSplit.value.usd : undefined,
     });
   },
   { immediate: true },
@@ -229,11 +267,12 @@ watch(
       <div class="due">
         <div class="muted">Amount due</div>
         <div class="big">{{ money(amountDue, currency) }}</div>
+        <div v-if="rate" class="khr-due" data-test="due-khr">{{ formatKhr(dueKhr) }} <span class="muted small">· {{ rate.toLocaleString() }} ៛ = $1</span></div>
       </div>
 
       <div class="methods">
         <button v-for="mt in METHODS" :key="mt.v" type="button" class="method" :class="{ on: method === mt.v }" @click="method = mt.v">
-          <i :class="mt.icon" /> {{ humanize(mt.v) }}
+          <i :class="mt.icon" /> {{ mt.l }}
         </button>
       </div>
 
@@ -312,13 +351,21 @@ watch(
       <template v-if="!done && !useKhqr && method !== 'WALLET' && method !== 'VOUCHER'">
         <div class="row" style="gap: 10px; align-items: flex-end">
           <div class="field" style="flex: 1">
-            <label>{{ humanize(method) }} amount</label>
-            <InputNumber ref="input" v-model="amount" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" fluid input-class="amount-input" @keydown.enter.prevent="add()" />
+            <label>{{ method === 'CASH_KHR' ? 'Riel received' : method === 'CASH' && rate ? 'Dollars received' : `${humanize(method)} amount` }}</label>
+            <InputNumber v-if="method === 'CASH_KHR'" ref="input" v-model="amount" :min="0" :step="100" :max-fraction-digits="0" prefix="៛" fluid input-class="amount-input" @keydown.enter.prevent="add()" />
+            <InputNumber v-else ref="input" v-model="amount" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" fluid input-class="amount-input" @keydown.enter.prevent="add()" />
           </div>
           <Button :label="payments.length ? 'Add' : 'Pay'" icon="pi pi-check" size="large" :disabled="!!nonCashError || !amount" @click="add()" />
         </div>
         <div v-if="method === 'CASH'" class="quick">
           <Button v-for="q in quick" :key="q" :label="money(q, currency)" severity="secondary" outlined @click="add(q)" />
+        </div>
+        <div v-else-if="method === 'CASH_KHR'" class="quick khr">
+          <Button v-for="q in quickKhr" :key="q" :label="formatKhr(q)" severity="secondary" outlined @click="add(q)" />
+        </div>
+        <div v-if="isCash && rate" class="row change-mode">
+          <span class="small muted">Give change as</span>
+          <SelectButton v-model="changeMode" :options="CHANGE_MODES" option-label="l" option-value="v" :allow-empty="false" size="small" />
         </div>
         <div v-else class="field">
           <label>Reference (approval code, transaction id)</label>
@@ -330,7 +377,7 @@ watch(
 
       <div v-if="payments.length" class="paid">
         <div v-for="(p, i) in payments" :key="i" class="row" style="justify-content: space-between">
-          <span>{{ humanize(p.method) }} <span v-if="p.reference" class="muted small mono">{{ p.method === 'WALLET' ? cardShort(p.reference) : p.method === 'KHQR' && p.reference.length === 32 ? 'KHQR' : p.reference }}</span></span>
+          <span>{{ p.currency === 'KHR' ? `Cash ${formatKhr(p.tendered!)}` : humanize(p.method) }} <span v-if="p.reference" class="muted small mono">{{ p.method === 'WALLET' ? cardShort(p.reference) : p.method === 'KHQR' && p.reference.length === 32 ? 'KHQR' : p.reference }}</span></span>
           <span class="row num">{{ money(p.amount, currency) }}
             <Button v-if="!busy" icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Remove payment" @click="payments.splice(i, 1)" />
           </span>
@@ -341,7 +388,11 @@ watch(
       <div v-if="done" class="change">
         <div>
           <div class="muted">Change</div>
-          <div class="big num">{{ money(change, currency) }}</div>
+          <template v-if="rate && change > 0">
+            <div class="big num" data-test="change-split">{{ [changeSplit.usd ? money(changeSplit.usd, currency) : '', changeSplit.khr ? formatKhr(changeSplit.khr) : ''].filter(Boolean).join(' + ') || money(0, currency) }}</div>
+            <div class="small muted">= {{ money(change, currency) }}</div>
+          </template>
+          <div v-else class="big num">{{ money(change, currency) }}</div>
         </div>
         <Button label="Complete sale" icon="pi pi-check-circle" size="large" :loading="busy" autofocus @click="finish" />
       </div>
@@ -358,6 +409,8 @@ watch(
 .method i { font-size: 20px; }
 .method.on { border-color: var(--p-primary-color); background: color-mix(in srgb, var(--p-primary-color) 12%, var(--surface)); color: var(--p-primary-color); }
 .quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.khr-due { font-size: 18px; font-weight: 700; color: var(--text-2); }
+.change-mode { gap: 10px; }
 .paid { display: grid; gap: 4px; border-top: 1px solid var(--border); padding-top: 10px; }
 .change { display: flex; justify-content: space-between; align-items: center; background: color-mix(in srgb, var(--good) 12%, var(--surface)); border-radius: 10px; padding: 14px 16px; }
 :deep(.amount-input) { font-size: 22px; font-weight: 650; }

@@ -8,6 +8,7 @@ import { usePagedList } from '@/composables/usePagedList';
 import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
 import { dateTime, humanize, money } from '@/utils/format';
+import { formatKhr } from '@shared/cash';
 
 const app = useApp();
 const auth = useAuth();
@@ -24,9 +25,12 @@ async function loadMine() {
 
 const openDlg = ref(false);
 const openingCash = ref(0);
+const openingKhr = ref(0);
+/** Riel drawer when the store takes riel cash */
+const khrOn = computed(() => !!(app.currentStore as any)?.khrRate);
 async function openShift() {
   try {
-    await api.post('/shifts/open', { storeId: app.currentStoreId, openingCash: openingCash.value });
+    await api.post('/shifts/open', { storeId: app.currentStoreId, openingCash: openingCash.value, openingKhr: khrOn.value ? openingKhr.value || 0 : undefined });
     openDlg.value = false;
     notify.success('Shift opened');
     loadMine();
@@ -44,17 +48,18 @@ async function show(id: string) {
 }
 
 const closeDlg = ref(false);
-const close = reactive({ closingCash: 0, note: '' });
+const close = reactive({ closingCash: 0, closingKhr: null as number | null, note: '' });
 const closed = ref<any>(null);
 function startClose() {
   close.closingCash = Number(detail.value.summary.expectedCash);
+  close.closingKhr = khrOn.value || detail.value.openingKhr ? detail.value.summary.khr.expected : null;
   close.note = '';
   closed.value = null;
   closeDlg.value = true;
 }
 async function doClose() {
   try {
-    closed.value = await api.post(`/shifts/${detail.value.id}/close`, close);
+    closed.value = await api.post(`/shifts/${detail.value.id}/close`, { ...close, closingKhr: close.closingKhr ?? undefined });
     notify.success('Shift closed');
     loadMine();
     list.load();
@@ -104,7 +109,8 @@ onMounted(() => {
 
     <Dialog v-model:visible="openDlg" header="Open shift" modal :style="{ width: '380px' }">
       <form class="form" @submit.prevent="openShift">
-        <div class="field"><label>Cash in the drawer now</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus /></div>
+        <div class="field"><label>{{ khrOn ? 'Dollars in the drawer now' : 'Cash in the drawer now' }}</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus /></div>
+        <div v-if="khrOn" class="field"><label>Riel in the drawer now</label><InputNumber v-model="openingKhr" :min="0" :step="100" prefix="៛" fluid /></div>
         <div class="row" style="justify-content: flex-end"><Button type="submit" label="Open shift" icon="pi pi-play" /></div>
       </form>
     </Dialog>
@@ -137,6 +143,19 @@ onMounted(() => {
             </template>
           </dl>
         </div>
+        <div v-if="detail.summary.khr && (khrOn || detail.summary.khr.received || detail.openingKhr)" class="card mt" data-test="khr-drawer">
+          <h3 style="margin-top: 0">Riel drawer</h3>
+          <dl class="kv">
+            <dt>Opening riel</dt><dd class="num">{{ formatKhr(detail.summary.khr.opening) }}</dd>
+            <dt>Riel received ({{ detail.summary.khr.payments }})</dt><dd class="num">+{{ formatKhr(detail.summary.khr.received) }}</dd>
+            <dt>Riel change given</dt><dd class="num">−{{ formatKhr(detail.summary.khr.change) }}</dd>
+            <dt><b>Expected riel</b></dt><dd class="num"><b>{{ formatKhr(detail.summary.khr.expected) }}</b></dd>
+            <template v-if="detail.closingKhr !== null && detail.closingKhr !== undefined">
+              <dt>Counted</dt><dd class="num">{{ formatKhr(detail.closingKhr) }}</dd>
+              <dt>Difference</dt><dd class="num" :class="detail.closingKhr - detail.summary.khr.expected < 0 ? 'neg' : 'pos'">{{ formatKhr(detail.closingKhr - detail.summary.khr.expected) }}</dd>
+            </template>
+          </dl>
+        </div>
         <div class="row mt" style="justify-content: flex-end">
           <RouterLink :to="`/sales`"><Button label="Sales" text size="small" /></RouterLink>
           <Button v-if="canClose" label="Close shift" icon="pi pi-stop" severity="danger" @click="startClose" />
@@ -146,7 +165,8 @@ onMounted(() => {
 
     <Dialog v-model:visible="closeDlg" header="Close shift" modal :style="{ width: '400px' }">
       <form v-if="!closed" class="form" @submit.prevent="doClose">
-        <div class="field"><label>Cash counted in the drawer</label><InputNumber v-model="close.closingCash" :min="0" :min-fraction-digits="2" fluid /></div>
+        <div class="field"><label>{{ close.closingKhr !== null ? 'Dollars counted in the drawer' : 'Cash counted in the drawer' }}</label><InputNumber v-model="close.closingCash" :min="0" :min-fraction-digits="2" fluid /></div>
+        <div v-if="close.closingKhr !== null" class="field"><label>Riel counted</label><InputNumber v-model="close.closingKhr" :min="0" :step="100" prefix="៛" fluid /></div>
         <div class="field"><label>Note</label><InputText v-model="close.note" /></div>
         <div class="row" style="justify-content: flex-end"><Button type="submit" label="Close shift" severity="danger" /></div>
       </form>
@@ -154,6 +174,10 @@ onMounted(() => {
         <Message :severity="Number(closed.difference) === 0 ? 'success' : 'warn'" :closable="false">
           Expected {{ m(closed.expectedCash) }}, counted {{ m(closed.closingCash) }}.
           {{ Number(closed.difference) === 0 ? 'The drawer balances.' : `Difference: ${m(closed.difference)}` }}
+        </Message>
+        <Message v-if="closed.differenceKhr !== null && closed.differenceKhr !== undefined" :severity="closed.differenceKhr === 0 ? 'success' : 'warn'" :closable="false">
+          Riel: expected {{ formatKhr(closed.expectedKhr) }}, counted {{ formatKhr(closed.closingKhr) }}.
+          {{ closed.differenceKhr === 0 ? 'Balances.' : `Difference: ${formatKhr(closed.differenceKhr)}` }}
         </Message>
         <Button label="Done" @click="closeDlg = false" />
       </div>

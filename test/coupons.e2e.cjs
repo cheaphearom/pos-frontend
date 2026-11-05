@@ -20,7 +20,7 @@ const fmt = (n) => '$' + Number(n).toFixed(2);
   const shot = (p, n) => (OUT ? p.screenshot({ path: OUT + n + '.png' }) : null);
   const pos = await login('cashier1@pos.local');
   await pos.waitForSelector('.tile'); await pos.waitForTimeout(800);
-  if (await pos.getByRole('button', { name: 'Open shift' }).count()) { await pos.getByRole('button', { name: 'Open shift' }).click(); await pos.locator('.p-dialog input').fill('50'); await pos.locator('.p-dialog button[type=submit]').click(); await pos.waitForTimeout(600); }
+  if (await pos.getByRole('button', { name: 'Open shift' }).count()) { await pos.getByRole('button', { name: 'Open shift' }).click(); await pos.locator('.p-dialog input').first().fill('50'); await pos.locator('.p-dialog button[type=submit]').click(); await pos.waitForTimeout(600); }
   const s = pos.locator('.search-input');
   const tok = await pos.evaluate(() => localStorage.getItem('pos.accessToken'));
   const get = async (p) => (await fetch(API + p, { headers: { Authorization: 'Bearer ' + tok } })).json();

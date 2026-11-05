@@ -35,7 +35,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   const pos = watch(await ctx.newPage());
   await pos.goto(W + '/login'); await pos.fill('#email', 'cashier1@pos.local'); await pos.fill('#password', 'Password@123'); await pos.click('button[type=submit]');
   await pos.waitForURL(W + '/pos'); await pos.waitForSelector('.tile'); await pos.waitForTimeout(1500);
-  if (await pos.getByRole('button', { name: 'Open shift' }).count()) { await pos.getByRole('button', { name: 'Open shift' }).click(); await pos.locator('.p-dialog input').fill('50'); await pos.locator('.p-dialog button[type=submit]').click(); await pos.waitForTimeout(600); }
+  if (await pos.getByRole('button', { name: 'Open shift' }).count()) { await pos.getByRole('button', { name: 'Open shift' }).click(); await pos.locator('.p-dialog input').first().fill('50'); await pos.locator('.p-dialog button[type=submit]').click(); await pos.waitForTimeout(600); }
   ok(await pos.getByRole('button', { name: 'Online (1)' }).count() === 1, 'POS shows "Online (1)"');
   await pos.getByRole('button', { name: 'Online (1)' }).click(); await pos.waitForTimeout(600);
   await shot(pos, 'a4-pos-online');

@@ -9,6 +9,7 @@ import { useRoute } from 'vue-router';
 import { describePromotion, isPromoActive, type PromoRule } from '@shared/promotions';
 import { displayChannel, type DisplayState } from '@/pos/display';
 import { qty } from '@/utils/format';
+import { formatKhr, usdToKhrUp } from '@shared/cash';
 
 const route = useRoute();
 const storeId = String(route.query.store ?? '');
@@ -44,6 +45,11 @@ channel.onMessage((msg) => {
 
 const mode = computed(() => state.value?.mode ?? 'idle');
 const lines = computed(() => state.value?.lines ?? []);
+/** "$7 + ៛900" when change is given in two currencies */
+function changeText(change: number, usd?: number, khr?: number) {
+  if (!khr) return money(usd ?? change);
+  return [usd ? money(usd) : '', formatKhr(khr)].filter(Boolean).join(' + ');
+}
 const t = computed(() => state.value?.totals);
 const saved = computed(() => (t.value?.discount ?? 0) + (t.value?.points ?? 0));
 
@@ -129,7 +135,7 @@ onBeforeUnmount(() => {
       <div v-if="state.done.queueNo" class="order-no"><div>Your order number</div><b>{{ state.done.queueNo }}</b></div>
       <div v-if="state.done.change > 0" class="change">
         <div>Your change</div>
-        <b>{{ money(state.done.change) }}</b>
+        <b>{{ changeText(state.done.change, state.done.changeUsd, state.done.changeKhr) }}</b>
       </div>
       <div class="done-meta">
         Paid {{ money(state.done.paid) }}<template v-if="state.done.pointsEarned"> · +{{ state.done.pointsEarned }} points</template>
@@ -180,12 +186,13 @@ onBeforeUnmount(() => {
           <div class="total">
             <div>Total</div>
             <b>{{ money(t?.total ?? 0) }}</b>
+            <span v-if="state?.store.khrRate && t?.total" class="khr">{{ formatKhr(usdToKhrUp(t.total, state.store.khrRate)) }}</span>
           </div>
           <div v-if="saved > 0" class="saved">You save {{ money(saved) }} today 🎉</div>
           <div v-if="mode === 'pay' && state?.payment" class="paying">
             <div class="r"><span>Paid</span><span>{{ money(state.payment.paid) }}</span></div>
             <div v-if="state.payment.remaining > 0" class="r big"><span>Still to pay</span><span>{{ money(state.payment.remaining) }}</span></div>
-            <div v-if="state.payment.change > 0" class="r big"><span>Change</span><span>{{ money(state.payment.change) }}</span></div>
+            <div v-if="state.payment.change > 0" class="r big"><span>Change</span><span>{{ changeText(state.payment.change, state.payment.changeUsd, state.payment.changeKhr) }}</span></div>
           </div>
         </template>
       </aside>
@@ -255,6 +262,7 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; }
 .order-no { text-align: center; }
 .order-no div { color: var(--muted); }
 .order-no b { font-size: 4.2em; line-height: 1; color: var(--accent); }
+.khr { display: block; font-size: 1.6em; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
 .change { background: var(--panel); border-radius: 20px; padding: 2vh 4vw; margin-top: 2vh; }
 .change div { color: var(--muted); }
 .change b { font-size: 3.6em; font-variant-numeric: tabular-nums; }

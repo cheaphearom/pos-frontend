@@ -11,6 +11,7 @@ import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
 import { dateTime, humanize, money, qty } from '@/utils/format';
 import { optionsText } from '@/utils/modifiers';
+import { formatKhr } from '@shared/cash';
 
 const app = useApp();
 const auth = useAuth();
@@ -167,8 +168,8 @@ onMounted(() => {
           <tr><td>Tax</td><td class="right num">{{ m(sale.taxTotal) }}</td></tr>
           <tr class="big"><td>Total</td><td class="right num">{{ m(sale.total) }}</td></tr>
           <tr v-if="sale.pointsRedeemed"><td>Points used ({{ sale.pointsRedeemed }})</td><td class="right num">−{{ m(sale.pointsDiscount) }}</td></tr>
-          <tr v-for="p in sale.payments" :key="p.id"><td>Paid · {{ humanize(p.method) }} <span class="mono small muted">{{ p.reference }}</span></td><td class="right num">{{ m(p.amount) }}</td></tr>
-          <tr v-if="Number(sale.changeDue)"><td>Change</td><td class="right num">{{ m(sale.changeDue) }}</td></tr>
+          <tr v-for="p in sale.payments" :key="p.id"><td>Paid · {{ p.currency === 'KHR' ? `Cash ${formatKhr(Number(p.tendered))} @ ${Number(p.rate)}` : humanize(p.method) }} <span class="mono small muted">{{ p.reference }}</span></td><td class="right num">{{ m(p.amount) }}</td></tr>
+          <tr v-if="Number(sale.changeDue)"><td>Change</td><td class="right num">{{ Number(sale.changeKhr) ? [Number(sale.changeUsd) ? m(sale.changeUsd) : '', formatKhr(Number(sale.changeKhr))].filter(Boolean).join(' + ') : m(sale.changeDue) }}</td></tr>
           <tr v-if="sale.pointsEarned"><td>Points earned</td><td class="right num">+{{ sale.pointsEarned }}</td></tr>
         </table>
         <div v-if="sale.refunds.length" class="mt">

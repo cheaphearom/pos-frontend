@@ -24,7 +24,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   // open shift if needed
   if (await page.getByRole('button', { name: 'Open shift' }).count()) {
     await page.getByRole('button', { name: 'Open shift' }).click();
-    await page.locator('.p-dialog input').fill('100'); await page.locator('.p-dialog button[type=submit]').click();
+    await page.locator('.p-dialog input').first().fill('100'); await page.locator('.p-dialog button[type=submit]').click();
     await page.waitForTimeout(600);
   }
   ok(await page.getByText(/Shift since/).count() > 0, 'shift is open');

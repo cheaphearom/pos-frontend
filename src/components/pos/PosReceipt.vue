@@ -2,9 +2,13 @@
 /** Receipt layout for screen and 80mm thermal printers. Works for server receipts and offline ones. */
 import { dateTime, humanize, money, qty } from '@/utils/format';
 import { optionsText } from '@/utils/modifiers';
+import { formatKhr, usdToKhrUp } from '@shared/cash';
 
 const props = defineProps<{ sale: any; currency: string }>();
 const m = (v: any) => money(v, props.currency);
+/** Riel rate printed on the receipt: the one used for riel cash, else the store's */
+const khrRate = (sale: any): number | null => Number(sale.payments?.find((p: any) => p.currency === 'KHR')?.rate ?? sale.store?.khrRate ?? 0) || null;
+const changeText = (sale: any) => (Number(sale.changeKhr) ? [Number(sale.changeUsd) ? m(sale.changeUsd) : '', formatKhr(Number(sale.changeKhr))].filter(Boolean).join(' + ') : m(sale.changeDue));
 </script>
 
 <template>
@@ -38,8 +42,10 @@ const m = (v: any) => money(v, props.currency);
     <div class="row2"><span>Tax</span><span>{{ m(sale.taxTotal) }}</span></div>
     <div class="row2 total"><span>TOTAL</span><span>{{ m(sale.total) }}</span></div>
     <div v-if="sale.pointsRedeemed" class="row2"><span>Points ({{ sale.pointsRedeemed }})</span><span>−{{ m(sale.pointsDiscount) }}</span></div>
-    <div v-for="(p, n) in sale.payments" :key="'p' + n" class="row2"><span>{{ humanize(p.method) }}</span><span>{{ m(p.amount) }}</span></div>
-    <div v-if="Number(sale.changeDue)" class="row2"><span>Change</span><span>{{ m(sale.changeDue) }}</span></div>
+    <div v-if="khrRate(sale)" class="row2"><span>Total in riel</span><span>{{ formatKhr(usdToKhrUp(Number(sale.amountDue ?? sale.total), khrRate(sale)!)) }}</span></div>
+    <div v-for="(p, n) in sale.payments" :key="'p' + n" class="row2"><span>{{ p.currency === 'KHR' ? `Cash ${formatKhr(Number(p.tendered))}` : humanize(p.method) }}</span><span>{{ m(p.amount) }}</span></div>
+    <div v-if="Number(sale.changeDue)" class="row2"><span>Change</span><span>{{ changeText(sale) }}</span></div>
+    <div v-if="khrRate(sale)" class="sub">Rate {{ khrRate(sale)!.toLocaleString() }} riel = $1</div>
     <div v-if="sale.pointsEarned" class="row2"><span>Points earned</span><span>+{{ sale.pointsEarned }}</span></div>
     <div class="sep" />
     <div v-if="sale.offline" class="c small">Saved offline · will sync automatically</div>

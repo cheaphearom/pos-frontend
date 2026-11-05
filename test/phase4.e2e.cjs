@@ -58,7 +58,7 @@ const fmt = (n) => '$' + Number(n).toFixed(2);
   const { ctx: cctx, page } = await login('cashier1@pos.local', { width: 1366, height: 820 });
   await page.waitForURL(W + '/pos'); await page.waitForSelector('.tile');
   await page.waitForTimeout(1000);
-  if (await page.getByRole('button', { name: 'Open shift' }).count()) { await page.getByRole('button', { name: 'Open shift' }).click(); await page.locator('.p-dialog input').fill('50'); await page.locator('.p-dialog button[type=submit]').click(); await page.waitForTimeout(600); }
+  if (await page.getByRole('button', { name: 'Open shift' }).count()) { await page.getByRole('button', { name: 'Open shift' }).click(); await page.locator('.p-dialog input').first().fill('50'); await page.locator('.p-dialog button[type=submit]').click(); await page.waitForTimeout(600); }
   const s = page.locator('.search-input');
   await s.fill('SKU-0002'); await s.press('Enter');        // Coca-Cola: Drinks 10% off
   await s.fill('3*SKU-0011'); await s.press('Enter');      // Instant noodles x3: buy 2 get 1
