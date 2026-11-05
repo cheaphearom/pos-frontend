@@ -128,7 +128,9 @@ async function logout() {
 .sidebar {
   width: 236px; flex-shrink: 0; background: var(--sidebar); color: var(--sidebar-text);
   position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 16px 12px;
+  scrollbar-width: none; /* still scrolls, but no visible bar (Firefox, Chrome, Edge) */
 }
+.sidebar::-webkit-scrollbar { display: none; } /* older Chrome / Edge / Safari */
 .brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; font-size: 17px; padding: 4px 8px 18px; }
 .logo { width: 32px; height: 32px; border-radius: 8px; background: var(--sidebar-active); display: grid; place-items: center; }
 .nav-section { margin-bottom: 14px; }
