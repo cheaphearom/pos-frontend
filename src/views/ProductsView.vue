@@ -1,0 +1,140 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue';
+import { api } from '@/api/client';
+import type { Category, Product } from '@/api/types';
+import { useNotify } from '@/composables/useNotify';
+import { usePagedList } from '@/composables/usePagedList';
+import { useApp } from '@/stores/app';
+import { useAuth } from '@/stores/auth';
+import { money, qty } from '@/utils/format';
+
+const auth = useAuth();
+const app = useApp();
+const notify = useNotify();
+const categories = ref<Category[]>([]);
+const list = usePagedList<Product>('/products', { search: '', categoryId: null, storeId: app.currentStoreId, includeInactive: false });
+
+const cur = computed(() => app.currentStore?.currency ?? 'USD');
+const empty = () => ({ id: '', sku: '', barcode: '', name: '', description: '', categoryId: null as string | null, unit: 'pcs', costPrice: 0, sellPrice: 0, taxable: true, trackStock: true, isActive: true });
+const dialog = ref(false);
+const saving = ref(false);
+const form = reactive(empty());
+
+function openNew() {
+  Object.assign(form, empty());
+  dialog.value = true;
+}
+function edit(p: Product) {
+  Object.assign(form, { ...p, barcode: p.barcode ?? '', description: p.description ?? '', costPrice: Number(p.costPrice), sellPrice: Number(p.sellPrice) });
+  dialog.value = true;
+}
+
+async function save() {
+  saving.value = true;
+  try {
+    const { id, ...body } = form;
+    const payload = { ...body, barcode: body.barcode || undefined, description: body.description || undefined, categoryId: body.categoryId || undefined };
+    if (id) await api.patch(`/products/${id}`, payload);
+    else await api.post('/products', { ...payload, isActive: undefined });
+    notify.success(id ? 'Product updated' : 'Product created', form.name);
+    dialog.value = false;
+    list.load();
+  } catch (e) {
+    notify.error(e);
+  } finally {
+    saving.value = false;
+  }
+}
+
+const margin = (p: Product) => {
+  const price = Number(p.price ?? p.sellPrice);
+  return price ? ((price - Number(p.costPrice)) / price) * 100 : 0;
+};
+
+onMounted(async () => {
+  list.load();
+  categories.value = await api.get('/categories');
+});
+</script>
+
+<template>
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>Products</h1>
+        <div class="sub">Shared catalogue for all stores · price and stock shown for {{ app.currentStore?.code }}</div>
+      </div>
+      <div class="actions">
+        <Button v-if="auth.isAdmin" label="New product" icon="pi pi-plus" @click="openNew" />
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <IconField>
+          <InputIcon class="pi pi-search" />
+          <InputText v-model="list.filters.search" placeholder="Name, SKU or barcode" />
+        </IconField>
+        <Select v-model="list.filters.categoryId" :options="categories" option-label="name" option-value="id" placeholder="All categories" show-clear />
+        <label class="row small"><ToggleSwitch v-model="list.filters.includeInactive" /> Show inactive</label>
+      </div>
+
+      <DataTable :value="list.rows.value" lazy paginator :rows="list.page.rows" :first="list.page.first" :total-records="list.total.value"
+        :rows-per-page-options="[25, 50, 100]" :loading="list.loading.value" data-key="id" size="small" striped-rows
+        @page="list.onPage" @row-click="auth.isAdmin && edit($event.data)" :row-class="() => (auth.isAdmin ? 'clickable' : '')">
+        <template #empty><span class="muted">No products found</span></template>
+        <Column field="sku" header="SKU"><template #body="{ data }"><span class="mono">{{ data.sku }}</span></template></Column>
+        <Column field="name" header="Name">
+          <template #body="{ data }">
+            {{ data.name }} <Tag v-if="!data.isActive" value="inactive" severity="secondary" />
+            <div class="small muted mono">{{ data.barcode }}</div>
+          </template>
+        </Column>
+        <Column header="Category"><template #body="{ data }">{{ data.category?.name ?? '—' }}</template></Column>
+        <Column header="Cost" class="right"><template #body="{ data }">{{ money(data.costPrice, cur) }}</template></Column>
+        <Column header="Price" class="right">
+          <template #body="{ data }">
+            {{ money(data.price ?? data.sellPrice, cur) }}
+            <i v-if="data.price && data.price !== data.sellPrice" class="pi pi-tag small muted" v-tooltip="`Store price. Default ${money(data.sellPrice, cur)}`" />
+          </template>
+        </Column>
+        <Column header="Margin" class="right"><template #body="{ data }">{{ margin(data).toFixed(0) }}%</template></Column>
+        <Column header="Stock" class="right">
+          <template #body="{ data }">
+            <span v-if="!data.trackStock" class="muted">service</span>
+            <span v-else :class="{ neg: Number(data.stock) <= 0 }">{{ qty(data.stock) }} {{ data.unit }}</span>
+          </template>
+        </Column>
+        <Column header="Tax" class="right"><template #body="{ data }"><i :class="data.taxable ? 'pi pi-check' : 'pi pi-minus muted'" /></template></Column>
+      </DataTable>
+    </div>
+
+    <Dialog v-model:visible="dialog" :header="form.id ? 'Edit product' : 'New product'" modal :style="{ width: '640px' }" :breakpoints="{ '720px': '95vw' }">
+      <form class="form" @submit.prevent="save">
+        <div class="form-2">
+          <div class="field"><label>SKU *</label><InputText v-model="form.sku" required /></div>
+          <div class="field"><label>Barcode</label><InputText v-model="form.barcode" placeholder="Scan or type" /></div>
+        </div>
+        <div class="field"><label>Name *</label><InputText v-model="form.name" required /></div>
+        <div class="form-2">
+          <div class="field"><label>Category</label><Select v-model="form.categoryId" :options="categories" option-label="name" option-value="id" show-clear placeholder="None" /></div>
+          <div class="field"><label>Unit</label><InputText v-model="form.unit" placeholder="pcs, kg, box…" /></div>
+        </div>
+        <div class="form-2">
+          <div class="field"><label>Cost price</label><InputNumber v-model="form.costPrice" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" fluid /></div>
+          <div class="field"><label>Selling price * <span class="hint">(before tax)</span></label><InputNumber v-model="form.sellPrice" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" fluid /></div>
+        </div>
+        <div class="field"><label>Description</label><Textarea v-model="form.description" rows="2" auto-resize /></div>
+        <div class="row" style="gap: 24px; flex-wrap: wrap">
+          <label class="row"><ToggleSwitch v-model="form.taxable" /> Taxable</label>
+          <label class="row"><ToggleSwitch v-model="form.trackStock" /> Track stock</label>
+          <label v-if="form.id" class="row"><ToggleSwitch v-model="form.isActive" /> Active (for sale)</label>
+        </div>
+        <div class="row" style="justify-content: flex-end">
+          <Button label="Cancel" severity="secondary" text @click="dialog = false" />
+          <Button type="submit" label="Save" icon="pi pi-check" :loading="saving" />
+        </div>
+      </form>
+    </Dialog>
+  </div>
+</template>
