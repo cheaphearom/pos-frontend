@@ -9,6 +9,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRouter } from 'vue-router';
 import { api, ApiError } from '@/api/client';
 import PosPayment, { type WalletCardInfo } from '@/components/pos/PosPayment.vue';
+import PosOptions, { type ChosenOption, type OptionGroup } from '@/components/pos/PosOptions.vue';
+import { optionsText } from '@/utils/modifiers';
 import PosReceipt from '@/components/pos/PosReceipt.vue';
 import { useNotify } from '@/composables/useNotify';
 import { useCatalog, type CatalogItem } from '@/pos/catalog';
@@ -34,7 +36,7 @@ const m = (v: number | string) => money(v, cur.value);
 const catalog = useCatalog(app.currentStoreId!);
 
 // ───────────── Cart (kept in localStorage so a reload does not lose it) ─────────────
-interface Line { productId: string; categoryId?: string | null; name: string; sku: string; unit: string; price: string; taxable: boolean; trackStock: boolean; quantity: number; discount: number }
+interface Line { productId: string; categoryId?: string | null; name: string; sku: string; unit: string; price: string; taxable: boolean; trackStock: boolean; quantity: number; discount: number; modifiers?: ChosenOption[]; note?: string }
 interface Cart {
   clientRef: string;
   startedAt: string;
@@ -43,6 +45,8 @@ interface Cart {
   wallet?: WalletCardInfo | null;
   coupon?: (CouponRule & { code: string }) | null;
   voucher?: { code: string; balance: string } | null;
+  orderType?: 'TAKEAWAY' | 'DINE_IN';
+  tableNo?: string;
   redeemPoints: number;
   discount: number;
   discountPercent: number;
@@ -50,7 +54,7 @@ interface Cart {
 }
 const CART_KEY = `pos.cart:${app.currentStoreId}`;
 const HELD_KEY = `pos.held:${app.currentStoreId}`;
-const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, wallet: null, coupon: null, voucher: null, redeemPoints: 0, discount: 0, discountPercent: 0, note: '' });
+const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, wallet: null, coupon: null, voucher: null, orderType: 'TAKEAWAY', tableNo: '', redeemPoints: 0, discount: 0, discountPercent: 0, note: '' });
 const readJson = <T,>(k: string, d: T): T => {
   try { return JSON.parse(localStorage.getItem(k) ?? '') ?? d; } catch { return d; }
 };
@@ -59,12 +63,37 @@ const held = ref<Cart[]>(readJson(HELD_KEY, []));
 watch(cart, (c) => localStorage.setItem(CART_KEY, JSON.stringify(c)), { deep: true });
 watch(held, (h) => localStorage.setItem(HELD_KEY, JSON.stringify(h)), { deep: true });
 
+// ───────────── Drink options ─────────────
+const optionGroups = ref<OptionGroup[]>(readJson('pos.modifiers', []));
+const optProduct = ref<CatalogItem | null>(null);
+const optDlg = ref(false);
+const optGroupsFor = computed(() =>
+  (optProduct.value?.modifierGroupIds ?? []).map((id) => optionGroups.value.find((g) => g.id === id)).filter((g): g is OptionGroup => !!g),
+);
+function onOptionsChosen(e: { modifiers: ChosenOption[]; quantity: number; note: string }) {
+  if (optProduct.value) pushLine(optProduct.value, e.quantity, e.modifiers, e.note);
+  focusSearch();
+}
+const sameOptions = (a?: ChosenOption[], b?: ChosenOption[]) => (a ?? []).map((x) => x.id).join() === (b ?? []).map((x) => x.id).join();
+
 function addProduct(p: CatalogItem, quantity = 1) {
-  const line = cart.lines.find((l) => l.productId === p.id && !l.discount);
+  if (p.modifierGroupIds?.length && optionGroups.value.length) {
+    optProduct.value = p;
+    optDlg.value = true;
+    return;
+  }
+  pushLine(p, quantity);
+}
+function pushLine(p: CatalogItem, quantity: number, modifiers: ChosenOption[] = [], note = '') {
+  const extra = modifiers.reduce((s, o) => s + Number(o.price), 0);
+  const line = cart.lines.find((l) => l.productId === p.id && !l.discount && sameOptions(l.modifiers, modifiers) && (l.note ?? '') === note);
   if (line) line.quantity = round3(line.quantity + quantity);
-  else cart.lines.push({ productId: p.id, categoryId: p.categoryId, name: p.name, sku: p.sku, unit: p.unit, price: p.price, taxable: p.taxable, trackStock: p.trackStock, quantity, discount: 0 });
+  else cart.lines.push({
+    productId: p.id, categoryId: p.categoryId, name: p.name, sku: p.sku, unit: p.unit, price: (Number(p.price) + extra).toFixed(2),
+    taxable: p.taxable, trackStock: p.trackStock, quantity, discount: 0, modifiers, note,
+  });
   if (p.trackStock && Number(p.stock) - (line?.quantity ?? quantity) < 0) notify.error(`Low stock: ${p.name} shows ${qty(p.stock)} left`);
-  selected.value = cart.lines.findIndex((l) => l.productId === p.id);
+  selected.value = line ? cart.lines.indexOf(line) : cart.lines.length - 1;
 }
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 function changeQty(i: number, d: number) {
@@ -378,7 +407,11 @@ async function complete(payments: { method: string; amount: number; reference?: 
   const body = {
     storeId: app.currentStoreId,
     clientRef: cart.clientRef,
-    items: cart.lines.map((l) => ({ productId: l.productId, quantity: l.quantity, discount: l.discount || undefined })),
+    items: cart.lines.map((l) => ({
+      productId: l.productId, quantity: l.quantity, discount: l.discount || undefined,
+      modifiers: l.modifiers?.length ? l.modifiers.map((o) => o.id) : undefined, note: l.note || undefined,
+    })),
+    ...(store.value?.hasKitchen && { orderType: cart.orderType ?? 'TAKEAWAY', tableNo: cart.orderType === 'DINE_IN' && cart.tableNo ? cart.tableNo : undefined }),
     payments,
     customerId: cart.customer?.id,
     redeemPoints: cart.redeemPoints || undefined,
@@ -425,7 +458,8 @@ async function saveOffline(body: any, payments: { method: string; amount: number
     store: store.value,
     cashier: { fullName: auth.user?.fullName },
     customer: cart.customer,
-    items: cart.lines.map((l, i) => ({ name: l.name, quantity: l.quantity, unitPrice: l.price, discount: t.lines[i].discount, lineTotal: t.lines[i].total, promotion: promos.value[i]?.name ? { name: promos.value[i].name } : null })),
+    items: cart.lines.map((l, i) => ({ name: l.name, quantity: l.quantity, unitPrice: l.price, discount: t.lines[i].discount, lineTotal: t.lines[i].total, promotion: promos.value[i]?.name ? { name: promos.value[i].name } : null, modifiers: l.modifiers, note: l.note })),
+    orderType: store.value?.hasKitchen ? cart.orderType : undefined, tableNo: cart.tableNo,
     subtotal: t.subtotal, discountTotal: t.discountTotal, taxTotal: t.taxTotal, total: t.total,
     pointsRedeemed: 0, pointsDiscount: 0, payments,
     changeDue: Math.round((paid - t.total) * 100) / 100,
@@ -455,7 +489,7 @@ function showDone(sale: any) {
   const paid = (sale.payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0);
   doneInfo.value = {
     total: Number(sale.amountDue ?? sale.total), paid, change: Number(sale.changeDue ?? 0),
-    receiptNo: sale.receiptNo, pointsEarned: sale.pointsEarned ?? 0, offline: !!sale.offline,
+    receiptNo: sale.receiptNo, queueNo: sale.queueNo ?? null, pointsEarned: sale.pointsEarned ?? 0, offline: !!sale.offline,
   };
   clearTimeout(doneTimer);
   doneTimer = setTimeout(() => (doneInfo.value = null), 20_000); // back to the welcome screen
@@ -468,7 +502,7 @@ const displayState = computed<DisplayState>(() => {
     cashier: auth.user?.fullName,
     customer: cart.customer ? { name: cart.customer.name, points: cart.customer.points } : null,
     lines: cart.lines.map((l, i) => ({
-      name: l.name, quantity: l.quantity, unit: l.unit, price: Number(l.price),
+      name: l.modifiers?.length ? `${l.name} (${optionsText(l.modifiers)})` : l.name, quantity: l.quantity, unit: l.unit, price: Number(l.price),
       total: t?.lines[i]?.total ?? 0, promo: promos.value[i]?.discount ? `${promos.value[i].name} −${m(promos.value[i].discount)}` : null,
     })),
     totals: { subtotal: t?.subtotal ?? 0, discount: t?.discountTotal ?? 0, tax: t?.taxTotal ?? 0, points: pointsDiscount.value, total: amountDue.value, items: itemCount.value },
@@ -521,6 +555,7 @@ async function refreshData() {
     api.get('/categories').then((c) => { categories.value = c; localStorage.setItem('pos.categories', JSON.stringify(c)); }),
     api.get('/customers/loyalty-rules').then((r) => { loyalty.value = r; localStorage.setItem('pos.loyalty', JSON.stringify(r)); }),
     loadPromos(),
+    api.get('/modifiers').then((g) => { optionGroups.value = g.filter((x: any) => x.isActive); localStorage.setItem('pos.modifiers', JSON.stringify(optionGroups.value)); }),
     syncNow(),
   ]);
 }
@@ -532,7 +567,7 @@ async function loadPromos() {
 }
 
 function onKey(e: KeyboardEvent) {
-  const dialogOpen = payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value;
+  const dialogOpen = optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value;
   if (e.key === 'F9' || (e.key === 'Enter' && e.ctrlKey)) { e.preventDefault(); if (!dialogOpen) openPay(); }
   else if (e.key === 'F2') { e.preventDefault(); focusSearch(); }
   else if (e.key === 'F4' && !dialogOpen) { e.preventDefault(); custDlg.value = true; }
@@ -608,7 +643,8 @@ async function logout() {
         </div>
         <div class="tiles">
           <button v-for="p in results" :key="p.id" class="tile" @click="addProduct(p); focusSearch()">
-            <span class="name">{{ p.name }}</span>
+            <img v-if="p.imageUrl" :src="p.imageUrl" alt="" class="tile-img" loading="lazy" />
+            <span class="name">{{ p.name }}<i v-if="p.modifierGroupIds?.length" class="pi pi-sliders-h opt-mark" /></span>
             <span class="price">{{ m(p.price) }}</span>
             <span class="meta">
               <span class="mono">{{ p.sku }}</span>
@@ -623,6 +659,10 @@ async function logout() {
 
       <!-- Cart -->
       <section class="cart-panel">
+        <div v-if="store?.hasKitchen" class="otype">
+          <SelectButton v-model="cart.orderType" :options="[{ l: 'Takeaway', v: 'TAKEAWAY' }, { l: 'Dine-in', v: 'DINE_IN' }]" option-label="l" option-value="v" :allow-empty="false" size="small" />
+          <InputText v-if="cart.orderType === 'DINE_IN'" v-model="cart.tableNo" placeholder="Table" size="small" style="width: 80px" maxlength="20" />
+        </div>
         <div class="cust">
           <template v-if="cart.customer">
             <i class="pi pi-user" />
@@ -640,6 +680,8 @@ async function logout() {
           <div v-for="(l, i) in cart.lines" :key="i" class="line" :class="{ sel: selected === i }" @click="selected = i">
             <div class="ln-main" @dblclick="editLine(i)">
               <div class="ln-name">{{ l.name }}</div>
+              <div v-if="l.modifiers?.length" class="small ln-opts">{{ optionsText(l.modifiers) }}</div>
+              <div v-if="l.note" class="small ln-note"><i class="pi pi-comment" /> {{ l.note }}</div>
               <div class="small muted">{{ m(l.price) }} / {{ l.unit }}<span v-if="l.discount" class="neg"> · −{{ m(l.discount) }}</span></div>
               <div v-if="promos[i]?.discount" class="promo small"><i class="pi pi-tag" /> {{ promos[i].name }} −{{ m(promos[i].discount) }}</div>
             </div>
@@ -690,6 +732,7 @@ async function logout() {
       </section>
     </div>
 
+    <PosOptions v-model:visible="optDlg" :product="optProduct" :groups="optGroupsFor" :currency="cur" @add="onOptionsChosen" />
     <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" :store-id="app.currentStoreId!" :khqr-enabled="!!(store as any)?.khqrAccountId" :wallet-card="cart.wallet" :voucher="cart.voucher" @pay="complete" @progress="payProgress = $event" />
 
     <!-- Receipt after sale -->
@@ -871,6 +914,11 @@ async function logout() {
 .line.sel { background: color-mix(in srgb, var(--p-primary-color) 7%, transparent); }
 .ln-name { font-weight: 600; line-height: 1.25; }
 .promo { color: var(--p-primary-color); font-weight: 600; margin-top: 2px; }
+.ln-opts { color: var(--text-2); }
+.ln-note { color: #b45309; }
+.otype { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.tile-img { width: 100%; height: 72px; object-fit: cover; border-radius: 8px; }
+.opt-mark { font-size: 11px; color: var(--text-3); margin-left: 6px; }
 .wallet-line { color: var(--p-primary-color); font-weight: 600; }
 .coupon-row { color: var(--p-primary-color); font-weight: 600; }
 .qty { display: flex; align-items: center; gap: 4px; }

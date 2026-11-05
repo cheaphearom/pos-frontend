@@ -21,12 +21,14 @@ const sections: { title: string; items: NavItem[] }[] = [
   { title: 'Selling', items: [
     { to: '/sales', label: 'Sales', icon: 'pi pi-receipt' },
     { to: '/shifts', label: 'Shifts', icon: 'pi pi-clock' },
+    { to: '/kitchen', label: 'Barista screen', icon: 'pi pi-th-large' },
     { to: '/customers', label: 'Customers', icon: 'pi pi-heart' },
     { to: '/wallet-cards', label: 'Wallet cards', icon: 'pi pi-credit-card', roles: ['STORE_MANAGER'] },
   ] },
   { title: 'Catalogue & stock', items: [
     { to: '/products', label: 'Products', icon: 'pi pi-box' },
     { to: '/categories', label: 'Categories', icon: 'pi pi-tags', roles: ['SUPER_ADMIN'] },
+    { to: '/modifiers', label: 'Drink options', icon: 'pi pi-sliders-v', roles: ['STORE_MANAGER'] },
     { to: '/inventory', label: 'Inventory', icon: 'pi pi-warehouse', roles: ['STORE_MANAGER'] },
     { to: '/transfers', label: 'Transfers', icon: 'pi pi-arrow-right-arrow-left', roles: ['STORE_MANAGER'] },
   ] },

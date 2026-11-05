@@ -20,6 +20,9 @@ const routes: RouteRecordRaw[] = [
   { path: '/login', component: () => import('./views/LoginView.vue'), meta: { public: true, title: 'Log in' } },
   // Customer-facing second screen: only listens to the POS window, so no login needed.
   { path: '/display', component: () => import('./views/CustomerDisplayView.vue'), meta: { public: true, title: 'Customer display' } },
+  { path: '/kitchen', component: () => import('./views/KitchenView.vue'), meta: { title: 'Barista screen' } },
+  // Pickup board for a TV: public, shows queue numbers only.
+  { path: '/board', component: () => import('./views/BoardView.vue'), meta: { public: true, title: 'Order board' } },
   { path: '/pos', component: () => import('./views/PosView.vue'), meta: { title: 'POS' } },
   {
     path: '/',
@@ -29,6 +32,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'sales', component: () => import('./views/SalesView.vue'), meta: { title: 'Sales' } },
       { path: 'shifts', component: () => import('./views/ShiftsView.vue'), meta: { title: 'Shifts' } },
       { path: 'products', component: () => import('./views/ProductsView.vue'), meta: { title: 'Products' } },
+      { path: 'modifiers', component: () => import('./views/ModifiersView.vue'), meta: { title: 'Drink options', roles: M } },
       { path: 'categories', component: () => import('./views/CategoriesView.vue'), meta: { title: 'Categories', roles: A } },
       { path: 'inventory', component: () => import('./views/InventoryView.vue'), meta: { title: 'Inventory', roles: M } },
       { path: 'transfers', component: () => import('./views/TransfersView.vue'), meta: { title: 'Transfers', roles: M } },

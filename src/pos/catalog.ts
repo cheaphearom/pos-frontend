@@ -14,6 +14,9 @@ export interface CatalogItem {
   isActive: boolean;
   categoryId: string | null;
   stock: string;
+  imageUrl?: string | null;
+  /** Drink option groups (Size, Sugar...) in order */
+  modifierGroupIds?: string[];
 }
 
 interface Saved { serverTime: string; products: CatalogItem[] }

@@ -15,7 +15,8 @@ const categories = ref<Category[]>([]);
 const list = usePagedList<Product>('/products', { search: '', categoryId: null, storeId: app.currentStoreId, includeInactive: false });
 
 const cur = computed(() => app.currentStore?.currency ?? 'USD');
-const empty = () => ({ id: '', sku: '', barcode: '', name: '', description: '', categoryId: null as string | null, unit: 'pcs', costPrice: 0, sellPrice: 0, taxable: true, trackStock: true, isActive: true });
+const empty = () => ({ id: '', sku: '', barcode: '', name: '', description: '', categoryId: null as string | null, unit: 'pcs', costPrice: 0, sellPrice: 0, taxable: true, trackStock: true, isActive: true, imageUrl: '', modifierGroupIds: [] as string[] });
+const modifierGroups = ref<any[]>([]);
 const dialog = ref(false);
 const saving = ref(false);
 const form = reactive(empty());
@@ -25,7 +26,10 @@ function openNew() {
   dialog.value = true;
 }
 function edit(p: Product) {
-  Object.assign(form, { ...p, barcode: p.barcode ?? '', description: p.description ?? '', costPrice: Number(p.costPrice), sellPrice: Number(p.sellPrice) });
+  Object.assign(form, {
+    ...empty(), ...p, barcode: p.barcode ?? '', description: p.description ?? '', costPrice: Number(p.costPrice), sellPrice: Number(p.sellPrice),
+    imageUrl: (p as any).imageUrl ?? '', modifierGroupIds: ((p as any).modifierGroups ?? []).map((m: any) => m.groupId),
+  });
   dialog.value = true;
 }
 
@@ -33,7 +37,7 @@ async function save() {
   saving.value = true;
   try {
     const { id, ...body } = form;
-    const payload = { ...body, barcode: body.barcode || undefined, description: body.description || undefined, categoryId: body.categoryId || undefined };
+    const payload = { ...body, barcode: body.barcode || undefined, description: body.description || undefined, categoryId: body.categoryId || undefined, imageUrl: body.imageUrl || null };
     if (id) await api.patch(`/products/${id}`, payload);
     else await api.post('/products', { ...payload, isActive: undefined });
     notify.success(id ? 'Product updated' : 'Product created', form.name);
@@ -53,7 +57,7 @@ const margin = (p: Product) => {
 
 onMounted(async () => {
   list.load();
-  categories.value = await api.get('/categories');
+  [categories.value, modifierGroups.value] = await Promise.all([api.get('/categories'), api.get('/modifiers').then((g) => g.filter((x: any) => x.isActive))]);
 });
 </script>
 
@@ -87,6 +91,7 @@ onMounted(async () => {
         <Column field="name" header="Name">
           <template #body="{ data }">
             {{ data.name }} <Tag v-if="!data.isActive" value="inactive" severity="secondary" />
+            <Tag v-if="data.modifierGroups?.length" :value="`${data.modifierGroups.length} options`" severity="info" style="margin-left: 4px" />
             <div class="small muted mono">{{ data.barcode }}</div>
           </template>
         </Column>
@@ -125,6 +130,11 @@ onMounted(async () => {
           <div class="field"><label>Selling price * <span class="hint">(before tax)</span></label><InputNumber v-model="form.sellPrice" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" fluid /></div>
         </div>
         <div class="field"><label>Description</label><Textarea v-model="form.description" rows="2" auto-resize /></div>
+        <div class="field">
+          <label>Drink options <span class="hint">(customer chooses at the POS, in this order)</span></label>
+          <MultiSelect v-model="form.modifierGroupIds" :options="modifierGroups" option-label="name" option-value="id" display="chip" placeholder="None" />
+        </div>
+        <div class="field"><label>Photo URL <span class="hint">(shown on the POS tile)</span></label><InputText v-model="form.imageUrl" placeholder="https://…/latte.jpg" /></div>
         <div class="row" style="gap: 24px; flex-wrap: wrap">
           <label class="row"><ToggleSwitch v-model="form.taxable" /> Taxable</label>
           <label class="row"><ToggleSwitch v-model="form.trackStock" /> Track stock</label>

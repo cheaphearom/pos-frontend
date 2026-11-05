@@ -9,6 +9,7 @@ import { usePagedList } from '@/composables/usePagedList';
 import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
 import { dateTime, humanize, money, qty } from '@/utils/format';
+import { optionsText } from '@/utils/modifiers';
 
 const app = useApp();
 const auth = useAuth();
@@ -103,6 +104,7 @@ onMounted(() => {
         <div class="r-head">
           <b>{{ sale.store.name }}</b>
           <div class="small muted">{{ sale.store.address }}<br />{{ sale.store.phone }}</div>
+          <div v-if="sale.queueNo" class="small mt"><b>Order {{ sale.queueNo }}</b> · {{ sale.orderType === 'DINE_IN' ? 'Dine-in' + (sale.tableNo ? ' table ' + sale.tableNo : '') : humanize(sale.orderType) }} · {{ humanize(sale.kitchenStatus) }}</div>
           <div class="small mt">Receipt <span class="mono">{{ sale.receiptNo }}</span> · {{ dateTime(sale.createdAt) }}</div>
           <div class="small">Cashier: {{ sale.cashier?.fullName ?? sale.channel }}</div>
           <div class="small" v-if="sale.customer">Member: {{ sale.customer.name }} ({{ sale.customer.code }})</div>
@@ -113,6 +115,7 @@ onMounted(() => {
             <td>
               {{ i.name }}
               <div class="small muted">{{ qty(i.quantity) }} × {{ m(i.unitPrice) }}<span v-if="Number(i.discount)"> · disc −{{ m(i.discount) }}</span><span v-if="Number(i.refundedQty)" class="neg"> · refunded {{ qty(i.refundedQty) }}</span></div>
+              <div v-if="i.modifiers?.length" class="small muted">{{ optionsText(i.modifiers, true) }}<span v-if="i.note"> · “{{ i.note }}”</span></div>
               <div v-if="i.promotion" class="small" style="color: var(--p-primary-color)"><i class="pi pi-tag" /> {{ i.promotion.name }} −{{ m(i.promoDiscount) }}</div>
             </td>
             <td class="right num">{{ m(i.lineTotal) }}</td>

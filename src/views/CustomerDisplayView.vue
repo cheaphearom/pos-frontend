@@ -126,6 +126,7 @@ onBeforeUnmount(() => {
       <div class="check"><i class="pi pi-check" /></div>
       <div class="kh">អរគុណ</div>
       <h1>Thank you!</h1>
+      <div v-if="state.done.queueNo" class="order-no"><div>Your order number</div><b>{{ state.done.queueNo }}</b></div>
       <div v-if="state.done.change > 0" class="change">
         <div>Your change</div>
         <b>{{ money(state.done.change) }}</b>
@@ -251,6 +252,9 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; }
 .done { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 1.5vh; }
 .check { width: 14vh; height: 14vh; border-radius: 50%; background: var(--save); color: #0d1b33; display: grid; place-items: center; font-size: 7vh; animation: pop .4s ease-out; }
 .check i { font-size: 7vh; font-weight: 900; }
+.order-no { text-align: center; }
+.order-no div { color: var(--muted); }
+.order-no b { font-size: 4.2em; line-height: 1; color: var(--accent); }
 .change { background: var(--panel); border-radius: 20px; padding: 2vh 4vw; margin-top: 2vh; }
 .change div { color: var(--muted); }
 .change b { font-size: 3.6em; font-variant-numeric: tabular-nums; }

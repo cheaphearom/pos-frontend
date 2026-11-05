@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** Receipt layout for screen and 80mm thermal printers. Works for server receipts and offline ones. */
 import { dateTime, humanize, money, qty } from '@/utils/format';
+import { optionsText } from '@/utils/modifiers';
 
 const props = defineProps<{ sale: any; currency: string }>();
 const m = (v: any) => money(v, props.currency);
@@ -14,6 +15,10 @@ const m = (v: any) => money(v, props.currency);
       <div v-if="sale.store?.phone">Tel {{ sale.store.phone }}</div>
     </div>
     <div class="sep" />
+    <div v-if="sale.queueNo" class="queue">
+      <div>Order</div><b>{{ sale.queueNo }}</b>
+      <div v-if="sale.orderType && sale.orderType !== 'RETAIL'">{{ sale.orderType === 'DINE_IN' ? 'Dine-in' + (sale.tableNo ? ' · Table ' + sale.tableNo : '') : humanize(sale.orderType) }}</div>
+    </div>
     <div class="row2"><span>Receipt</span><b>{{ sale.receiptNo }}</b></div>
     <div class="row2"><span>Date</span><span>{{ dateTime(sale.createdAt) }}</span></div>
     <div class="row2"><span>Cashier</span><span>{{ sale.cashier?.fullName }}</span></div>
@@ -22,6 +27,8 @@ const m = (v: any) => money(v, props.currency);
     <div v-for="(i, n) in sale.items" :key="n" class="item">
       <div class="row2"><span>{{ i.name }}</span><span>{{ m(i.lineTotal) }}</span></div>
       <div class="sub">{{ qty(i.quantity) }} × {{ m(i.unitPrice) }}<template v-if="Number(i.discount)"> &nbsp;disc −{{ m(i.discount) }}</template></div>
+      <div v-if="i.modifiers?.length" class="sub">{{ optionsText(i.modifiers, true) }}</div>
+      <div v-if="i.note" class="sub">“{{ i.note }}”</div>
       <div v-if="i.promotion?.name" class="sub">★ {{ i.promotion.name }}</div>
     </div>
     <div class="sep" />
@@ -48,6 +55,8 @@ const m = (v: any) => money(v, props.currency);
 .row2 { display: flex; justify-content: space-between; gap: 10px; }
 .row2 > :last-child { text-align: right; white-space: nowrap; }
 .sub { opacity: .7; font-size: 11.5px; }
+.queue { text-align: center; border: 2px solid currentColor; border-radius: 8px; padding: 4px; margin-bottom: 6px; }
+.queue b { font-size: 30px; display: block; line-height: 1.1; }
 .total { font-weight: 800; font-size: 15px; margin: 4px 0; }
 .small { font-size: 11px; }
 </style>

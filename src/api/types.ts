@@ -16,6 +16,8 @@ export interface Store extends StoreRef {
   currency: string;
   taxRate: string;
   isActive: boolean;
+  hasKitchen?: boolean;
+  khqrAccountId?: string | null;
 }
 
 export interface Category { id: string; name: string; parentId: string | null; _count?: { products: number } }

@@ -28,7 +28,7 @@ export interface DisplayState {
   /** While paying */
   payment?: PaymentProgress | null;
   /** After the sale */
-  done?: { total: number; paid: number; change: number; receiptNo: string; pointsEarned: number; offline: boolean } | null;
+  done?: { total: number; paid: number; change: number; receiptNo: string; pointsEarned: number; offline: boolean; queueNo?: string | null } | null;
 }
 
 type Msg = { type: 'state'; state: DisplayState } | { type: 'hello' } | { type: 'ping' } | { type: 'bye' };

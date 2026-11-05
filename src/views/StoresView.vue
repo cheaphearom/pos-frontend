@@ -11,7 +11,7 @@ const rows = ref<Store[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
 const saving = ref(false);
-const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '' });
+const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false });
 const form = reactive(empty());
 
 async function load() {
@@ -29,7 +29,7 @@ async function save() {
       code: form.code.toUpperCase(), name: form.name, address: form.address || undefined, phone: form.phone || undefined,
       currency: form.currency.toUpperCase(), taxRate: Number((form.taxPercent / 100).toFixed(4)),
       khqrAccountId: form.khqrAccountId || null, khqrMerchantName: form.khqrMerchantName || null, khqrCity: form.khqrCity || null,
-      khqrMerchantId: form.khqrMerchantId || null, khqrBank: form.khqrBank || null,
+      khqrMerchantId: form.khqrMerchantId || null, khqrBank: form.khqrBank || null, hasKitchen: !!form.hasKitchen,
     };
     if (form.id) await api.patch(`/stores/${form.id}`, { ...body, isActive: form.isActive });
     else await api.post('/stores', body);
@@ -55,6 +55,7 @@ onMounted(load);
         <Column field="phone" header="Phone" />
         <Column field="currency" header="Currency" />
         <Column header="Tax" class="right"><template #body="{ data }">{{ (Number(data.taxRate) * 100).toFixed(2).replace(/\.?0+$/, '') }}%</template></Column>
+        <Column header="Café"><template #body="{ data }"><i v-if="data.hasKitchen" class="pi pi-check" /></template></Column>
         <Column header="KHQR"><template #body="{ data }"><span v-if="data.khqrAccountId" class="mono small">{{ data.khqrAccountId }}</span><span v-else class="muted">off</span></template></Column>
         <Column header="Status"><template #body="{ data }"><Tag :value="data.isActive ? 'active' : 'inactive'" :severity="data.isActive ? 'success' : 'secondary'" /></template></Column>
       </DataTable>
@@ -75,6 +76,7 @@ onMounted(load);
           <div class="field"><label>Tax rate (%)</label><InputNumber v-model="form.taxPercent" :min="0" :max="100" :max-fraction-digits="2" suffix="%" fluid /></div>
           <div v-if="form.id" class="field"><label>Status</label><label class="row"><ToggleSwitch v-model="form.isActive" /> Active</label></div>
         </div>
+        <label class="row"><ToggleSwitch v-model="form.hasKitchen" /> Café mode: queue numbers, dine-in / takeaway, barista screen</label>
         <h3 style="margin: 8px 0 0">KHQR payments (Bakong)</h3>
         <div class="form-2">
           <div class="field"><label>Bakong account ID</label><InputText v-model="form.khqrAccountId" placeholder="myshop@aclb" maxlength="32" /><span class="hint">Leave empty to turn KHQR off for this store</span></div>
