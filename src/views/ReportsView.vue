@@ -6,11 +6,11 @@ import SimpleChart from '@/components/SimpleChart.vue';
 import { useNotify } from '@/composables/useNotify';
 import { useApp } from '@/stores/app';
 import { downloadCsv } from '@/utils/csv';
-import { daysAgo, humanize, isoDate, money, num } from '@/utils/format';
+import { businessDay, humanize, money, num } from '@/utils/format';
 
 const app = useApp();
 const notify = useNotify();
-const f = reactive({ from: isoDate(daysAgo(29)) as string | null, to: isoDate(new Date()) as string | null, scope: 'store' as 'store' | 'all', groupBy: 'day' });
+const f = reactive({ from: businessDay(29) as string | null, to: businessDay(0) as string | null, scope: 'store' as 'store' | 'all', groupBy: 'day' });
 const loading = ref(false);
 const r = reactive<Record<string, any>>({});
 const cur = computed(() => app.currentStore?.currency ?? 'USD');
@@ -22,7 +22,7 @@ async function load() {
   loading.value = true;
   try {
     const p = params.value;
-    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients] = await Promise.all([
+    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production] = await Promise.all([
       api.get('/reports/sales-summary', { ...p, groupBy: f.groupBy }),
       api.get('/reports/profit', { ...p, groupBy: f.groupBy }),
       api.get('/reports/top-products', { ...p, limit: 20 }),
@@ -34,8 +34,9 @@ async function load() {
       api.get('/reports/wallet', p),
       api.get('/reports/coupons-vouchers', p),
       api.get('/reports/ingredient-usage', p),
+      api.get('/production/report', p),
     ]);
-    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients });
+    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production });
   } catch (e) {
     notify.error(e);
   } finally {
@@ -160,6 +161,24 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
           <Column header="Used" class="right"><template #body="{ data }">{{ num(data.used, 1) }} {{ data.unit }}</template></Column>
           <Column header="Cost" class="right"><template #body="{ data }">{{ m(data.cost) }}</template></Column>
         </DataTable>
+      </div>
+
+      <div class="card mt">
+        <div class="row" style="justify-content: space-between"><h3>Bakery production and waste</h3><span class="muted small">made {{ m(r.production.totals.productionCost) }} · wasted <b class="neg">{{ m(r.production.totals.wasteCost) }}</b></span></div>
+        <DataTable :value="r.production.data" size="small" scrollable scroll-height="320px">
+          <template #empty><span class="muted">Nothing baked or written off in this period</span></template>
+          <Column header="Item"><template #body="{ data }">{{ data.name }} <span class="mono small muted">{{ data.sku }}</span></template></Column>
+          <Column header="Batches" class="right"><template #body="{ data }">{{ data.batches }}</template></Column>
+          <Column header="Made" class="right"><template #body="{ data }">{{ num(data.produced, 1) }}</template></Column>
+          <Column header="Sold" class="right"><template #body="{ data }">{{ num(data.sold, 1) }}</template></Column>
+          <Column header="Wasted" class="right"><template #body="{ data }">{{ num(data.wasted, 1) }} {{ data.unit }}</template></Column>
+          <Column header="Waste %" class="right"><template #body="{ data }"><b v-if="data.wastePercent !== null" :class="{ neg: data.wastePercent > 10 }">{{ data.wastePercent }}%</b><span v-else class="muted">—</span></template></Column>
+          <Column header="Cost made" class="right"><template #body="{ data }">{{ m(data.productionCost) }}</template></Column>
+          <Column header="Cost wasted" class="right"><template #body="{ data }">{{ m(data.wasteCost) }}</template></Column>
+        </DataTable>
+        <div v-if="r.production.byReason.length" class="row mt small" style="flex-wrap: wrap; gap: 14px">
+          <span v-for="w in r.production.byReason" :key="w.reason">{{ humanize(w.reason) }}: <b>{{ m(w.cost) }}</b></span>
+        </div>
       </div>
 
       <div class="card mt">

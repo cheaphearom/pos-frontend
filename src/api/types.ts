@@ -8,6 +8,8 @@ export interface Me {
   fullName: string;
   role: Role;
   stores: StoreRef[];
+  /** Time zone reports count days in */
+  timezone?: string;
 }
 
 export interface Store extends StoreRef {

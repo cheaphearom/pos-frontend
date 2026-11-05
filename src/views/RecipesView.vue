@@ -1,5 +1,6 @@
 <script setup lang="ts">
-/** Recipes: what each drink uses (beans, milk, cups…), how options change it, and the real cost per cup. */
+/** Recipes: what each drink uses (beans, milk, cups…), how options change it, and the real cost per cup.
+ * Bakery items (made in batches) have a batch recipe instead, used when the batch is baked. */
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { api } from '@/api/client';
 import type { Product } from '@/api/types';
@@ -121,7 +122,7 @@ onMounted(() => {
       <div class="toolbar"><IconField><InputIcon class="pi pi-search" /><InputText v-model="search" placeholder="Drink or dish" /></IconField></div>
       <DataTable :value="shown" :loading="loading" size="small" @row-click="open($event.data)" :row-class="() => 'clickable'">
         <template #empty><span class="muted">No drinks yet</span></template>
-        <Column header="Product"><template #body="{ data }"><b>{{ data.name }}</b> <span class="mono small muted">{{ data.sku }}</span></template></Column>
+        <Column header="Product"><template #body="{ data }"><b>{{ data.name }}</b> <span class="mono small muted">{{ data.sku }}</span> <Tag v-if="data.madeInHouse" :value="`bakery · batch of ${data.batchYield}`" severity="info" /></template></Column>
         <Column header="Ingredients" class="right"><template #body="{ data }"><span :class="{ neg: !data.ingredients }">{{ data.ingredients || 'no recipe' }}</span></template></Column>
         <Column header="Price" class="right"><template #body="{ data }">{{ money(data.price) }}</template></Column>
         <Column header="Cost (default options)" class="right"><template #body="{ data }">{{ data.recipeCost === null ? '—' : c4(data.recipeCost) }}</template></Column>
@@ -131,7 +132,8 @@ onMounted(() => {
 
     <Drawer v-model:visible="show" position="right" :header="rec?.name" style="width: min(760px, 100vw)">
       <template v-if="rec">
-        <h3>Base recipe <span class="small muted">(one {{ rec.unit }}, default size)</span></h3>
+        <h3 v-if="rec.madeInHouse">Batch recipe <span class="small muted">(one batch = {{ Number(rec.batchYield) }} {{ rec.unit }}; used when baked on the Production page)</span></h3>
+        <h3 v-else>Base recipe <span class="small muted">(one {{ rec.unit }}, default size)</span></h3>
         <ProductPicker v-if="auth.isAdmin" kind="ingredient" placeholder="Add an ingredient…" @select="addIngredient" />
         <DataTable :value="items" size="small" class="mt">
           <template #empty><span class="muted">No ingredients yet. Add beans, milk, cups…</span></template>
@@ -145,10 +147,12 @@ onMounted(() => {
           <Column v-if="auth.isAdmin" style="width: 40px"><template #body="{ index }"><Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Remove" @click="items.splice(index, 1)" /></template></Column>
         </DataTable>
         <div class="row mt" style="justify-content: space-between">
-          <span>Base cost <b>{{ c4(baseCost) }}</b> · price {{ money(rec.sellPrice) }}</span>
+          <span v-if="rec.madeInHouse">Batch cost <b>{{ c4(baseCost) }}</b> · per piece <b>{{ c4(baseCost / (Number(rec.batchYield) || 1)) }}</b> · price {{ money(rec.sellPrice) }}</span>
+          <span v-else>Base cost <b>{{ c4(baseCost) }}</b> · price {{ money(rec.sellPrice) }}</span>
           <Button v-if="auth.isAdmin" label="Save recipe" icon="pi pi-check" :loading="saving" @click="saveRecipe" />
         </div>
 
+        <template v-if="!rec.madeInHouse">
         <h3 class="mt">How options change it</h3>
         <p class="small muted" style="margin-top: 0">Effects belong to the option, so "Large" or "Oat milk" work the same for every drink.</p>
         <div v-for="g in rec.groups" :key="g.id" class="grp">
@@ -175,6 +179,7 @@ onMounted(() => {
             <b :class="marginClass(previewPrice ? ((previewPrice - (preview.unitCost ?? 0)) / previewPrice) * 100 : null)">margin {{ previewPrice ? (((previewPrice - (preview.unitCost ?? 0)) / previewPrice) * 100).toFixed(1) : 0 }}%</b>
           </div>
         </div>
+        </template>
       </template>
     </Drawer>
 

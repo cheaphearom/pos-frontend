@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** Date range picker bound to { from, to } strings (YYYY-MM-DD), with quick presets. */
 import { computed } from 'vue';
-import { daysAgo, isoDate } from '@/utils/format';
+import { businessDay, isoDate } from '@/utils/format';
 
 const from = defineModel<string | null>('from');
 const to = defineModel<string | null>('to');
@@ -21,8 +21,8 @@ const presets = [
   { label: '90 days', days: 89 },
 ];
 function preset(days: number) {
-  from.value = isoDate(daysAgo(days));
-  to.value = isoDate(new Date());
+  from.value = businessDay(days);
+  to.value = businessDay(0);
 }
 </script>
 

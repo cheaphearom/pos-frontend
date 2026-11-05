@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { setBusinessTimezone } from '@/utils/format';
 import { computed, ref } from 'vue';
 import { api, tokens } from '@/api/client';
 import type { Me, Role } from '@/api/types';
@@ -25,9 +26,11 @@ export const useAuth = defineStore('auth', () => {
     try {
       user.value = await api.get<Me>('/auth/me');
       cache.set(user.value);
+      setBusinessTimezone(user.value.timezone);
     } catch (e) {
       // No connection: keep working as the last logged-in user (POS offline mode).
       user.value = e instanceof TypeError ? cache.get() : null;
+      setBusinessTimezone(user.value?.timezone);
     }
     return user.value;
   }

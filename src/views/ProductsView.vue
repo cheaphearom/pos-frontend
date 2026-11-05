@@ -15,7 +15,7 @@ const categories = ref<Category[]>([]);
 const list = usePagedList<Product>('/products', { search: '', categoryId: null, storeId: app.currentStoreId, includeInactive: false, kind: null as string | null });
 
 const cur = computed(() => app.currentStore?.currency ?? 'USD');
-const empty = () => ({ id: '', sku: '', barcode: '', name: '', description: '', categoryId: null as string | null, unit: 'pcs', costPrice: 0, sellPrice: 0, taxable: true, trackStock: true, isActive: true, imageUrl: '', modifierGroupIds: [] as string[], isIngredient: false, onlineAvailable: false });
+const empty = () => ({ id: '', sku: '', barcode: '', name: '', description: '', categoryId: null as string | null, unit: 'pcs', costPrice: 0, sellPrice: 0, taxable: true, trackStock: true, isActive: true, imageUrl: '', modifierGroupIds: [] as string[], isIngredient: false, onlineAvailable: false, madeInHouse: false, batchYield: 1, shelfLifeHours: null as number | null });
 const pack = reactive({ size: null as number | null, price: null as number | null });
 function applyPack() {
   if (pack.size && pack.price !== null) form.costPrice = Math.round((pack.price / pack.size) * 1e6) / 1e6;
@@ -37,6 +37,7 @@ function edit(p: Product) {
     imageUrl: (p as any).imageUrl ?? '', modifierGroupIds: ((p as any).modifierGroups ?? []).map((m: any) => m.groupId),
     isIngredient: !!(p as any).isIngredient,
     onlineAvailable: !!(p as any).onlineAvailable,
+    madeInHouse: !!(p as any).madeInHouse, batchYield: Number((p as any).batchYield ?? 1), shelfLifeHours: (p as any).shelfLifeHours ?? null,
   });
   Object.assign(pack, { size: null, price: null });
   dialog.value = true;
@@ -104,6 +105,7 @@ onMounted(async () => {
           <template #body="{ data }">
             {{ data.name }} <Tag v-if="!data.isActive" value="inactive" severity="secondary" />
             <Tag v-if="data.isIngredient" value="ingredient" severity="warn" style="margin-left: 4px" />
+            <Tag v-if="data.madeInHouse" value="bakery" severity="info" style="margin-left: 4px" />
             <Tag v-if="data.modifierGroups?.length" :value="`${data.modifierGroups.length} options`" severity="info" style="margin-left: 4px" />
             <div class="small muted mono">{{ data.barcode }}</div>
           </template>
@@ -157,7 +159,13 @@ onMounted(async () => {
           <label class="row"><ToggleSwitch v-model="form.taxable" /> Taxable</label>
           <label class="row"><ToggleSwitch v-model="form.trackStock" /> Track stock</label>
           <label v-if="!form.isIngredient" class="row"><ToggleSwitch v-model="form.onlineAvailable" /> Sell online</label>
+          <label v-if="!form.isIngredient" class="row"><ToggleSwitch v-model="form.madeInHouse" /> Made here (bakery)</label>
           <label v-if="form.id" class="row"><ToggleSwitch v-model="form.isActive" /> Active (for sale)</label>
+        </div>
+        <div v-if="form.madeInHouse && !form.isIngredient" class="grid2 bake">
+          <div class="field"><label>Pieces per batch <span class="hint">(the recipe is for one batch)</span></label><InputNumber v-model="form.batchYield" :min="0.001" :max-fraction-digits="3" fluid /></div>
+          <div class="field"><label>Fresh for (hours) <span class="hint">(empty = keeps)</span></label><InputNumber v-model="form.shelfLifeHours" :min="1" :max="8760" fluid /></div>
+          <p class="hint" style="grid-column: 1 / -1; margin: 0">Baking a batch (Production page) uses the ingredients and adds the pieces to stock; selling takes pieces from stock.</p>
         </div>
         <div class="row" style="justify-content: flex-end">
           <Button label="Cancel" severity="secondary" text @click="dialog = false" />
@@ -167,3 +175,7 @@ onMounted(async () => {
     </Dialog>
   </div>
 </template>
+
+<style scoped>
+.bake { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; border-radius: 10px; background: var(--bg); }
+</style>

@@ -53,6 +53,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'sales', component: () => import('./views/SalesView.vue'), meta: { title: 'Sales' } },
       { path: 'shifts', component: () => import('./views/ShiftsView.vue'), meta: { title: 'Shifts' } },
       { path: 'products', component: () => import('./views/ProductsView.vue'), meta: { title: 'Products' } },
+      { path: 'production', component: () => import('./views/ProductionView.vue'), meta: { title: 'Bakery production' } },
       { path: 'recipes', component: () => import('./views/RecipesView.vue'), meta: { title: 'Recipes', roles: M } },
       { path: 'modifiers', component: () => import('./views/ModifiersView.vue'), meta: { title: 'Drink options', roles: M } },
       { path: 'categories', component: () => import('./views/CategoriesView.vue'), meta: { title: 'Categories', roles: A } },

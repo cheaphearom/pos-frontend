@@ -30,6 +30,7 @@ const sections: { title: string; items: NavItem[] }[] = [
     { to: '/categories', label: 'Categories', icon: 'pi pi-tags', roles: ['SUPER_ADMIN'] },
     { to: '/modifiers', label: 'Drink options', icon: 'pi pi-sliders-v', roles: ['STORE_MANAGER'] },
     { to: '/recipes', label: 'Recipes', icon: 'pi pi-book', roles: ['STORE_MANAGER'] },
+    { to: '/production', label: 'Bakery production', icon: 'pi pi-sun' },
     { to: '/inventory', label: 'Inventory', icon: 'pi pi-warehouse', roles: ['STORE_MANAGER'] },
     { to: '/transfers', label: 'Transfers', icon: 'pi pi-arrow-right-arrow-left', roles: ['STORE_MANAGER'] },
   ] },
