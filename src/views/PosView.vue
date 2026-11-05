@@ -195,6 +195,10 @@ async function scanCode(code: string) {
   try {
     const r = await api.get('/codes/lookup', { code, storeId: app.currentStoreId, customerId: cart.customer?.id });
     if (r.kind === 'wallet') return useWalletCard(r.card);
+    if (r.kind === 'member') {
+      setCustomer(r.customer);
+      return notify.success(`Member ${r.customer.name}`, `${r.customer.points} points`);
+    }
     if (r.kind === 'voucher') return useVoucher(r.voucher);
     if (r.kind === 'coupon') {
       cart.coupon = { ...r.coupon, value: r.coupon.value, minSpend: r.coupon.minSpend, maxDiscount: r.coupon.maxDiscount };
@@ -518,7 +522,13 @@ async function takeOnline(o: any) {
   cart.orderType = full.orderType === 'DINE_IN' ? 'DINE_IN' : 'PICKUP';
   cart.tableNo = full.tableNo ?? '';
   cart.note = `Online · ${full.customerName}${full.phone ? ' · ' + full.phone : ''}`;
-  if (full.phone) {
+  if (full.customerId) {
+    // Ordered from the member app: same member, and the points they chose to use.
+    try {
+      setCustomer(await api.get(`/customers/${full.customerId}`));
+      cart.redeemPoints = full.redeemPoints ?? 0;
+    } catch { /* member removed */ }
+  } else if (full.phone) {
     try { setCustomer(await api.get('/customers/lookup', { code: full.phone })); } catch { /* not a member */ }
   }
   if (full.couponCode) await scanCode(full.couponCode);

@@ -98,8 +98,10 @@ onBeforeUnmount(() => { clearInterval(poll); clearInterval(tick); });
           <div><b>{{ Number(l.quantity) }}×</b> {{ l.name }}<div v-if="l.modifiers?.length" class="small muted">{{ optionsText(l.modifiers) }}</div><div v-if="l.note" class="small note">“{{ l.note }}”</div></div>
           <span>{{ money(l.total) }}</span>
         </div>
-        <div class="line total"><span>Total</span><span>{{ money(order.total) }}</span></div>
+        <div v-if="Number(order.totals?.pointsDiscount)" class="line"><span>Points used ({{ order.redeemPoints }})</span><span>−{{ money(order.totals.pointsDiscount) }}</span></div>
+        <div class="line total"><span>{{ order.payMethod === 'WALLET' ? 'Paid from wallet' : 'Total' }}</span><span>{{ money(order.total) }}</span></div>
       </section>
+      <RouterLink v-if="order.member" to="/m" class="again"><i class="pi pi-user" /> Back to my account</RouterLink>
       <RouterLink v-if="$route.query.store" :to="{ path: `/order/${$route.query.store}`, query: $route.query.table ? { table: $route.query.table } : {} }" class="again">Order more</RouterLink>
     </template>
     <div v-else class="center"><i class="pi pi-spin pi-spinner" style="font-size: 28px" /></div>

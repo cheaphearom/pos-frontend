@@ -81,7 +81,7 @@ async function adjust() {
         :loading="list.loading.value" size="small" @page="list.onPage" @row-click="open($event.data)" :row-class="() => 'clickable'">
         <template #empty><span class="muted">No customers</span></template>
         <Column header="Card"><template #body="{ data }"><span class="mono">{{ data.code }}</span></template></Column>
-        <Column header="Name"><template #body="{ data }">{{ data.name }} <Tag v-if="!data.isActive" value="inactive" severity="secondary" /></template></Column>
+        <Column header="Name"><template #body="{ data }">{{ data.name }} <Tag v-if="!data.isActive" value="inactive" severity="secondary" /> <Tag v-if="data.appJoinedAt" value="app" severity="info" v-tooltip="'Uses the member app'" /></template></Column>
         <Column field="phone" header="Phone" />
         <Column header="Points" class="right"><template #body="{ data }"><b class="num">{{ num(data.points) }}</b></template></Column>
         <Column header="Total spent" class="right"><template #body="{ data }">{{ m(data.totalSpent) }}</template></Column>

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test:e2e": "node test/pos.e2e.cjs && node test/phase4.e2e.cjs && node test/display.e2e.cjs && node test/wallet.e2e.cjs && node test/coupons.e2e.cjs && node test/cafe.e2e.cjs && node test/recipes.e2e.cjs && node test/online.e2e.cjs"
+    "test:e2e": "node test/pos.e2e.cjs && node test/phase4.e2e.cjs && node test/display.e2e.cjs && node test/wallet.e2e.cjs && node test/coupons.e2e.cjs && node test/cafe.e2e.cjs && node test/recipes.e2e.cjs && node test/online.e2e.cjs && node test/member.e2e.cjs"
   },
   "dependencies": {
     "@primeuix/themes": "^1.2.1",

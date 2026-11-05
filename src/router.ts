@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { setLoggedOutHandler } from './api/client';
+import { memberSession, setMemberLoggedOutHandler } from './online/memberApi';
 import type { Role } from './api/types';
 import AppLayout from './layouts/AppLayout.vue';
 import { useApp } from './stores/app';
@@ -10,6 +11,8 @@ declare module 'vue-router' {
     title?: string;
     public?: boolean;
     roles?: Role[];
+    /** Member app page: needs the member (customer) login, not staff */
+    member?: boolean;
   }
 }
 
@@ -26,6 +29,21 @@ const routes: RouteRecordRaw[] = [
   // Online ordering for customers (public)
   { path: '/order/status/:token', component: () => import('./views/OrderStatusView.vue'), meta: { public: true, title: 'Your order' } },
   { path: '/order/:code', component: () => import('./views/OrderView.vue'), meta: { public: true, title: 'Order online' } },
+  // Member app for customers' phones (own phone-number login)
+  { path: '/m/login', component: () => import('./views/member/MemberLogin.vue'), meta: { public: true, title: 'Member login' } },
+  {
+    path: '/m',
+    component: () => import('./views/member/MemberLayout.vue'),
+    meta: { public: true, member: true },
+    children: [
+      { path: '', component: () => import('./views/member/MemberHome.vue'), meta: { public: true, member: true, title: 'My account' } },
+      { path: 'order', component: () => import('./views/member/MemberStores.vue'), meta: { public: true, member: true, title: 'Order ahead' } },
+      { path: 'orders', component: () => import('./views/member/MemberOrders.vue'), meta: { public: true, member: true, title: 'History' } },
+      { path: 'orders/:id', component: () => import('./views/member/MemberOrder.vue'), meta: { public: true, member: true, title: 'Receipt' } },
+      { path: 'points', component: () => import('./views/member/MemberPoints.vue'), meta: { public: true, member: true, title: 'Points' } },
+      { path: 'profile', component: () => import('./views/member/MemberProfile.vue'), meta: { public: true, member: true, title: 'Me' } },
+    ],
+  },
   { path: '/pos', component: () => import('./views/PosView.vue'), meta: { title: 'POS' } },
   {
     path: '/',
@@ -59,6 +77,9 @@ const routes: RouteRecordRaw[] = [
 export const router = createRouter({ history: createWebHistory(), routes });
 
 router.beforeEach(async (to) => {
+  // Member app: separate login, no staff checks.
+  if (to.meta.member) return memberSession.s ? true : { path: '/m/login', query: { next: to.fullPath } };
+  if (to.path === '/m/login') return memberSession.s ? '/m' : true;
   const auth = useAuth();
   if (!auth.user) await auth.loadMe();
   if (to.meta.public) return auth.user && to.path === '/login' ? (auth.role === 'CASHIER' ? '/pos' : '/') : true;
@@ -70,10 +91,16 @@ router.beforeEach(async (to) => {
 });
 
 router.afterEach((to) => {
+  if (to.meta.member || to.path.startsWith('/order') || to.path === '/m/login') return; // the page sets its own title
   document.title = to.meta.title ? `${to.meta.title} · POS Admin` : 'POS Admin';
 });
 
 setLoggedOutHandler(() => {
   useAuth().clear();
   if (router.currentRoute.value.path !== '/login') router.push('/login');
+});
+
+setMemberLoggedOutHandler(() => {
+  const at = router.currentRoute.value;
+  if (at.meta.member) router.replace({ path: '/m/login', query: { next: at.fullPath } });
 });

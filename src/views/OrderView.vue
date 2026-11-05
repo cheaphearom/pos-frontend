@@ -3,6 +3,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PosOptions, { type ChosenOption, type OptionGroup } from '@/components/pos/PosOptions.vue';
+import { mem, memberSession } from '@/online/memberApi';
 import { myOrders, pub } from '@/online/publicApi';
 import { optionsText } from '@/utils/modifiers';
 
@@ -19,7 +20,23 @@ const money = (v: number | string) => new Intl.NumberFormat('en-US', { style: 'c
 interface CartLine { productId: string; name: string; quantity: number; modifiers: ChosenOption[]; note: string; unitPrice: number }
 const CART = `order.cart:${code}`;
 const cart = ref<CartLine[]>(read(CART, []));
-const form = reactive(read(`order.form`, { customerName: '', phone: '', note: '', couponCode: '', payMethod: 'KHQR' as 'KHQR' | 'COUNTER' }));
+const form = reactive(read(`order.form`, { customerName: '', phone: '', note: '', couponCode: '', payMethod: 'KHQR' as 'KHQR' | 'COUNTER' | 'WALLET' }));
+if (form.payMethod === 'WALLET' && !memberSession.s) form.payMethod = 'KHQR';
+
+// Logged in to the member app: no name/phone to type, points and wallet can pay.
+const member = ref<any>(null);
+const usePoints = ref(false);
+const card = computed(() => member.value?.cards.find((c: any) => c.status === 'ACTIVE') ?? null);
+const loginLink = computed(() => `/m/login?next=${encodeURIComponent(route.fullPath.replace(/[?&]cart=1/, ''))}`);
+/** Points to use: as many as the member has, leaving at least 1 cent to pay (same rule as the server). */
+const redeem = computed(() => {
+  if (!usePoints.value || !member.value || !quote.value) return 0;
+  const pv = member.value.pointValue;
+  return Math.max(0, Math.min(member.value.points, Math.floor((Math.round(Number(quote.value.total) * 100) - 1) / Math.round(pv * 100))));
+});
+const pointsOff = computed(() => (member.value ? Math.floor(redeem.value * Math.round(member.value.pointValue * 100)) / 100 : 0));
+const amountDue = computed(() => (quote.value ? Math.round((Number(quote.value.total) - pointsOff.value) * 100) / 100 : 0));
+const walletShort = computed(() => !!card.value && Number(card.value.balance) < amountDue.value);
 watch(cart, (c) => save(CART, c), { deep: true });
 watch(form, (f) => save('order.form', { ...f, note: '', couponCode: '' }), { deep: true });
 function read<T>(k: string, d: T): T { try { return JSON.parse(localStorage.getItem(k) ?? '') ?? d; } catch { return d; } }
@@ -90,12 +107,15 @@ const placing = ref(false);
 const placeError = ref('');
 async function place() {
   placeError.value = '';
-  if (!form.customerName.trim()) { placeError.value = 'Please enter your name'; return; }
+  if (!member.value && !form.customerName.trim()) { placeError.value = 'Please enter your name'; return; }
+  if (form.payMethod === 'WALLET' && (!card.value || walletShort.value)) { placeError.value = 'Not enough wallet balance'; return; }
   placing.value = true;
   try {
     const r = await pub(`/stores/${code}/orders`, {
-      items: request(), customerName: form.customerName.trim(), phone: form.phone.trim() || undefined, note: form.note.trim() || undefined,
-      couponCode: form.couponCode || undefined, tableNo: table || undefined, payMethod: form.payMethod,
+      items: request(), note: form.note.trim() || undefined, couponCode: form.couponCode || undefined, tableNo: table || undefined, payMethod: form.payMethod,
+      ...(member.value
+        ? { redeemPoints: redeem.value || undefined, walletCardId: form.payMethod === 'WALLET' ? card.value?.id : undefined }
+        : { customerName: form.customerName.trim(), phone: form.phone.trim() || undefined }),
     });
     myOrders.add(r.token, code);
     cart.value = [];
@@ -108,9 +128,15 @@ onMounted(async () => {
   try {
     menu.value = await pub(`/stores/${code}/menu`);
     document.title = `Order · ${menu.value.store.name}`;
-    if (!menu.value.store.khqr) form.payMethod = 'COUNTER';
+    if (memberSession.s) {
+      member.value = await mem('/member/me').catch(() => null);
+      if (member.value && card.value) form.payMethod = 'WALLET';
+    }
+    if (form.payMethod === 'WALLET' && !card.value) form.payMethod = 'KHQR';
+    if (!menu.value.store.khqr && form.payMethod === 'KHQR') form.payMethod = 'COUNTER';
     // drop items no longer on the menu
     cart.value = cart.value.filter((l) => menu.value.products.some((p: any) => p.id === l.productId));
+    if (route.query.cart && cart.value.length) sheet.value = true; // "order again" from the member app
   } catch (e) { loadError.value = (e as Error).message; }
 });
 const recent = myOrders.list().filter((o) => o.store === code && Date.now() - new Date(o.at).getTime() < 6 * 3600_000);
@@ -125,7 +151,11 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
           <div class="sname">{{ menu.store.name }}</div>
           <div class="small">{{ table ? `Table ${table} · we bring it to you` : 'Order ahead · pick up at the counter' }}</div>
         </div>
-        <RouterLink v-if="recent.length" :to="`/order/status/${recent[0].token}`" class="mine"><i class="pi pi-receipt" /> My order</RouterLink>
+        <div class="links">
+          <RouterLink v-if="recent.length" :to="`/order/status/${recent[0].token}`" class="mine"><i class="pi pi-receipt" /> My order</RouterLink>
+          <RouterLink v-if="member" to="/m" class="mine"><i class="pi pi-user" /> {{ member.points }} pts</RouterLink>
+          <RouterLink v-else :to="loginLink" class="mine"><i class="pi pi-star" /> Member</RouterLink>
+        </div>
       </header>
       <nav class="cats">
         <button :class="{ on: !category }" @click="category = null">All</button>
@@ -172,24 +202,36 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
               <div><span>Subtotal</span><span>{{ money(quote.subtotal) }}</span></div>
               <div v-if="Number(quote.discountTotal)" class="save"><span>Discount<template v-if="quote.coupon"> ({{ quote.coupon.code }})</template></span><span>−{{ money(quote.discountTotal) }}</span></div>
               <div><span>Tax</span><span>{{ money(quote.taxTotal) }}</span></div>
-              <div class="grand"><span>Total</span><span>{{ money(quote.total) }}</span></div>
+              <div v-if="pointsOff" class="save"><span>Points ({{ redeem }})</span><span>−{{ money(pointsOff) }}</span></div>
+              <div class="grand"><span>Total</span><span>{{ money(amountDue) }}</span></div>
             </div>
             <Message v-if="quoteError" severity="warn" :closable="false" size="small">{{ quoteError }}</Message>
 
             <div class="form">
-              <div class="field"><label>Your name *</label><InputText v-model="form.customerName" maxlength="80" autocomplete="name" /></div>
-              <div class="field"><label>Phone <span class="hint">(members earn points)</span></label><InputText v-model="form.phone" inputmode="tel" maxlength="20" autocomplete="tel" /></div>
+              <template v-if="member">
+                <div class="memberbox">
+                  <span><i class="pi pi-user" /> <b>{{ member.name }}</b> · you earn points on this order</span>
+                  <label v-if="member.points && quote" class="usepts"><Checkbox v-model="usePoints" binary input-id="usepts" /> <span>Use my points ({{ member.points }} = {{ money(Math.floor(member.points * member.pointValue * 100) / 100) }})</span></label>
+                </div>
+              </template>
+              <template v-else>
+                <div class="field"><label>Your name *</label><InputText v-model="form.customerName" maxlength="80" autocomplete="name" /></div>
+                <div class="field"><label>Phone <span class="hint">(members earn points)</span></label><InputText v-model="form.phone" inputmode="tel" maxlength="20" autocomplete="tel" /></div>
+                <RouterLink :to="loginLink" class="hint">Member? Log in to use points and your wallet</RouterLink>
+              </template>
               <div class="field"><label>Note</label><InputText v-model="form.note" maxlength="200" placeholder="Anything we should know?" /></div>
               <div class="field">
                 <label>Payment</label>
                 <div class="pay">
+                  <button v-if="card" :class="{ on: form.payMethod === 'WALLET' }" :disabled="walletShort" @click="form.payMethod = 'WALLET'"><i class="pi pi-credit-card" /> Wallet {{ money(card.balance) }}</button>
                   <button v-if="menu.store.khqr" :class="{ on: form.payMethod === 'KHQR' }" @click="form.payMethod = 'KHQR'"><i class="pi pi-qrcode" /> KHQR now</button>
                   <button :class="{ on: form.payMethod === 'COUNTER' }" @click="form.payMethod = 'COUNTER'"><i class="pi pi-wallet" /> Pay at counter</button>
                 </div>
               </div>
             </div>
+            <Message v-if="form.payMethod === 'WALLET' && walletShort" severity="warn" :closable="false" size="small">Your wallet balance is not enough. Top up at the counter, or choose another payment.</Message>
             <Message v-if="placeError" severity="error" :closable="false" size="small">{{ placeError }}</Message>
-            <Button class="placebtn" :label="quote ? `Place order · ${money(quote.total)}` : 'Place order'" :loading="placing || quoting" :disabled="!quote" @click="place" />
+            <Button class="placebtn" :label="quote ? `${form.payMethod === 'WALLET' ? 'Pay with wallet' : 'Place order'} · ${money(amountDue)}` : 'Place order'" :loading="placing || quoting" :disabled="!quote" @click="place" />
           </template>
         </div>
       </Drawer>
@@ -203,6 +245,10 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
 .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 16px 10px; background: var(--surface); }
 .sname { font-size: 20px; font-weight: 800; }
 .small { font-size: 13px; color: var(--text-2); }
+.links { display: flex; gap: 12px; }
+.memberbox { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--p-primary-color) 8%, var(--surface)); }
+.usepts { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.pay button:disabled { opacity: .5; }
 .mine { font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .cats { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; position: sticky; top: 0; background: var(--surface); z-index: 2; border-bottom: 1px solid var(--border); scrollbar-width: none; }
 .cats button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 600; white-space: nowrap; }
@@ -231,7 +277,7 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
 .totals div { display: flex; justify-content: space-between; }
 .totals .save { color: var(--good); }
 .grand { font-size: 20px; font-weight: 800; border-top: 1px solid var(--border); padding-top: 6px; }
-.pay { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pay { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
 .pay button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 12px; padding: 14px; font: inherit; font-weight: 700; display: flex; gap: 8px; justify-content: center; align-items: center; }
 .pay button.on { border-color: var(--p-primary-color); color: var(--p-primary-color); background: color-mix(in srgb, var(--p-primary-color) 10%, var(--surface)); }
 .placebtn { width: 100%; padding: 16px; font-size: 18px; }

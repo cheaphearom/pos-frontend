@@ -1,12 +1,13 @@
-/** Calls to the public online-ordering API (no login). */
+/** Calls to the public online-ordering API (no staff login). Sends the member app token when the customer is logged in. */
 const BASE = '/api/v1/public';
+const memberToken = () => { try { return JSON.parse(localStorage.getItem('member.session') ?? 'null')?.token ?? null; } catch { return null; } };
 
 export class PublicError extends Error {}
 
 export async function pub<T = any>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(BASE + path, {
     method: body === undefined ? 'GET' : 'POST',
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    headers: { ...(body !== undefined && { 'Content-Type': 'application/json' }), ...(memberToken() && { Authorization: `Bearer ${memberToken()}` }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const j = await res.json().catch(() => ({}));
