@@ -18,6 +18,7 @@ const A: Role[] = ['SUPER_ADMIN'];
 
 const routes: RouteRecordRaw[] = [
   { path: '/login', component: () => import('./views/LoginView.vue'), meta: { public: true, title: 'Log in' } },
+  { path: '/pos', component: () => import('./views/PosView.vue'), meta: { title: 'POS' } },
   {
     path: '/',
     component: AppLayout,
@@ -44,7 +45,7 @@ export const router = createRouter({ history: createWebHistory(), routes });
 router.beforeEach(async (to) => {
   const auth = useAuth();
   if (!auth.user) await auth.loadMe();
-  if (to.meta.public) return auth.user && to.path === '/login' ? '/' : true;
+  if (to.meta.public) return auth.user && to.path === '/login' ? (auth.role === 'CASHIER' ? '/pos' : '/') : true;
   if (!auth.user) return { path: '/login', query: to.fullPath !== '/' ? { next: to.fullPath } : {} };
   const app = useApp();
   if (!app.stores.length) await app.loadStores().catch(() => undefined);

@@ -19,7 +19,7 @@ async function submit() {
   try {
     await auth.login(email.value.trim(), password.value);
     await app.loadStores();
-    router.push((route.query.next as string) || '/');
+    router.push((route.query.next as string) || (auth.role === 'CASHIER' ? '/pos' : '/'));
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Login failed';
   } finally {

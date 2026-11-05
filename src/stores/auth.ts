@@ -24,8 +24,10 @@ export const useAuth = defineStore('auth', () => {
     if (!tokens.access) return null;
     try {
       user.value = await api.get<Me>('/auth/me');
-    } catch {
-      user.value = null;
+      cache.set(user.value);
+    } catch (e) {
+      // No connection: keep working as the last logged-in user (POS offline mode).
+      user.value = e instanceof TypeError ? cache.get() : null;
     }
     return user.value;
   }
@@ -33,13 +35,28 @@ export const useAuth = defineStore('auth', () => {
   async function logout() {
     const refreshToken = tokens.refresh;
     tokens.clear();
+    cache.clear();
     user.value = null;
     if (refreshToken) await api.post('/auth/logout', { refreshToken }).catch(() => undefined);
   }
 
   function clear() {
     user.value = null;
+    cache.clear();
   }
 
   return { user, isLoggedIn, role, isAdmin, isManager, can, login, loadMe, logout, clear };
 });
+
+const ME = 'pos.me';
+const cache = {
+  get(): Me | null {
+    try { return JSON.parse(localStorage.getItem(ME) ?? 'null'); } catch { return null; }
+  },
+  set(me: Me) {
+    try { localStorage.setItem(ME, JSON.stringify(me)); } catch { /* ignore */ }
+  },
+  clear() {
+    try { localStorage.removeItem(ME); } catch { /* ignore */ }
+  },
+};

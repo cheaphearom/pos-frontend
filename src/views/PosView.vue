@@ -1,0 +1,630 @@
+<script setup lang="ts">
+/**
+ * Cashier checkout screen.
+ * - Barcode scanners type the code + Enter into the search box ("3*code" = quantity 3).
+ * - Works offline: products come from the local catalogue, prices are calculated on the
+ *   device with the same rules as the server, and sales wait in a queue until online.
+ */
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import { api, ApiError } from '@/api/client';
+import PosPayment from '@/components/pos/PosPayment.vue';
+import PosReceipt from '@/components/pos/PosReceipt.vue';
+import { useNotify } from '@/composables/useNotify';
+import { useCatalog, type CatalogItem } from '@/pos/catalog';
+import { isNetworkError, online } from '@/pos/network';
+import { PricingError, priceCart, pointsValue } from '@/pos/pricing';
+import { enqueue, loadQueue, queue, removeFromQueue, retryQueued, syncingQueue, syncQueue } from '@/pos/queue';
+import { uuid } from '@/pos/uuid';
+import { useApp } from '@/stores/app';
+import { useAuth } from '@/stores/auth';
+import { dateTime, money, qty } from '@/utils/format';
+
+const app = useApp();
+const auth = useAuth();
+const router = useRouter();
+const notify = useNotify();
+
+const store = computed(() => app.currentStore);
+const cur = computed(() => store.value?.currency ?? 'USD');
+const m = (v: number | string) => money(v, cur.value);
+const catalog = useCatalog(app.currentStoreId!);
+
+// ───────────── Cart (kept in localStorage so a reload does not lose it) ─────────────
+interface Line { productId: string; name: string; sku: string; unit: string; price: string; taxable: boolean; trackStock: boolean; quantity: number; discount: number }
+interface Cart {
+  clientRef: string;
+  startedAt: string;
+  lines: Line[];
+  customer: { id: string; name: string; code: string; phone: string | null; points: number } | null;
+  redeemPoints: number;
+  discount: number;
+  discountPercent: number;
+  note: string;
+}
+const CART_KEY = `pos.cart:${app.currentStoreId}`;
+const HELD_KEY = `pos.held:${app.currentStoreId}`;
+const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, redeemPoints: 0, discount: 0, discountPercent: 0, note: '' });
+const readJson = <T,>(k: string, d: T): T => {
+  try { return JSON.parse(localStorage.getItem(k) ?? '') ?? d; } catch { return d; }
+};
+const cart = reactive<Cart>(readJson(CART_KEY, newCart()));
+const held = ref<Cart[]>(readJson(HELD_KEY, []));
+watch(cart, (c) => localStorage.setItem(CART_KEY, JSON.stringify(c)), { deep: true });
+watch(held, (h) => localStorage.setItem(HELD_KEY, JSON.stringify(h)), { deep: true });
+
+function addProduct(p: CatalogItem, quantity = 1) {
+  const line = cart.lines.find((l) => l.productId === p.id && !l.discount);
+  if (line) line.quantity = round3(line.quantity + quantity);
+  else cart.lines.push({ productId: p.id, name: p.name, sku: p.sku, unit: p.unit, price: p.price, taxable: p.taxable, trackStock: p.trackStock, quantity, discount: 0 });
+  if (p.trackStock && Number(p.stock) - (line?.quantity ?? quantity) < 0) notify.error(`Low stock: ${p.name} shows ${qty(p.stock)} left`);
+  selected.value = cart.lines.findIndex((l) => l.productId === p.id);
+}
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+function changeQty(i: number, d: number) {
+  const l = cart.lines[i];
+  l.quantity = round3(Math.max(0, l.quantity + d));
+  if (l.quantity === 0) cart.lines.splice(i, 1);
+}
+function clearCart() {
+  Object.assign(cart, newCart());
+  search.value = '';
+  focusSearch();
+}
+
+// ───────────── Totals (same maths as the server) ─────────────
+const taxRate = computed(() => Number(store.value?.taxRate ?? 0));
+const priced = computed(() => {
+  if (!cart.lines.length) return { totals: null, error: '' };
+  try {
+    return {
+      totals: priceCart(cart.lines.map((l) => ({ price: l.price, quantity: l.quantity, discount: l.discount, taxable: l.taxable })), taxRate.value, {
+        amount: cart.discount || undefined,
+        percent: cart.discountPercent || undefined,
+      }),
+      error: '',
+    };
+  } catch (e) {
+    return { totals: null, error: e instanceof PricingError ? e.message : String(e) };
+  }
+});
+const totals = computed(() => priced.value.totals);
+const loyalty = ref<{ earnRate: number; pointValue: number }>(readJson('pos.loyalty', { earnRate: 1, pointValue: 0.01 }));
+const pointsDiscount = computed(() => (cart.customer && cart.redeemPoints ? pointsValue(cart.redeemPoints, loyalty.value.pointValue) : 0));
+const amountDue = computed(() => Math.round(((totals.value?.total ?? 0) - pointsDiscount.value) * 100) / 100);
+const maxRedeem = computed(() => {
+  if (!cart.customer || !totals.value) return 0;
+  return Math.min(cart.customer.points, Math.floor(totals.value.total / loyalty.value.pointValue));
+});
+const itemCount = computed(() => cart.lines.reduce((s, l) => s + (l.unit === 'pcs' ? l.quantity : 1), 0));
+
+// ───────────── Product search / scanning ─────────────
+const search = ref('');
+const category = ref<string | null>(null);
+const categories = ref<{ id: string; name: string }[]>(readJson('pos.categories', []));
+const searchEl = ref<HTMLInputElement | null>(null);
+const results = computed(() => catalog.search(search.value, category.value, 60));
+const selected = ref(-1);
+const focusSearch = () => nextTick(() => searchEl.value?.focus());
+
+function onSearchEnter() {
+  const raw = search.value.trim();
+  if (!raw) return payment.value || openPay();
+  // "3*8850000001" → quantity 3
+  const mult = /^(\d+(?:\.\d+)?)\*(.+)$/.exec(raw);
+  const q = mult ? Number(mult[1]) : 1;
+  const code = mult ? mult[2] : raw;
+  const hit = catalog.findCode(code) ?? (results.value.length === 1 ? results.value[0] : undefined);
+  if (hit) {
+    addProduct(hit, q);
+    search.value = '';
+  } else notify.error(`No product with code "${code}"`);
+}
+
+// ───────────── Customer & loyalty ─────────────
+const custDlg = ref(false);
+const custCode = ref('');
+const custBusy = ref(false);
+const newCust = reactive({ show: false, name: '', phone: '' });
+async function findCustomer() {
+  if (!custCode.value.trim()) return;
+  custBusy.value = true;
+  try {
+    const c = await api.get('/customers/lookup', { code: custCode.value.trim() });
+    setCustomer(c);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) {
+      newCust.show = true;
+      newCust.phone = custCode.value.trim();
+    } else notify.error(isNetworkError(e) ? 'Offline: member lookup needs internet' : e);
+  } finally {
+    custBusy.value = false;
+  }
+}
+async function createCustomer() {
+  try {
+    setCustomer(await api.post('/customers', { name: newCust.name, phone: newCust.phone || undefined }));
+  } catch (e) { notify.error(e); }
+}
+function setCustomer(c: any) {
+  cart.customer = { id: c.id, name: c.name, code: c.code, phone: c.phone, points: c.points };
+  cart.redeemPoints = 0;
+  custDlg.value = false;
+  custCode.value = '';
+  newCust.show = false;
+  focusSearch();
+}
+
+// ───────────── Discounts, hold, note ─────────────
+const discDlg = ref(false);
+const disc = reactive({ type: 'amount' as 'amount' | 'percent', value: 0 });
+function openDiscount() {
+  disc.type = cart.discountPercent ? 'percent' : 'amount';
+  disc.value = cart.discountPercent || cart.discount || 0;
+  discDlg.value = true;
+}
+function applyDiscount() {
+  cart.discount = disc.type === 'amount' ? disc.value : 0;
+  cart.discountPercent = disc.type === 'percent' ? disc.value : 0;
+  discDlg.value = false;
+  focusSearch();
+}
+const lineDlg = ref(false);
+const lineEdit = reactive({ index: -1, quantity: 1, discount: 0 });
+function editLine(i: number) {
+  const l = cart.lines[i];
+  Object.assign(lineEdit, { index: i, quantity: l.quantity, discount: l.discount });
+  lineDlg.value = true;
+}
+function saveLine() {
+  const l = cart.lines[lineEdit.index];
+  if (lineEdit.quantity <= 0) cart.lines.splice(lineEdit.index, 1);
+  else Object.assign(l, { quantity: round3(lineEdit.quantity), discount: lineEdit.discount || 0 });
+  lineDlg.value = false;
+  focusSearch();
+}
+
+function hold() {
+  if (!cart.lines.length) return;
+  held.value.push(JSON.parse(JSON.stringify(cart)));
+  clearCart();
+  notify.success('Sale on hold', 'Recall it from "Held"');
+}
+const heldDlg = ref(false);
+function recall(i: number) {
+  if (cart.lines.length) hold();
+  Object.assign(cart, held.value.splice(i, 1)[0]);
+  heldDlg.value = false;
+}
+
+// ───────────── Shift ─────────────
+const shift = ref<any>(readJson(`pos.shift:${app.currentStoreId}`, null));
+const shiftDlg = ref(false);
+const openingCash = ref(0);
+async function loadShift() {
+  try {
+    shift.value = await api.get('/shifts/current', { storeId: app.currentStoreId });
+    localStorage.setItem(`pos.shift:${app.currentStoreId}`, JSON.stringify(shift.value));
+  } catch (e) {
+    if (!isNetworkError(e)) notify.error(e);
+  }
+}
+async function openShift() {
+  try {
+    shift.value = await api.post('/shifts/open', { storeId: app.currentStoreId, openingCash: openingCash.value });
+    localStorage.setItem(`pos.shift:${app.currentStoreId}`, JSON.stringify(shift.value));
+    shiftDlg.value = false;
+    notify.success('Shift opened');
+    focusSearch();
+  } catch (e) { notify.error(e); }
+}
+
+// ───────────── Pay & complete ─────────────
+const payment = ref(false);
+const paying = ref(false);
+const receipt = ref<any>(null);
+const receiptDlg = ref(false);
+
+function openPay() {
+  if (!cart.lines.length) return;
+  if (priced.value.error) return notify.error(priced.value.error);
+  if (online.value && !shift.value) {
+    shiftDlg.value = true;
+    return;
+  }
+  payment.value = true;
+}
+
+async function complete(payments: { method: string; amount: number; reference?: string }[]) {
+  paying.value = true;
+  const body = {
+    storeId: app.currentStoreId,
+    clientRef: cart.clientRef,
+    items: cart.lines.map((l) => ({ productId: l.productId, quantity: l.quantity, discount: l.discount || undefined })),
+    payments,
+    customerId: cart.customer?.id,
+    redeemPoints: cart.redeemPoints || undefined,
+    discount: cart.discount || undefined,
+    discountPercent: cart.discountPercent || undefined,
+    note: cart.note || undefined,
+  };
+  try {
+    let sale: any;
+    if (online.value) {
+      try {
+        sale = await api.post('/sales', body);
+      } catch (e) {
+        if (!isNetworkError(e)) throw e;
+        sale = await saveOffline(body, payments); // connection dropped mid-sale
+      }
+    } else sale = await saveOffline(body, payments);
+
+    cart.lines.forEach((l) => catalog.deduct(l.productId, l.quantity));
+    receipt.value = sale;
+    payment.value = false;
+    receiptDlg.value = true;
+    Object.assign(cart, newCart());
+  } catch (e) {
+    notify.error(e);
+  } finally {
+    paying.value = false;
+  }
+}
+
+/** Queue the sale and build a local receipt from the on-device calculation. */
+async function saveOffline(body: any, payments: { method: string; amount: number }[]) {
+  if (body.redeemPoints) throw new Error('Points cannot be used while offline. Remove the points and try again.');
+  const t = totals.value!;
+  const paid = payments.reduce((s, p) => s + p.amount, 0);
+  const local = {
+    offline: true,
+    receiptNo: 'OFF-' + body.clientRef.slice(0, 8).toUpperCase(),
+    createdAt: new Date().toISOString(),
+    store: store.value,
+    cashier: { fullName: auth.user?.fullName },
+    customer: cart.customer,
+    items: cart.lines.map((l, i) => ({ name: l.name, quantity: l.quantity, unitPrice: l.price, discount: t.lines[i].discount, lineTotal: t.lines[i].total })),
+    subtotal: t.subtotal, discountTotal: t.discountTotal, taxTotal: t.taxTotal, total: t.total,
+    pointsRedeemed: 0, pointsDiscount: 0, payments,
+    changeDue: Math.round((paid - t.total) * 100) / 100,
+  };
+  await enqueue({ clientRef: body.clientRef, body: { ...body, offlineCreatedAt: local.createdAt }, createdAt: local.createdAt, attempts: 0, receipt: local });
+  return local;
+}
+
+function printReceipt() {
+  document.body.classList.add('printing-pos');
+  window.print();
+  setTimeout(() => document.body.classList.remove('printing-pos'), 500);
+}
+function nextSale() {
+  receiptDlg.value = false;
+  focusSearch();
+}
+
+// ───────────── Offline queue panel ─────────────
+const queueDlg = ref(false);
+const failedCount = computed(() => queue.value.filter((q) => q.error).length);
+async function syncNow() {
+  const r = await syncQueue();
+  if (r.sent) notify.success(`${r.sent} offline sale(s) uploaded`);
+  if (r.failed) notify.error(`${r.failed} sale(s) were rejected. Open the queue to see why.`);
+}
+function discardQueued(ref: string) {
+  if (confirm('Delete this offline sale? It will not be recorded.')) removeFromQueue(ref);
+}
+
+// ───────────── Startup & keyboard ─────────────
+let syncTimer: ReturnType<typeof setInterval> | undefined;
+async function refreshData() {
+  if (!online.value) return;
+  await Promise.allSettled([
+    catalog.sync(),
+    loadShift(),
+    api.get('/categories').then((c) => { categories.value = c; localStorage.setItem('pos.categories', JSON.stringify(c)); }),
+    api.get('/customers/loyalty-rules').then((r) => { loyalty.value = r; localStorage.setItem('pos.loyalty', JSON.stringify(r)); }),
+    syncNow(),
+  ]);
+}
+
+function onKey(e: KeyboardEvent) {
+  const dialogOpen = payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value;
+  if (e.key === 'F9' || (e.key === 'Enter' && e.ctrlKey)) { e.preventDefault(); if (!dialogOpen) openPay(); }
+  else if (e.key === 'F2') { e.preventDefault(); focusSearch(); }
+  else if (e.key === 'F4' && !dialogOpen) { e.preventDefault(); custDlg.value = true; }
+  else if (e.key === 'Enter' && receiptDlg.value) { e.preventDefault(); nextSale(); }
+  else if (!dialogOpen && document.activeElement === document.body && e.key.length === 1) focusSearch(); // scanner typing anywhere
+}
+
+watch(online, (v) => v && refreshData());
+onMounted(async () => {
+  await loadQueue();
+  const hadLocal = await catalog.loadLocal();
+  focusSearch();
+  if (online.value) {
+    if (!hadLocal) notify.success('Downloading products…');
+    await refreshData();
+  }
+  syncTimer = setInterval(() => online.value && catalog.sync().catch(() => undefined), 5 * 60_000);
+  window.addEventListener('keydown', onKey);
+});
+onBeforeUnmount(() => {
+  clearInterval(syncTimer);
+  window.removeEventListener('keydown', onKey);
+});
+
+async function logout() {
+  if (queue.value.length && !confirm(`${queue.value.length} offline sale(s) are not uploaded yet. They stay on this device. Log out anyway?`)) return;
+  await auth.logout();
+  router.push('/login');
+}
+</script>
+
+<template>
+  <div class="pos-screen">
+    <!-- Top bar -->
+    <header class="bar">
+      <RouterLink v-if="auth.isManager" to="/" class="back" v-tooltip.bottom="'Back to admin'"><i class="pi pi-arrow-left" /></RouterLink>
+      <div class="title">
+        <b>{{ store?.name }}</b>
+        <span class="muted small">{{ auth.user?.fullName }}</span>
+      </div>
+      <Select v-if="app.stores.length > 1" v-model="app.currentStoreId" :options="app.stores" option-label="code" option-value="id" size="small" :disabled="cart.lines.length > 0" />
+      <div class="spacer" />
+      <Tag v-if="!online" severity="danger" icon="pi pi-wifi" value="OFFLINE" />
+      <Tag v-else severity="success" value="Online" />
+      <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
+      <Button v-if="shift" :label="'Shift since ' + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" text @click="router.push(`/shifts?open=${shift.id}`)" />
+      <Button v-else label="Open shift" icon="pi pi-play" size="small" @click="shiftDlg = true" :disabled="!online" />
+      <Button icon="pi pi-sign-out" text rounded aria-label="Log out" v-tooltip.bottom="'Log out'" @click="logout" />
+    </header>
+
+    <div class="body">
+      <!-- Products -->
+      <section class="catalog-panel">
+        <div class="search">
+          <i class="pi pi-search" />
+          <input ref="searchEl" v-model="search" class="search-input" placeholder="Scan barcode or search… (F2)   e.g. 3*8850000001 for 3 pcs"
+            autocomplete="off" @keydown.enter.prevent="onSearchEnter" @keydown.esc="search = ''" />
+          <span v-if="catalog.syncing.value" class="pi pi-spin pi-sync muted" v-tooltip="'Updating products'" />
+        </div>
+        <div class="cats">
+          <button class="chip" :class="{ on: !category }" @click="category = null">All</button>
+          <button v-for="c in categories" :key="c.id" class="chip" :class="{ on: category === c.id }" @click="category = category === c.id ? null : c.id">{{ c.name }}</button>
+        </div>
+        <div class="tiles">
+          <button v-for="p in results" :key="p.id" class="tile" @click="addProduct(p); focusSearch()">
+            <span class="name">{{ p.name }}</span>
+            <span class="price">{{ m(p.price) }}</span>
+            <span class="meta">
+              <span class="mono">{{ p.sku }}</span>
+              <span v-if="p.trackStock" :class="{ neg: Number(p.stock) <= 0 }">{{ qty(p.stock) }} {{ p.unit }}</span>
+            </span>
+          </button>
+          <div v-if="!results.length" class="empty muted">
+            {{ catalog.items.value.length ? 'No matching products' : online ? 'Loading products…' : 'No products saved on this device yet. Connect to the internet once to download them.' }}
+          </div>
+        </div>
+      </section>
+
+      <!-- Cart -->
+      <section class="cart-panel">
+        <div class="cust">
+          <template v-if="cart.customer">
+            <i class="pi pi-user" />
+            <div style="flex: 1; min-width: 0">
+              <b>{{ cart.customer.name }}</b>
+              <div class="small muted">{{ cart.customer.code }} · {{ cart.customer.points }} points</div>
+            </div>
+            <Button icon="pi pi-times" text rounded size="small" aria-label="Remove customer" @click="cart.customer = null; cart.redeemPoints = 0" />
+          </template>
+          <Button v-else label="Add member (F4)" icon="pi pi-user-plus" text size="small" @click="custDlg = true" />
+        </div>
+
+        <div class="lines">
+          <div v-for="(l, i) in cart.lines" :key="i" class="line" :class="{ sel: selected === i }" @click="selected = i">
+            <div class="ln-main" @dblclick="editLine(i)">
+              <div class="ln-name">{{ l.name }}</div>
+              <div class="small muted">{{ m(l.price) }} / {{ l.unit }}<span v-if="l.discount" class="neg"> · −{{ m(l.discount) }}</span></div>
+            </div>
+            <div class="qty">
+              <button aria-label="Less" @click.stop="changeQty(i, -1)"><i class="pi pi-minus" /></button>
+              <span class="num" @click.stop="editLine(i)">{{ qty(l.quantity) }}</span>
+              <button aria-label="More" @click.stop="changeQty(i, 1)"><i class="pi pi-plus" /></button>
+            </div>
+            <div class="ln-total num">{{ totals ? m(totals.lines[i]?.total ?? 0) : '' }}</div>
+            <button class="ln-edit" aria-label="Edit line" @click.stop="editLine(i)"><i class="pi pi-ellipsis-v" /></button>
+          </div>
+          <div v-if="!cart.lines.length" class="empty muted"><i class="pi pi-shopping-cart" style="font-size: 32px" /><div>Scan or tap a product to start</div></div>
+        </div>
+
+        <div class="sum">
+          <Message v-if="priced.error" severity="error" :closable="false" size="small">{{ priced.error }}</Message>
+          <div class="r"><span>Subtotal <span class="muted small">({{ qty(itemCount) }} items)</span></span><span class="num">{{ m(totals?.subtotal ?? 0) }}</span></div>
+          <div v-if="totals?.discountTotal" class="r"><span>Discount</span><span class="num neg">−{{ m(totals.discountTotal) }}</span></div>
+          <div class="r"><span>Tax {{ (taxRate * 100).toFixed(2).replace(/\.?0+$/, '') }}%</span><span class="num">{{ m(totals?.taxTotal ?? 0) }}</span></div>
+          <div v-if="cart.customer && maxRedeem > 0 && online" class="r redeem">
+            <span>Use points <span class="muted small">(max {{ maxRedeem }})</span></span>
+            <InputNumber v-model="cart.redeemPoints" :min="0" :max="maxRedeem" size="small" :input-style="{ width: '90px', textAlign: 'right' }" />
+          </div>
+          <div v-if="pointsDiscount" class="r"><span>Points</span><span class="num neg">−{{ m(pointsDiscount) }}</span></div>
+          <div class="r total"><span>Total</span><span class="num">{{ m(amountDue) }}</span></div>
+
+          <div class="actions">
+            <Button icon="pi pi-percentage" label="Discount" severity="secondary" outlined :disabled="!cart.lines.length" @click="openDiscount" />
+            <Button icon="pi pi-pause" label="Hold" severity="secondary" outlined :disabled="!cart.lines.length" @click="hold" />
+            <Button icon="pi pi-inbox" :label="`Held (${held.length})`" severity="secondary" outlined :disabled="!held.length" @click="heldDlg = true" />
+            <Button icon="pi pi-trash" label="Clear" severity="danger" outlined :disabled="!cart.lines.length" @click="clearCart" />
+          </div>
+          <Button class="pay-btn" :label="`Pay ${m(amountDue)}`" icon="pi pi-wallet" size="large" :disabled="!cart.lines.length || !!priced.error" @click="openPay">
+          </Button>
+          <div class="small muted c">F9 pay · F2 search · F4 member</div>
+        </div>
+      </section>
+    </div>
+
+    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" @pay="complete" />
+
+    <!-- Receipt after sale -->
+    <Dialog v-model:visible="receiptDlg" header="Sale complete" modal :style="{ width: '420px' }" :breakpoints="{ '480px': '100vw' }" @hide="focusSearch">
+      <div v-if="receipt">
+        <div v-if="Number(receipt.changeDue)" class="change-big">Change <b>{{ m(receipt.changeDue) }}</b></div>
+        <Message v-if="receipt.offline" severity="warn" :closable="false" size="small">Offline: saved on this device and will upload automatically.</Message>
+        <div class="receipt-box"><PosReceipt :sale="receipt" :currency="cur" /></div>
+        <div class="row mt">
+          <Button label="Print" icon="pi pi-print" severity="secondary" class="w-full" @click="printReceipt" />
+          <Button label="New sale (Enter)" icon="pi pi-plus" class="w-full" autofocus @click="nextSale" />
+        </div>
+      </div>
+    </Dialog>
+    <div id="print-receipt"><PosReceipt v-if="receipt" :sale="receipt" :currency="cur" /></div>
+
+    <!-- Member -->
+    <Dialog v-model:visible="custDlg" header="Loyalty member" modal :style="{ width: '420px' }" @show="newCust.show = false">
+      <form class="form" @submit.prevent="newCust.show ? createCustomer() : findCustomer()">
+        <template v-if="!newCust.show">
+          <div class="field"><label>Phone number or member card</label><InputText v-model="custCode" autofocus /></div>
+          <Button type="submit" label="Find" icon="pi pi-search" :loading="custBusy" />
+        </template>
+        <template v-else>
+          <Message severity="info" :closable="false" size="small">No member found. Register a new one:</Message>
+          <div class="field"><label>Name *</label><InputText v-model="newCust.name" required autofocus /></div>
+          <div class="field"><label>Phone</label><InputText v-model="newCust.phone" /></div>
+          <div class="row" style="justify-content: flex-end">
+            <Button label="Back" text severity="secondary" @click="newCust.show = false" />
+            <Button type="submit" label="Register member" icon="pi pi-user-plus" />
+          </div>
+        </template>
+      </form>
+    </Dialog>
+
+    <!-- Sale discount -->
+    <Dialog v-model:visible="discDlg" header="Discount on whole sale" modal :style="{ width: '380px' }">
+      <form class="form" @submit.prevent="applyDiscount">
+        <SelectButton v-model="disc.type" :options="[{ l: 'Amount', v: 'amount' }, { l: 'Percent', v: 'percent' }]" option-label="l" option-value="v" :allow-empty="false" />
+        <InputNumber v-model="disc.value" :min="0" :max="disc.type === 'percent' ? 100 : undefined" :max-fraction-digits="2" :suffix="disc.type === 'percent' ? ' %' : ''" fluid autofocus />
+        <div class="row" style="justify-content: flex-end">
+          <Button label="Remove" text severity="secondary" @click="disc.value = 0; applyDiscount()" />
+          <Button type="submit" label="Apply" />
+        </div>
+      </form>
+    </Dialog>
+
+    <!-- Line edit -->
+    <Dialog v-model:visible="lineDlg" :header="cart.lines[lineEdit.index]?.name" modal :style="{ width: '380px' }">
+      <form class="form" @submit.prevent="saveLine">
+        <div class="field"><label>Quantity ({{ cart.lines[lineEdit.index]?.unit }})</label><InputNumber v-model="lineEdit.quantity" :min="0" :max-fraction-digits="3" fluid autofocus /></div>
+        <div class="field"><label>Discount on this line (amount)</label><InputNumber v-model="lineEdit.discount" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" fluid /></div>
+        <div class="row" style="justify-content: flex-end">
+          <Button label="Remove item" text severity="danger" @click="lineEdit.quantity = 0; saveLine()" />
+          <Button type="submit" label="Save" />
+        </div>
+      </form>
+    </Dialog>
+
+    <!-- Held sales -->
+    <Dialog v-model:visible="heldDlg" header="Held sales" modal :style="{ width: '460px' }">
+      <div v-for="(h, i) in held" :key="h.clientRef" class="held">
+        <div>
+          <b>{{ h.lines.length }} item(s)</b> <span v-if="h.customer">· {{ h.customer.name }}</span>
+          <div class="small muted">{{ dateTime(h.startedAt) }} · {{ h.lines.map((l) => l.name).slice(0, 3).join(', ') }}</div>
+        </div>
+        <div class="row">
+          <Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete" @click="held.splice(i, 1)" />
+          <Button label="Recall" size="small" @click="recall(i)" />
+        </div>
+      </div>
+    </Dialog>
+
+    <!-- Shift -->
+    <Dialog v-model:visible="shiftDlg" header="Open your shift" modal :style="{ width: '380px' }">
+      <form class="form" @submit.prevent="openShift">
+        <p class="muted" style="margin: 0">Count the cash in the drawer before you start selling.</p>
+        <div class="field"><label>Opening cash</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus /></div>
+        <Button type="submit" label="Open shift" icon="pi pi-play" />
+      </form>
+    </Dialog>
+
+    <!-- Offline queue -->
+    <Dialog v-model:visible="queueDlg" header="Sales waiting to upload" modal :style="{ width: '560px' }" :breakpoints="{ '640px': '100vw' }">
+      <p class="muted" style="margin-top: 0">These sales were made offline and are saved on this device. They upload automatically when the internet is back.</p>
+      <div v-for="q in queue" :key="q.clientRef" class="held">
+        <div>
+          <b class="mono">{{ q.receipt.receiptNo }}</b> · {{ m(q.receipt.total) }}
+          <div class="small muted">{{ dateTime(q.createdAt) }} · {{ q.receipt.items.length }} item(s)</div>
+          <div v-if="q.error" class="small neg">Rejected: {{ q.error }}</div>
+        </div>
+        <div class="row">
+          <Button v-if="q.error" label="Retry" size="small" text @click="retryQueued(q.clientRef)" />
+          <Button v-if="q.error" icon="pi pi-trash" text rounded severity="danger" aria-label="Delete" @click="discardQueued(q.clientRef)" />
+        </div>
+      </div>
+      <div class="row mt" style="justify-content: flex-end">
+        <Button label="Upload now" icon="pi pi-cloud-upload" :loading="syncingQueue" :disabled="!online" @click="syncNow" />
+      </div>
+    </Dialog>
+  </div>
+</template>
+
+<style scoped>
+.pos-screen { height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
+.bar { height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.back { color: var(--text-2); padding: 6px; }
+.title { display: flex; flex-direction: column; line-height: 1.15; }
+.spacer { flex: 1; }
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 420px; }
+.catalog-panel { display: flex; flex-direction: column; min-height: 0; padding: 14px; gap: 10px; }
+.search { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 2px solid var(--p-primary-color); border-radius: 12px; padding: 0 14px; }
+.search-input { flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 17px; padding: 13px 0; min-width: 0; }
+.cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; flex-shrink: 0; }
+.chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 7px 14px; font: inherit; font-weight: 550; cursor: pointer; white-space: nowrap; }
+.chip.on { background: var(--p-primary-color); border-color: var(--p-primary-color); color: #fff; }
+.tiles { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-content: start; }
+.tile { text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; min-height: 108px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; font: inherit; color: var(--text); transition: border-color .1s, transform .05s; }
+.tile:hover { border-color: var(--p-primary-color); }
+.tile:active { transform: scale(.98); }
+.tile .name { font-weight: 600; line-height: 1.25; flex: 1; }
+.tile .price { font-size: 17px; font-weight: 700; color: var(--p-primary-color); }
+.tile .meta { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-3); }
+.empty { grid-column: 1 / -1; text-align: center; padding: 40px 10px; display: grid; gap: 8px; justify-items: center; }
+.cart-panel { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-left: 1px solid var(--border); }
+.cust { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); min-height: 56px; }
+.lines { flex: 1; overflow-y: auto; }
+.line { display: grid; grid-template-columns: 1fr auto 76px 24px; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: default; }
+.line.sel { background: color-mix(in srgb, var(--p-primary-color) 7%, transparent); }
+.ln-name { font-weight: 600; line-height: 1.25; }
+.qty { display: flex; align-items: center; gap: 4px; }
+.qty button, .ln-edit { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; display: grid; place-items: center; }
+.ln-edit { border: 0; background: transparent; width: 24px; }
+.qty span { min-width: 34px; text-align: center; font-weight: 600; cursor: pointer; }
+.ln-total { text-align: right; font-weight: 600; }
+.sum { border-top: 1px solid var(--border); padding: 12px 14px; display: grid; gap: 6px; }
+.r { display: flex; justify-content: space-between; align-items: center; }
+.r.total { font-size: 24px; font-weight: 800; margin-top: 4px; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.actions :deep(.p-button) { padding: 8px; font-size: 13px; }
+.pay-btn { width: 100%; font-size: 20px; padding: 16px; margin-top: 4px; }
+.c { text-align: center; }
+.receipt-box { background: var(--bg); border-radius: 10px; padding: 16px; max-height: 50vh; overflow-y: auto; margin-top: 10px; }
+.change-big { text-align: center; font-size: 20px; padding: 10px; border-radius: 10px; background: color-mix(in srgb, var(--good) 14%, var(--surface)); margin-bottom: 6px; }
+.change-big b { font-size: 28px; display: block; }
+.held { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+#print-receipt { display: none; }
+@media (max-width: 900px) {
+  .pos-screen { height: auto; min-height: 100vh; }
+  .body { grid-template-columns: 1fr; }
+  .tiles { max-height: 46vh; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .cart-panel { border-left: 0; border-top: 1px solid var(--border); }
+  .lines { max-height: 40vh; }
+  .title .small { display: none; }
+}
+</style>
+
+<style>
+@media print {
+  body.printing-pos * { visibility: hidden; }
+  body.printing-pos #print-receipt, body.printing-pos #print-receipt * { visibility: visible; color: #000 !important; }
+  body.printing-pos #print-receipt { display: block !important; position: absolute; left: 0; top: 0; width: 72mm; }
+  @page { size: 80mm auto; margin: 4mm; }
+}
+</style>

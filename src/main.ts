@@ -31,3 +31,8 @@ app.use(ConfirmationService);
 app.directive('tooltip', Tooltip);
 registerComponents(app);
 app.mount('#app');
+
+// Offline support (production builds only; needs HTTPS or localhost).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => undefined));
+}

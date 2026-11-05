@@ -95,6 +95,7 @@ async function logout() {
           </Select>
         </div>
         <div class="spacer" />
+        <RouterLink to="/pos"><Button label="Open POS" icon="pi pi-shopping-cart" size="small" /></RouterLink>
         <Button :icon="dark ? 'pi pi-sun' : 'pi pi-moon'" text rounded aria-label="Toggle dark mode" @click="dark = !dark" />
         <div class="user">
           <div class="name">{{ auth.user?.fullName }}</div>

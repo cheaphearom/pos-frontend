@@ -13,7 +13,13 @@ export const useApp = defineStore('app', () => {
   const currentStore = computed(() => stores.value.find((s) => s.id === currentStoreId.value) ?? null);
 
   async function loadStores() {
-    stores.value = await api.get<Store[]>('/stores');
+    try {
+      stores.value = await api.get<Store[]>('/stores');
+      localStorage.setItem('pos.stores', JSON.stringify(stores.value));
+    } catch (e) {
+      if (!(e instanceof TypeError)) throw e;
+      stores.value = JSON.parse(localStorage.getItem('pos.stores') ?? '[]'); // offline
+    }
     if (!stores.value.some((s) => s.id === currentStoreId.value)) {
       currentStoreId.value = stores.value[0]?.id ?? null;
     }
