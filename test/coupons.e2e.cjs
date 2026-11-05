@@ -78,7 +78,8 @@ const fmt = (n) => '$' + Number(n).toFixed(2);
 
   // 5. admin
   const ad = await login('admin@pos.local');
-  await ad.goto(W + '/coupons'); await ad.waitForTimeout(1000);
+  await ad.goto(W + '/coupons');
+  await ad.waitForFunction(() => document.querySelectorAll('.p-datatable-tbody tr').length >= 2, null, { timeout: 10000 }).catch(() => {});
   ok((await ad.locator('.p-datatable-tbody tr').count()) === 2, 'coupons page lists the 2 demo campaigns');
   await shot(ad, '63-coupons');
   await ad.getByRole('button', { name: 'New coupon' }).click(); await ad.waitForTimeout(300);
