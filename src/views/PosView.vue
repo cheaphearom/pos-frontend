@@ -15,6 +15,7 @@ import { useCatalog, type CatalogItem } from '@/pos/catalog';
 import { isNetworkError, online } from '@/pos/network';
 import { PricingError, priceCart, pointsValue } from '@/pos/pricing';
 import { applyPromotions, type PromoRule } from '@shared/promotions';
+import { couponDiscount, type CouponRule } from '@shared/coupons';
 import { enqueue, loadQueue, queue, removeFromQueue, retryQueued, syncingQueue, syncQueue } from '@/pos/queue';
 import { uuid } from '@/pos/uuid';
 import { displayChannel, openDisplayWindow, type DisplayState, type PaymentProgress } from '@/pos/display';
@@ -40,6 +41,8 @@ interface Cart {
   lines: Line[];
   customer: { id: string; name: string; code: string; phone: string | null; points: number } | null;
   wallet?: WalletCardInfo | null;
+  coupon?: (CouponRule & { code: string }) | null;
+  voucher?: { code: string; balance: string } | null;
   redeemPoints: number;
   discount: number;
   discountPercent: number;
@@ -47,7 +50,7 @@ interface Cart {
 }
 const CART_KEY = `pos.cart:${app.currentStoreId}`;
 const HELD_KEY = `pos.held:${app.currentStoreId}`;
-const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, wallet: null, redeemPoints: 0, discount: 0, discountPercent: 0, note: '' });
+const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, wallet: null, coupon: null, voucher: null, redeemPoints: 0, discount: 0, discountPercent: 0, note: '' });
 const readJson = <T,>(k: string, d: T): T => {
   try { return JSON.parse(localStorage.getItem(k) ?? '') ?? d; } catch { return d; }
 };
@@ -98,12 +101,19 @@ const lineDiscount = (l: Line, i: number) => {
 
 // ───────────── Totals (same maths as the server) ─────────────
 const taxRate = computed(() => Number(store.value?.taxRate ?? 0));
+/** Coupon on the sale value after line discounts and promotions (same file as the server). */
+const coupon = computed(() => {
+  if (!cart.coupon || !cart.lines.length) return { discount: 0, error: '' };
+  const base = cart.lines.reduce((t, l, i) => t + r2(Number(l.price) * l.quantity) - lineDiscount(l, i), 0);
+  const r = couponDiscount(cart.coupon, r2(base));
+  return { discount: r.discount, error: r.error ?? '' };
+});
 const priced = computed(() => {
   if (!cart.lines.length) return { totals: null, error: '' };
   try {
     return {
       totals: priceCart(cart.lines.map((l, i) => ({ price: l.price, quantity: l.quantity, discount: lineDiscount(l, i), taxable: l.taxable })), taxRate.value, {
-        amount: cart.discount || undefined,
+        amount: r2((cart.discount || 0) + coupon.value.discount) || undefined,
         percent: cart.discountPercent || undefined,
       }),
       error: '',
@@ -144,22 +154,58 @@ function onSearchEnter() {
     search.value = '';
   } else if (/^\d{12,19}$/.test(code)) {
     search.value = '';
-    scanWallet(code); // not a product: maybe a wallet card
-  } else notify.error(`No product with code "${code}"`);
+    scanCode(code); // not a product: wallet card, voucher or coupon?
+  } else scanCode(code);
+}
+
+/** Not a product: ask the server whether it is a wallet card, gift voucher or coupon. */
+async function scanCode(code: string) {
+  search.value = '';
+  if (!online.value) return notify.error(`"${code}" is not a product. Wallet cards, vouchers and coupons need an internet connection.`);
+  try {
+    const r = await api.get('/codes/lookup', { code, storeId: app.currentStoreId, customerId: cart.customer?.id });
+    if (r.kind === 'wallet') return useWalletCard(r.card);
+    if (r.kind === 'voucher') return useVoucher(r.voucher);
+    if (r.kind === 'coupon') {
+      cart.coupon = { ...r.coupon, value: r.coupon.value, minSpend: r.coupon.minSpend, maxDiscount: r.coupon.maxDiscount };
+      notify.success(`Coupon ${r.coupon.code}`, r.coupon.name);
+    }
+  } catch (e) {
+    notify.error(e instanceof ApiError && e.status === 404 ? `Nothing found for "${code}"` : e);
+  }
+}
+
+// ───────────── Gift vouchers ─────────────
+const sellDlg = ref(false);
+const sell = reactive({ voucher: null as any, method: 'CASH', reference: '', busy: false });
+function useVoucher(v: any) {
+  if (v.status === 'INACTIVE') {
+    if (!shift.value) { shiftDlg.value = true; return; }
+    Object.assign(sell, { voucher: v, method: 'CASH', reference: '', busy: false });
+    sellDlg.value = true;
+    return;
+  }
+  if (v.status !== 'ACTIVE') return notify.error(`Voucher ${v.code} is ${v.status.toLowerCase()}`);
+  if (v.expired) return notify.error(`Voucher ${v.code} has expired`);
+  cart.voucher = { code: v.code, balance: v.balance };
+  notify.success(`Voucher ${v.code}`, `${m(v.balance)} to spend. Choose "Voucher" when paying.`);
+}
+async function doSell() {
+  sell.busy = true;
+  try {
+    const v = await api.post(`/vouchers/${sell.voucher.code}/sell`, { storeId: app.currentStoreId, method: sell.method, reference: sell.reference || undefined });
+    sellDlg.value = false;
+    notify.success(`Voucher sold: ${m(v.value)}`, `${v.code} is now active`);
+    focusSearch();
+  } catch (e) { notify.error(e); } finally { sell.busy = false; }
 }
 
 // ───────────── Wallet cards ─────────────
-async function scanWallet(code: string) {
-  if (!online.value) return notify.error('Wallet cards need an internet connection');
-  try {
-    const card = await api.get('/wallet/cards/lookup', { code });
-    if (card.status === 'INACTIVE') return startActivate(card);
-    if (card.status !== 'ACTIVE') return notify.error(`Wallet card ${cardShort(card.cardNumber)} is ${card.status.toLowerCase()}`);
-    attachWallet(card);
-    notify.success(`Wallet ${cardShort(card.cardNumber)}`, `${card.customer?.name ?? ''} · balance ${m(card.balance)}`);
-  } catch (e) {
-    notify.error(e instanceof ApiError && e.status === 404 ? `No product or wallet card with code "${code}"` : e);
-  }
+function useWalletCard(card: any) {
+  if (card.status === 'INACTIVE') return startActivate(card);
+  if (card.status !== 'ACTIVE') return notify.error(`Wallet card ${cardShort(card.cardNumber)} is ${card.status.toLowerCase()}`);
+  attachWallet(card);
+  notify.success(`Wallet ${cardShort(card.cardNumber)}`, `${card.customer?.name ?? ''} · balance ${m(card.balance)}`);
 }
 function attachWallet(card: any) {
   cart.wallet = { cardNumber: card.cardNumber, balance: card.balance, hasPin: card.hasPin, status: card.status, customer: card.customer };
@@ -319,6 +365,7 @@ const receiptDlg = ref(false);
 function openPay() {
   if (!cart.lines.length) return;
   if (priced.value.error) return notify.error(priced.value.error);
+  if (coupon.value.error) return notify.error(coupon.value.error);
   if (online.value && !shift.value) {
     shiftDlg.value = true;
     return;
@@ -335,6 +382,7 @@ async function complete(payments: { method: string; amount: number; reference?: 
     payments,
     customerId: cart.customer?.id,
     redeemPoints: cart.redeemPoints || undefined,
+    couponCode: cart.coupon?.code,
     discount: cart.discount || undefined,
     discountPercent: cart.discountPercent || undefined,
     note: cart.note || undefined,
@@ -366,6 +414,8 @@ async function complete(payments: { method: string; amount: number; reference?: 
 /** Queue the sale and build a local receipt from the on-device calculation. */
 async function saveOffline(body: any, payments: { method: string; amount: number }[]) {
   if (body.redeemPoints) throw new Error('Points cannot be used while offline. Remove the points and try again.');
+  if (body.couponCode) throw new Error('Coupons cannot be used while offline. Remove the coupon and try again.');
+  if (payments.some((p: any) => p.method === 'VOUCHER' || p.method === 'WALLET')) throw new Error('Vouchers and wallet cards need a connection.');
   const t = totals.value!;
   const paid = payments.reduce((s, p) => s + p.amount, 0);
   const local = {
@@ -608,6 +658,17 @@ async function logout() {
           <Message v-if="priced.error" severity="error" :closable="false" size="small">{{ priced.error }}</Message>
           <div class="r"><span>Subtotal <span class="muted small">({{ qty(itemCount) }} items)</span></span><span class="num">{{ m(totals?.subtotal ?? 0) }}</span></div>
           <div v-if="totals?.discountTotal" class="r"><span>Discount</span><span class="num neg">−{{ m(totals.discountTotal) }}</span></div>
+          <div v-if="cart.coupon" class="r coupon-row">
+            <span><i class="pi pi-ticket" /> {{ cart.coupon.name }} <span class="mono small">{{ cart.coupon.code }}</span>
+              <Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Remove coupon" @click="cart.coupon = null" /></span>
+            <span v-if="coupon.error" class="neg small">{{ coupon.error }}</span>
+            <span v-else class="num neg">−{{ m(coupon.discount) }}</span>
+          </div>
+          <div v-if="cart.voucher" class="r coupon-row">
+            <span><i class="pi pi-gift" /> Voucher <span class="mono small">{{ cart.voucher.code }}</span> · {{ m(cart.voucher.balance) }}
+              <Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Remove voucher" @click="cart.voucher = null" /></span>
+            <span class="small muted">pay with "Voucher"</span>
+          </div>
           <div class="r"><span>Tax {{ (taxRate * 100).toFixed(2).replace(/\.?0+$/, '') }}%</span><span class="num">{{ m(totals?.taxTotal ?? 0) }}</span></div>
           <div v-if="cart.customer && maxRedeem > 0 && online" class="r redeem">
             <span>Use points <span class="muted small">(max {{ maxRedeem }})</span></span>
@@ -629,7 +690,7 @@ async function logout() {
       </section>
     </div>
 
-    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" :store-id="app.currentStoreId!" :khqr-enabled="!!(store as any)?.khqrAccountId" :wallet-card="cart.wallet" @pay="complete" @progress="payProgress = $event" />
+    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" :store-id="app.currentStoreId!" :khqr-enabled="!!(store as any)?.khqrAccountId" :wallet-card="cart.wallet" :voucher="cart.voucher" @pay="complete" @progress="payProgress = $event" />
 
     <!-- Receipt after sale -->
     <Dialog v-model:visible="receiptDlg" header="Sale complete" modal :style="{ width: '420px' }" :breakpoints="{ '480px': '100vw' }" @hide="focusSearch">
@@ -708,6 +769,17 @@ async function logout() {
         <p class="muted" style="margin: 0">Count the cash in the drawer before you start selling.</p>
         <div class="field"><label>Opening cash</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus /></div>
         <Button type="submit" label="Open shift" icon="pi pi-play" />
+      </form>
+    </Dialog>
+
+    <!-- Gift voucher: sell -->
+    <Dialog v-model:visible="sellDlg" header="Sell gift voucher" modal :style="{ width: '440px' }" @hide="focusSearch">
+      <form v-if="sell.voucher" class="form" @submit.prevent="doSell">
+        <div class="wallet-box row" style="justify-content: space-between"><span class="mono"><b>{{ sell.voucher.code }}</b></span><span>Value <b>{{ m(sell.voucher.value) }}</b></span></div>
+        <div class="small muted">{{ sell.voucher.batch.name }}<span v-if="sell.voucher.expiresAt"> · expires {{ new Date(sell.voucher.expiresAt).toLocaleDateString() }}</span></div>
+        <div class="field"><label>Customer pays {{ m(sell.voucher.value) }} by</label><SelectButton v-model="sell.method" :options="['CASH', 'KHQR', 'CARD', 'BANK_TRANSFER']" :option-label="(o: string) => humanize(o)" :allow-empty="false" /></div>
+        <div v-if="sell.method !== 'CASH'" class="field"><label>Reference</label><InputText v-model="sell.reference" /></div>
+        <Button type="submit" :label="`Received ${m(sell.voucher.value)}, activate voucher`" icon="pi pi-check" :loading="sell.busy" />
       </form>
     </Dialog>
 
@@ -800,6 +872,7 @@ async function logout() {
 .ln-name { font-weight: 600; line-height: 1.25; }
 .promo { color: var(--p-primary-color); font-weight: 600; margin-top: 2px; }
 .wallet-line { color: var(--p-primary-color); font-weight: 600; }
+.coupon-row { color: var(--p-primary-color); font-weight: 600; }
 .qty { display: flex; align-items: center; gap: 4px; }
 .qty button, .ln-edit { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; display: grid; place-items: center; }
 .ln-edit { border: 0; background: transparent; width: 24px; }

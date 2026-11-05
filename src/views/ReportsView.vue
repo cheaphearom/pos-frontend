@@ -22,7 +22,7 @@ async function load() {
   loading.value = true;
   try {
     const p = params.value;
-    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet] = await Promise.all([
+    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv] = await Promise.all([
       api.get('/reports/sales-summary', { ...p, groupBy: f.groupBy }),
       api.get('/reports/profit', { ...p, groupBy: f.groupBy }),
       api.get('/reports/top-products', { ...p, limit: 20 }),
@@ -32,8 +32,9 @@ async function load() {
       api.get('/reports/inventory-value', { storeId: p.storeId }),
       api.get('/reports/promotions', p),
       api.get('/reports/wallet', p),
+      api.get('/reports/coupons-vouchers', p),
     ]);
-    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet });
+    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv });
   } catch (e) {
     notify.error(e);
   } finally {
@@ -162,6 +163,27 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
           <Column field="count" header="Count" class="right" />
           <Column header="Amount" class="right"><template #body="{ data }">{{ m(data.amount) }}</template></Column>
         </DataTable>
+      </div>
+
+      <div class="grid grid-2 mt">
+        <div class="card">
+          <h3>Coupons</h3>
+          <DataTable :value="r.cv.coupons" size="small">
+            <template #empty><span class="muted">No coupons used in this period</span></template>
+            <Column field="name" header="Campaign" />
+            <Column field="uses" header="Uses" class="right" />
+            <Column header="Discount given" class="right"><template #body="{ data }">{{ m(data.discount) }}</template></Column>
+          </DataTable>
+        </div>
+        <div class="card">
+          <h3>Gift vouchers</h3>
+          <dl class="kv">
+            <dt>Sold in period</dt><dd>{{ r.cv.vouchers.soldInPeriod.count }} · {{ m(r.cv.vouchers.soldInPeriod.value) }}</dd>
+            <dt>Spent in period</dt><dd>{{ r.cv.vouchers.spentInPeriod.count }} · {{ m(r.cv.vouchers.spentInPeriod.value) }}</dd>
+            <dt><b>Unspent sold vouchers</b></dt><dd><b>{{ m(r.cv.vouchers.outstandingSold.value) }}</b> <span class="muted small">on {{ r.cv.vouchers.outstandingSold.count }} (money you owe)</span></dd>
+            <dt>Unspent free vouchers</dt><dd>{{ m(r.cv.vouchers.outstandingFree.value) }} <span class="muted small">on {{ r.cv.vouchers.outstandingFree.count }}</span></dd>
+          </dl>
+        </div>
       </div>
 
       <div class="card mt">

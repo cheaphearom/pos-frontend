@@ -27,6 +27,7 @@ const m = (v: any) => money(v, props.currency);
     <div class="sep" />
     <div class="row2"><span>Subtotal</span><span>{{ m(sale.subtotal) }}</span></div>
     <div v-if="Number(sale.discountTotal)" class="row2"><span>Discount</span><span>−{{ m(sale.discountTotal) }}</span></div>
+    <div v-if="sale.couponName" class="sub">incl. coupon {{ sale.couponName }} −{{ m(sale.couponDiscount) }}</div>
     <div class="row2"><span>Tax</span><span>{{ m(sale.taxTotal) }}</span></div>
     <div class="row2 total"><span>TOTAL</span><span>{{ m(sale.total) }}</span></div>
     <div v-if="sale.pointsRedeemed" class="row2"><span>Points ({{ sale.pointsRedeemed }})</span><span>−{{ m(sale.pointsDiscount) }}</span></div>

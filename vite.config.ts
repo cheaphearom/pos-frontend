@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
         '@': '/src',
         // Promotion rules are shared with the API so online and offline prices are identical.
         '@shared/promotions': fileURLToPath(new URL('../api/src/promotions/engine.ts', import.meta.url)),
+        '@shared/coupons': fileURLToPath(new URL('../api/src/coupons/calc.ts', import.meta.url)),
       },
     },
     build: {

@@ -120,7 +120,7 @@ onMounted(() => {
         </table>
         <table class="r-totals">
           <tr><td>Subtotal</td><td class="right num">{{ m(sale.subtotal) }}</td></tr>
-          <tr v-if="Number(sale.discountTotal)"><td>Discount</td><td class="right num">−{{ m(sale.discountTotal) }}</td></tr>
+          <tr v-if="Number(sale.discountTotal)"><td>Discount<div v-if="sale.couponName" class="small muted">incl. coupon {{ sale.couponName }} −{{ m(sale.couponDiscount) }}</div></td><td class="right num">−{{ m(sale.discountTotal) }}</td></tr>
           <tr><td>Tax</td><td class="right num">{{ m(sale.taxTotal) }}</td></tr>
           <tr class="big"><td>Total</td><td class="right num">{{ m(sale.total) }}</td></tr>
           <tr v-if="sale.pointsRedeemed"><td>Points used ({{ sale.pointsRedeemed }})</td><td class="right num">−{{ m(sale.pointsDiscount) }}</td></tr>

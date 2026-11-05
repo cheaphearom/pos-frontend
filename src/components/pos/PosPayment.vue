@@ -9,7 +9,7 @@ import { online } from '@/pos/network';
 import { cardShort, humanize, money } from '@/utils/format';
 
 export interface WalletCardInfo { cardNumber: string; balance: string | number; hasPin: boolean; status: string; customer?: { name: string } | null }
-const props = defineProps<{ amountDue: number; currency: string; busy: boolean; storeId: string; khqrEnabled: boolean; walletCard?: WalletCardInfo | null }>();
+const props = defineProps<{ amountDue: number; currency: string; busy: boolean; storeId: string; khqrEnabled: boolean; walletCard?: WalletCardInfo | null; voucher?: { code: string; balance: string } | null }>();
 const notify = useNotify();
 const emit = defineEmits<{ pay: [{ method: string; amount: number; reference?: string; pin?: string }[]]; progress: [PaymentProgress | null] }>();
 const visible = defineModel<boolean>('visible', { default: false });
@@ -19,6 +19,7 @@ const METHODS = [
   { v: 'KHQR', icon: 'pi pi-qrcode' },
   { v: 'CARD', icon: 'pi pi-credit-card' },
   { v: 'WALLET', icon: 'pi pi-wallet' },
+  { v: 'VOUCHER', icon: 'pi pi-gift' },
   { v: 'BANK_TRANSFER', icon: 'pi pi-building-columns' },
   { v: 'E_WALLET', icon: 'pi pi-mobile' },
 ];
@@ -141,8 +142,32 @@ function addWallet() {
   if (done.value) finish();
 }
 
+// ───── Gift voucher ─────
+const vinfo = ref<{ code: string; balance: number } | null>(null);
+const vCode = ref('');
+const vLeft = computed(() => (vinfo.value ? vinfo.value.balance - payments.value.filter((x) => x.method === 'VOUCHER' && x.reference === vinfo.value!.code).reduce((s, x) => s + x.amount, 0) : 0));
+async function findVoucher() {
+  try {
+    const v = await api.get('/vouchers/lookup', { code: vCode.value.trim() });
+    if (v.status !== 'ACTIVE' || v.expired) return notify.error(v.expired ? 'This voucher has expired' : v.status === 'INACTIVE' ? 'This voucher was not sold yet' : `Voucher is ${v.status.toLowerCase()}`);
+    vinfo.value = { code: v.code, balance: Number(v.balance) };
+    amount.value = Math.min(remaining.value, r2(vLeft.value));
+  } catch (e) { notify.error(e); }
+}
+function addVoucher() {
+  const a = r2(amount.value ?? 0);
+  if (!vinfo.value || a <= 0) return;
+  if (a > r2(vLeft.value) + 1e-9) return notify.error(`Voucher has only ${money(vLeft.value, props.currency)}`);
+  if (nonCash.value + a > props.amountDue + 1e-9) return notify.error('A voucher cannot pay more than the amount due (no change on vouchers)');
+  payments.value.push({ method: 'VOUCHER', amount: a, reference: vinfo.value.code });
+  amount.value = remaining.value;
+  if (done.value) finish();
+}
+
 watch(visible, (v) => {
   if (!v) return;
+  vinfo.value = props.voucher ? { code: props.voucher.code, balance: Number(props.voucher.balance) } : null;
+  vCode.value = '';
   wcard.value = props.walletCard ?? null;
   wCode.value = '';
   wPin.value = '';
@@ -153,7 +178,8 @@ watch(visible, (v) => {
   focus();
 });
 watch(method, (m) => {
-  amount.value = m === 'WALLET' && wcard.value ? Math.min(remaining.value, r2(wBalance.value)) : remaining.value;
+  amount.value =
+    m === 'WALLET' && wcard.value ? Math.min(remaining.value, r2(wBalance.value)) : m === 'VOUCHER' && vinfo.value ? Math.min(remaining.value, r2(vLeft.value)) : remaining.value;
   focus();
 });
 
@@ -266,7 +292,24 @@ watch(
         </template>
       </div>
 
-      <template v-if="!done && !useKhqr && method !== 'WALLET'">
+      <div v-if="!done && method === 'VOUCHER'" class="form">
+        <Message v-if="!online" severity="warn" :closable="false">Vouchers need an internet connection.</Message>
+        <div v-else-if="!vinfo" class="row" style="gap: 10px; align-items: flex-end">
+          <div class="field" style="flex: 1"><label>Scan the voucher</label><InputText v-model="vCode" autofocus placeholder="Voucher code" @keydown.enter.prevent="findVoucher" /></div>
+          <Button label="Find" icon="pi pi-search" @click="findVoucher" />
+        </div>
+        <template v-else>
+          <div class="wallet-box"><span class="mono"><b>{{ vinfo.code }}</b></span><span>Left <b>{{ money(vLeft, currency) }}</b></span></div>
+          <div class="row" style="gap: 10px; align-items: flex-end">
+            <div class="field" style="flex: 1"><label>Amount from voucher</label><InputNumber v-model="amount" :min="0" :max="Math.min(remaining, vLeft)" :min-fraction-digits="2" :max-fraction-digits="2" fluid input-class="amount-input" @keydown.enter.prevent="addVoucher" /></div>
+            <Button label="Use voucher" icon="pi pi-gift" size="large" :disabled="!amount" @click="addVoucher" />
+          </div>
+          <div class="row"><Button label="Other voucher" text severity="secondary" @click="vinfo = null" /></div>
+          <small class="muted">What is not spent stays on the voucher. No change is given.</small>
+        </template>
+      </div>
+
+      <template v-if="!done && !useKhqr && method !== 'WALLET' && method !== 'VOUCHER'">
         <div class="row" style="gap: 10px; align-items: flex-end">
           <div class="field" style="flex: 1">
             <label>{{ humanize(method) }} amount</label>
