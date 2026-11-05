@@ -1,9 +1,14 @@
 <script setup lang="ts">
 /** Take payment: one or more methods (split), quick cash buttons, change. */
-import { computed, nextTick, ref, watch } from 'vue';
+import QRCode from 'qrcode';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { api } from '@/api/client';
+import { useNotify } from '@/composables/useNotify';
+import { online } from '@/pos/network';
 import { humanize, money } from '@/utils/format';
 
-const props = defineProps<{ amountDue: number; currency: string; busy: boolean }>();
+const props = defineProps<{ amountDue: number; currency: string; busy: boolean; storeId: string; khqrEnabled: boolean }>();
+const notify = useNotify();
 const emit = defineEmits<{ pay: [{ method: string; amount: number; reference?: string }[]] }>();
 const visible = defineModel<boolean>('visible', { default: false });
 
@@ -39,6 +44,68 @@ const quick = computed(() => {
   }
   return [...set].filter((v) => v > 0).sort((a, b) => a - b);
 });
+
+// ───── KHQR: show a Bakong QR for the exact amount and wait for the payment ─────
+const khqr = ref<{ md5: string; qr: string; amount: number; expiresAt: string; status: string; mode: string } | null>(null);
+const khqrImg = ref('');
+const khqrBusy = ref(false);
+const secondsLeft = ref(0);
+let poll: ReturnType<typeof setInterval> | undefined;
+let tick: ReturnType<typeof setInterval> | undefined;
+const useKhqr = computed(() => method.value === 'KHQR' && props.khqrEnabled && online.value);
+
+function stopKhqr() {
+  clearInterval(poll);
+  clearInterval(tick);
+  khqr.value = null;
+  khqrImg.value = '';
+}
+async function startKhqr() {
+  stopKhqr();
+  khqrBusy.value = true;
+  try {
+    const amount = remaining.value;
+    const res = await api.post('/payments/khqr', { storeId: props.storeId, amount });
+    khqr.value = { ...res, amount };
+    khqrImg.value = await QRCode.toDataURL(res.qr, { width: 300, margin: 1, errorCorrectionLevel: 'M' });
+    tick = setInterval(() => {
+      secondsLeft.value = Math.max(0, Math.round((new Date(khqr.value!.expiresAt).getTime() - Date.now()) / 1000));
+    }, 500);
+    poll = setInterval(checkKhqr, 2500);
+  } catch (e) {
+    notify.error(e);
+  } finally {
+    khqrBusy.value = false;
+  }
+}
+async function checkKhqr() {
+  if (!khqr.value) return;
+  try {
+    const st = await api.get(`/payments/khqr/${khqr.value.md5}`);
+    khqr.value.status = st.status;
+    if (st.status === 'PAID') khqrPaid();
+    else if (st.status === 'EXPIRED') clearInterval(poll);
+  } catch { /* network blip: keep polling */ }
+}
+async function confirmKhqr() {
+  if (!khqr.value) return;
+  khqrBusy.value = true;
+  try {
+    const st = await api.post(`/payments/khqr/${khqr.value.md5}/confirm`);
+    if (st.status === 'PAID') khqrPaid();
+  } catch (e) { notify.error(e); } finally { khqrBusy.value = false; }
+}
+function khqrPaid() {
+  const k = khqr.value!;
+  stopKhqr();
+  payments.value.push({ method: 'KHQR', amount: k.amount, reference: k.md5 });
+  notify.success('KHQR payment received', money(k.amount, props.currency));
+  if (done.value) finish();
+  else amount.value = remaining.value;
+}
+watch(method, (m) => m !== 'KHQR' && stopKhqr());
+watch(visible, (v) => !v && stopKhqr());
+onBeforeUnmount(stopKhqr);
 
 watch(visible, (v) => {
   if (!v) return;
@@ -93,7 +160,31 @@ function finish() {
         </button>
       </div>
 
-      <template v-if="!done">
+      <div v-if="!done && useKhqr" class="khqr">
+        <template v-if="!khqr">
+          <Button :label="`Show KHQR for ${money(remaining, currency)}`" icon="pi pi-qrcode" size="large" :loading="khqrBusy" @click="startKhqr" />
+          <span class="small muted">The customer scans with any Cambodian banking app.</span>
+        </template>
+        <template v-else>
+          <div class="khqr-card">
+            <div class="khqr-head">KHQR</div>
+            <img v-if="khqrImg" :src="khqrImg" alt="KHQR code" width="240" height="240" />
+            <div class="khqr-amount">{{ money(khqr.amount, currency) }}</div>
+          </div>
+          <div v-if="khqr.status === 'EXPIRED' || secondsLeft === 0" class="neg">This QR has expired.</div>
+          <div v-else class="small muted">
+            <i class="pi pi-spin pi-spinner" /> Waiting for payment… {{ Math.floor(secondsLeft / 60) }}:{{ String(secondsLeft % 60).padStart(2, '0') }}
+          </div>
+          <div class="row">
+            <Button v-if="khqr.status === 'EXPIRED' || secondsLeft === 0" label="New QR" icon="pi pi-refresh" @click="startKhqr" />
+            <Button v-else-if="khqr.mode === 'manual'" label="Customer has paid" icon="pi pi-check" :loading="khqrBusy" @click="confirmKhqr" />
+            <Button label="Cancel" text severity="secondary" @click="stopKhqr" />
+          </div>
+          <small v-if="khqr.mode === 'manual'" class="muted">Check the payment arrived in your bank app before confirming.</small>
+        </template>
+      </div>
+
+      <template v-if="!done && !useKhqr">
         <div class="row" style="gap: 10px; align-items: flex-end">
           <div class="field" style="flex: 1">
             <label>{{ humanize(method) }} amount</label>
@@ -109,6 +200,7 @@ function finish() {
           <InputText v-model="reference" @keydown.enter.prevent="add()" />
         </div>
         <small v-if="nonCashError" class="neg">{{ nonCashError }}</small>
+        <small v-if="method === 'KHQR' && !online" class="muted">Offline: KHQR codes cannot be checked. Enter the bank reference after checking the payment.</small>
       </template>
 
       <div v-if="payments.length" class="paid">
@@ -144,4 +236,9 @@ function finish() {
 .paid { display: grid; gap: 4px; border-top: 1px solid var(--border); padding-top: 10px; }
 .change { display: flex; justify-content: space-between; align-items: center; background: color-mix(in srgb, var(--good) 12%, var(--surface)); border-radius: 10px; padding: 14px 16px; }
 :deep(.amount-input) { font-size: 22px; font-weight: 650; }
+.khqr { display: grid; justify-items: center; gap: 10px; text-align: center; }
+.khqr-card { width: 270px; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .12); }
+.khqr-head { background: #e1232e; color: #fff; font-weight: 800; letter-spacing: .1em; padding: 10px; }
+.khqr-card img { display: block; margin: 14px auto 4px; }
+.khqr-amount { color: #111; font-size: 22px; font-weight: 800; padding: 4px 0 14px; }
 </style>

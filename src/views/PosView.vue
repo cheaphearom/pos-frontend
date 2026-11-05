@@ -14,6 +14,7 @@ import { useNotify } from '@/composables/useNotify';
 import { useCatalog, type CatalogItem } from '@/pos/catalog';
 import { isNetworkError, online } from '@/pos/network';
 import { PricingError, priceCart, pointsValue } from '@/pos/pricing';
+import { applyPromotions, type PromoRule } from '@shared/promotions';
 import { enqueue, loadQueue, queue, removeFromQueue, retryQueued, syncingQueue, syncQueue } from '@/pos/queue';
 import { uuid } from '@/pos/uuid';
 import { useApp } from '@/stores/app';
@@ -31,7 +32,7 @@ const m = (v: number | string) => money(v, cur.value);
 const catalog = useCatalog(app.currentStoreId!);
 
 // ───────────── Cart (kept in localStorage so a reload does not lose it) ─────────────
-interface Line { productId: string; name: string; sku: string; unit: string; price: string; taxable: boolean; trackStock: boolean; quantity: number; discount: number }
+interface Line { productId: string; categoryId?: string | null; name: string; sku: string; unit: string; price: string; taxable: boolean; trackStock: boolean; quantity: number; discount: number }
 interface Cart {
   clientRef: string;
   startedAt: string;
@@ -56,7 +57,7 @@ watch(held, (h) => localStorage.setItem(HELD_KEY, JSON.stringify(h)), { deep: tr
 function addProduct(p: CatalogItem, quantity = 1) {
   const line = cart.lines.find((l) => l.productId === p.id && !l.discount);
   if (line) line.quantity = round3(line.quantity + quantity);
-  else cart.lines.push({ productId: p.id, name: p.name, sku: p.sku, unit: p.unit, price: p.price, taxable: p.taxable, trackStock: p.trackStock, quantity, discount: 0 });
+  else cart.lines.push({ productId: p.id, categoryId: p.categoryId, name: p.name, sku: p.sku, unit: p.unit, price: p.price, taxable: p.taxable, trackStock: p.trackStock, quantity, discount: 0 });
   if (p.trackStock && Number(p.stock) - (line?.quantity ?? quantity) < 0) notify.error(`Low stock: ${p.name} shows ${qty(p.stock)} left`);
   selected.value = cart.lines.findIndex((l) => l.productId === p.id);
 }
@@ -72,13 +73,34 @@ function clearCart() {
   focusSearch();
 }
 
+// ───────────── Promotions (same engine file as the server) ─────────────
+const promoData = ref<{ timeZone: string; promotions: PromoRule[] }>(readJson(`pos.promos:${app.currentStoreId}`, { timeZone: 'UTC', promotions: [] }));
+const now = ref(new Date());
+const clock = setInterval(() => (now.value = new Date()), 30_000); // happy hours start and end while the screen is open
+const promos = computed(() =>
+  applyPromotions(
+    cart.lines.map((l) => ({ productId: l.productId, categoryId: l.categoryId ?? null, price: l.price, quantity: l.quantity })),
+    promoData.value.promotions,
+    app.currentStoreId!,
+    now.value,
+    promoData.value.timeZone,
+  ),
+);
+const r2 = (n: number) => Math.round(n * 100) / 100;
+/** Total line discount = promotion + manual discount (never more than the line). */
+const lineDiscount = (l: Line, i: number) => {
+  const gross = r2(Number(l.price) * l.quantity);
+  const promo = promos.value[i]?.discount ?? 0;
+  return r2(promo + Math.min(l.discount || 0, r2(gross - promo)));
+};
+
 // ───────────── Totals (same maths as the server) ─────────────
 const taxRate = computed(() => Number(store.value?.taxRate ?? 0));
 const priced = computed(() => {
   if (!cart.lines.length) return { totals: null, error: '' };
   try {
     return {
-      totals: priceCart(cart.lines.map((l) => ({ price: l.price, quantity: l.quantity, discount: l.discount, taxable: l.taxable })), taxRate.value, {
+      totals: priceCart(cart.lines.map((l, i) => ({ price: l.price, quantity: l.quantity, discount: lineDiscount(l, i), taxable: l.taxable })), taxRate.value, {
         amount: cart.discount || undefined,
         percent: cart.discountPercent || undefined,
       }),
@@ -283,7 +305,7 @@ async function saveOffline(body: any, payments: { method: string; amount: number
     store: store.value,
     cashier: { fullName: auth.user?.fullName },
     customer: cart.customer,
-    items: cart.lines.map((l, i) => ({ name: l.name, quantity: l.quantity, unitPrice: l.price, discount: t.lines[i].discount, lineTotal: t.lines[i].total })),
+    items: cart.lines.map((l, i) => ({ name: l.name, quantity: l.quantity, unitPrice: l.price, discount: t.lines[i].discount, lineTotal: t.lines[i].total, promotion: promos.value[i]?.name ? { name: promos.value[i].name } : null })),
     subtotal: t.subtotal, discountTotal: t.discountTotal, taxTotal: t.taxTotal, total: t.total,
     pointsRedeemed: 0, pointsDiscount: 0, payments,
     changeDue: Math.round((paid - t.total) * 100) / 100,
@@ -323,8 +345,15 @@ async function refreshData() {
     loadShift(),
     api.get('/categories').then((c) => { categories.value = c; localStorage.setItem('pos.categories', JSON.stringify(c)); }),
     api.get('/customers/loyalty-rules').then((r) => { loyalty.value = r; localStorage.setItem('pos.loyalty', JSON.stringify(r)); }),
+    loadPromos(),
     syncNow(),
   ]);
+}
+
+async function loadPromos() {
+  const r = await api.get('/promotions/active', { storeId: app.currentStoreId });
+  promoData.value = { timeZone: r.timeZone, promotions: r.promotions };
+  localStorage.setItem(`pos.promos:${app.currentStoreId}`, JSON.stringify(promoData.value));
 }
 
 function onKey(e: KeyboardEvent) {
@@ -345,11 +374,16 @@ onMounted(async () => {
     if (!hadLocal) notify.success('Downloading products…');
     await refreshData();
   }
-  syncTimer = setInterval(() => online.value && catalog.sync().catch(() => undefined), 5 * 60_000);
+  syncTimer = setInterval(() => {
+    if (!online.value) return;
+    catalog.sync().catch(() => undefined);
+    loadPromos().catch(() => undefined);
+  }, 5 * 60_000);
   window.addEventListener('keydown', onKey);
 });
 onBeforeUnmount(() => {
   clearInterval(syncTimer);
+  clearInterval(clock);
   window.removeEventListener('keydown', onKey);
 });
 
@@ -426,6 +460,7 @@ async function logout() {
             <div class="ln-main" @dblclick="editLine(i)">
               <div class="ln-name">{{ l.name }}</div>
               <div class="small muted">{{ m(l.price) }} / {{ l.unit }}<span v-if="l.discount" class="neg"> · −{{ m(l.discount) }}</span></div>
+              <div v-if="promos[i]?.discount" class="promo small"><i class="pi pi-tag" /> {{ promos[i].name }} −{{ m(promos[i].discount) }}</div>
             </div>
             <div class="qty">
               <button aria-label="Less" @click.stop="changeQty(i, -1)"><i class="pi pi-minus" /></button>
@@ -463,7 +498,7 @@ async function logout() {
       </section>
     </div>
 
-    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" @pay="complete" />
+    <PosPayment v-model:visible="payment" :amount-due="amountDue" :currency="cur" :busy="paying" :store-id="app.currentStoreId!" :khqr-enabled="!!(store as any)?.khqrAccountId" @pay="complete" />
 
     <!-- Receipt after sale -->
     <Dialog v-model:visible="receiptDlg" header="Sale complete" modal :style="{ width: '420px' }" :breakpoints="{ '480px': '100vw' }" @hide="focusSearch">
@@ -593,6 +628,7 @@ async function logout() {
 .line { display: grid; grid-template-columns: 1fr auto 76px 24px; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: default; }
 .line.sel { background: color-mix(in srgb, var(--p-primary-color) 7%, transparent); }
 .ln-name { font-weight: 600; line-height: 1.25; }
+.promo { color: var(--p-primary-color); font-weight: 600; margin-top: 2px; }
 .qty { display: flex; align-items: center; gap: 4px; }
 .qty button, .ln-edit { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; display: grid; place-items: center; }
 .ln-edit { border: 0; background: transparent; width: 24px; }

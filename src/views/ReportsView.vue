@@ -22,7 +22,7 @@ async function load() {
   loading.value = true;
   try {
     const p = params.value;
-    const [summary, profit, top, payments, cashiers, loyalty, stock] = await Promise.all([
+    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions] = await Promise.all([
       api.get('/reports/sales-summary', { ...p, groupBy: f.groupBy }),
       api.get('/reports/profit', { ...p, groupBy: f.groupBy }),
       api.get('/reports/top-products', { ...p, limit: 20 }),
@@ -30,8 +30,9 @@ async function load() {
       api.get('/reports/cashiers', p),
       api.get('/reports/loyalty', { ...p, limit: 10 }),
       api.get('/reports/inventory-value', { storeId: p.storeId }),
+      api.get('/reports/promotions', p),
     ]);
-    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock });
+    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions });
   } catch (e) {
     notify.error(e);
   } finally {
@@ -146,6 +147,18 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
             <Column header="Refunds" class="right"><template #body="{ data }">{{ m(data.refunds) }}</template></Column>
           </DataTable>
         </div>
+      </div>
+
+      <div class="card mt">
+        <h3>Promotions</h3>
+        <DataTable :value="r.promotions.data" size="small">
+          <template #empty><span class="muted">No promotion was used in this period</span></template>
+          <Column field="name" header="Promotion" />
+          <Column field="sales" header="Sales" class="right" />
+          <Column header="Items" class="right"><template #body="{ data }">{{ num(data.quantity, 3) }}</template></Column>
+          <Column header="Given away" class="right"><template #body="{ data }"><b>{{ m(data.discount) }}</b></template></Column>
+          <Column header="Revenue on these items" class="right"><template #body="{ data }">{{ m(data.revenue) }}</template></Column>
+        </DataTable>
       </div>
 
       <div class="grid grid-2 mt">

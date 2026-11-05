@@ -22,6 +22,7 @@ const m = (v: any) => money(v, props.currency);
     <div v-for="(i, n) in sale.items" :key="n" class="item">
       <div class="row2"><span>{{ i.name }}</span><span>{{ m(i.lineTotal) }}</span></div>
       <div class="sub">{{ qty(i.quantity) }} × {{ m(i.unitPrice) }}<template v-if="Number(i.discount)"> &nbsp;disc −{{ m(i.discount) }}</template></div>
+      <div v-if="i.promotion?.name" class="sub">★ {{ i.promotion.name }}</div>
     </div>
     <div class="sep" />
     <div class="row2"><span>Subtotal</span><span>{{ m(sale.subtotal) }}</span></div>

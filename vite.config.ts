@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig, loadEnv } from 'vite';
 
@@ -5,7 +6,13 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
     plugins: [vue()],
-    resolve: { alias: { '@': '/src' } },
+    resolve: {
+      alias: {
+        '@': '/src',
+        // Promotion rules are shared with the API so online and offline prices are identical.
+        '@shared/promotions': fileURLToPath(new URL('../api/src/promotions/engine.ts', import.meta.url)),
+      },
+    },
     build: {
       chunkSizeWarningLimit: 900,
       rollupOptions: {

@@ -113,6 +113,7 @@ onMounted(() => {
             <td>
               {{ i.name }}
               <div class="small muted">{{ qty(i.quantity) }} × {{ m(i.unitPrice) }}<span v-if="Number(i.discount)"> · disc −{{ m(i.discount) }}</span><span v-if="Number(i.refundedQty)" class="neg"> · refunded {{ qty(i.refundedQty) }}</span></div>
+              <div v-if="i.promotion" class="small" style="color: var(--p-primary-color)"><i class="pi pi-tag" /> {{ i.promotion.name }} −{{ m(i.promoDiscount) }}</div>
             </td>
             <td class="right num">{{ m(i.lineTotal) }}</td>
           </tr>

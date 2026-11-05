@@ -11,7 +11,7 @@ const rows = ref<Store[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
 const saving = ref(false);
-const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true });
+const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '' });
 const form = reactive(empty());
 
 async function load() {
@@ -19,7 +19,7 @@ async function load() {
   try { rows.value = await api.get('/stores', { includeInactive: true }); } catch (e) { notify.error(e); } finally { loading.value = false; }
 }
 function open(s?: Store) {
-  Object.assign(form, s ? { ...s, address: s.address ?? '', phone: s.phone ?? '', taxPercent: Number(s.taxRate) * 100 } : empty());
+  Object.assign(form, s ? { ...empty(), ...Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v ?? ''])), taxPercent: Number(s.taxRate) * 100 } : empty());
   dialog.value = true;
 }
 async function save() {
@@ -28,6 +28,8 @@ async function save() {
     const body = {
       code: form.code.toUpperCase(), name: form.name, address: form.address || undefined, phone: form.phone || undefined,
       currency: form.currency.toUpperCase(), taxRate: Number((form.taxPercent / 100).toFixed(4)),
+      khqrAccountId: form.khqrAccountId || null, khqrMerchantName: form.khqrMerchantName || null, khqrCity: form.khqrCity || null,
+      khqrMerchantId: form.khqrMerchantId || null, khqrBank: form.khqrBank || null,
     };
     if (form.id) await api.patch(`/stores/${form.id}`, { ...body, isActive: form.isActive });
     else await api.post('/stores', body);
@@ -53,6 +55,7 @@ onMounted(load);
         <Column field="phone" header="Phone" />
         <Column field="currency" header="Currency" />
         <Column header="Tax" class="right"><template #body="{ data }">{{ (Number(data.taxRate) * 100).toFixed(2).replace(/\.?0+$/, '') }}%</template></Column>
+        <Column header="KHQR"><template #body="{ data }"><span v-if="data.khqrAccountId" class="mono small">{{ data.khqrAccountId }}</span><span v-else class="muted">off</span></template></Column>
         <Column header="Status"><template #body="{ data }"><Tag :value="data.isActive ? 'active' : 'inactive'" :severity="data.isActive ? 'success' : 'secondary'" /></template></Column>
       </DataTable>
     </div>
@@ -72,6 +75,16 @@ onMounted(load);
           <div class="field"><label>Tax rate (%)</label><InputNumber v-model="form.taxPercent" :min="0" :max="100" :max-fraction-digits="2" suffix="%" fluid /></div>
           <div v-if="form.id" class="field"><label>Status</label><label class="row"><ToggleSwitch v-model="form.isActive" /> Active</label></div>
         </div>
+        <h3 style="margin: 8px 0 0">KHQR payments (Bakong)</h3>
+        <div class="form-2">
+          <div class="field"><label>Bakong account ID</label><InputText v-model="form.khqrAccountId" placeholder="myshop@aclb" maxlength="32" /><span class="hint">Leave empty to turn KHQR off for this store</span></div>
+          <div class="field"><label>Name shown to customers</label><InputText v-model="form.khqrMerchantName" maxlength="25" :placeholder="form.name.slice(0, 25)" /></div>
+        </div>
+        <div class="form-2">
+          <div class="field"><label>City</label><InputText v-model="form.khqrCity" maxlength="15" placeholder="Phnom Penh" /></div>
+          <div class="field"><label>Bank</label><InputText v-model="form.khqrBank" maxlength="32" placeholder="ACLEDA Bank Plc" /></div>
+        </div>
+        <div class="field"><label>Merchant ID <span class="hint">(only for Bakong merchant accounts)</span></label><InputText v-model="form.khqrMerchantId" maxlength="32" /></div>
         <div class="row" style="justify-content: flex-end"><Button type="submit" label="Save" icon="pi pi-check" :loading="saving" /></div>
       </form>
     </Dialog>

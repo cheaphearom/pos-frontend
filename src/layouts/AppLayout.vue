@@ -28,6 +28,11 @@ const sections: { title: string; items: NavItem[] }[] = [
     { to: '/categories', label: 'Categories', icon: 'pi pi-tags', roles: ['SUPER_ADMIN'] },
     { to: '/inventory', label: 'Inventory', icon: 'pi pi-warehouse', roles: ['STORE_MANAGER'] },
     { to: '/transfers', label: 'Transfers', icon: 'pi pi-arrow-right-arrow-left', roles: ['STORE_MANAGER'] },
+    { to: '/promotions', label: 'Promotions', icon: 'pi pi-megaphone', roles: ['STORE_MANAGER'] },
+  ] },
+  { title: 'Purchasing', items: [
+    { to: '/purchase-orders', label: 'Purchase orders', icon: 'pi pi-file-edit', roles: ['STORE_MANAGER'] },
+    { to: '/suppliers', label: 'Suppliers', icon: 'pi pi-truck', roles: ['STORE_MANAGER'] },
   ] },
   { title: 'Administration', items: [
     { to: '/users', label: 'Users', icon: 'pi pi-users', roles: ['STORE_MANAGER'] },
