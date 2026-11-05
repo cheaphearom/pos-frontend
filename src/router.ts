@@ -69,6 +69,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'reports', component: () => import('./views/ReportsView.vue'), meta: { title: 'Reports', roles: M } },
       { path: 'users', component: () => import('./views/UsersView.vue'), meta: { title: 'Users', roles: M } },
       { path: 'stores', component: () => import('./views/StoresView.vue'), meta: { title: 'Stores', roles: A } },
+      { path: 'audit', component: () => import('./views/AuditView.vue'), meta: { title: 'Audit log', roles: M } },
       { path: 'integrations', component: () => import('./views/IntegrationsView.vue'), meta: { title: 'Integrations', roles: A } },
     ],
   },

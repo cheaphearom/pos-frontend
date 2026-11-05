@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { api } from '@/api/client';
 import { PAYMENT_METHODS } from '@/api/types';
 import DateRange from '@/components/DateRange.vue';
+import ManagerApproval from '@/components/ManagerApproval.vue';
 import { useNotify } from '@/composables/useNotify';
 import { usePagedList } from '@/composables/usePagedList';
 import { useApp } from '@/stores/app';
@@ -22,7 +23,7 @@ const list = usePagedList('/sales', {
 const cur = computed(() => app.currentStore?.currency ?? 'USD');
 const m = (v: any) => money(v, cur.value);
 const statusSeverity: Record<string, string> = { COMPLETED: 'success', PARTIALLY_REFUNDED: 'warn', REFUNDED: 'danger', VOIDED: 'secondary' };
-const statuses = ['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'].map((v) => ({ v, l: humanize(v) }));
+const statuses = ['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED', 'VOIDED'].map((v) => ({ v, l: humanize(v) }));
 
 // ── Receipt
 const sale = ref<any>(null);
@@ -33,7 +34,44 @@ async function open(idOrReceipt: string) {
     showSale.value = true;
   } catch (e) { notify.error(e); }
 }
-const canRefund = computed(() => auth.isManager && sale.value && !['REFUNDED', 'VOIDED'].includes(sale.value.status));
+const canRefund = computed(() => sale.value && !['REFUNDED', 'VOIDED'].includes(sale.value.status));
+const saleStore = computed(() => app.stores.find((s) => s.id === sale.value?.storeId) as any);
+/** Cashiers need a manager PIN when the store says so */
+const pinFor = (what: 'refund' | 'void') => auth.role === 'CASHIER' && (what === 'refund' ? saleStore.value?.refundNeedsApproval : saleStore.value?.voidNeedsApproval) !== false;
+const today = (d: string) => new Date(d).toDateString() === new Date().toDateString();
+const canVoid = computed(() => sale.value && sale.value.status === 'COMPLETED' && !sale.value.refunds?.length && today(sale.value.createdAt)
+  && new Set(sale.value.payments.map((x: any) => x.method)).size <= 1);
+
+// ── Manager approval (cashiers)
+const apprDlg = ref(false);
+const appr = reactive({ action: 'REFUND' as 'REFUND' | 'VOID', message: '', then: (_id: string) => {} });
+function withApproval(action: 'REFUND' | 'VOID', message: string, run: (approvalId?: string) => void) {
+  if (!pinFor(action === 'REFUND' ? 'refund' : 'void')) return run();
+  Object.assign(appr, { action, message, then: run });
+  apprDlg.value = true;
+}
+
+// ── Void
+const voidDlg = ref(false);
+const voiding = ref(false);
+const voidForm = reactive({ reason: '', restock: true });
+function openVoid() {
+  Object.assign(voidForm, { reason: '', restock: true });
+  voidDlg.value = true;
+}
+function doVoid() {
+  if (voidForm.reason.trim().length < 3) return notify.error('Say why the sale is voided');
+  withApproval('VOID', `Void ${sale.value.receiptNo} (${m(sale.value.amountDue)}): ${voidForm.reason}`, async (approvalId) => {
+    voiding.value = true;
+    try {
+      await api.post(`/sales/${sale.value.id}/void`, { reason: voidForm.reason.trim(), restock: voidForm.restock, approvalId });
+      notify.success('Sale voided', `${sale.value.receiptNo}: give back ${m(sale.value.amountDue)} by ${humanize(sale.value.payments[0]?.method ?? 'CASH')}`);
+      voidDlg.value = false;
+      await open(sale.value.id);
+      list.load();
+    } catch (e) { notify.error(e); } finally { voiding.value = false; }
+  });
+}
 
 function printReceipt() {
   document.body.classList.add('printing-receipt');
@@ -56,17 +94,19 @@ function openRefund() {
 }
 const refundAll = () => refund.lines.forEach((l) => (l.quantity = l.max));
 const refundEstimate = computed(() => refund.lines.reduce((s, l) => s + l.unit * l.quantity, 0));
-async function doRefund() {
+function doRefund() {
   const items = refund.lines.filter((l) => l.quantity > 0).map((l) => ({ saleItemId: l.id, quantity: l.quantity }));
   if (!items.length) return notify.error('Choose at least one item to refund');
-  refunding.value = true;
-  try {
-    const r = await api.post(`/sales/${sale.value.id}/refunds`, { items, method: refund.method, restock: refund.restock, reason: refund.reason || undefined });
-    notify.success('Refund done', `${r.refundNo}: give back ${m(r.amount)}`);
-    refundDlg.value = false;
-    await open(sale.value.id);
-    list.load();
-  } catch (e) { notify.error(e); } finally { refunding.value = false; }
+  withApproval('REFUND', `Refund about ${m(refundEstimate.value)} on ${sale.value.receiptNo}${refund.reason ? `: ${refund.reason}` : ''}`, async (approvalId) => {
+    refunding.value = true;
+    try {
+      const r = await api.post(`/sales/${sale.value.id}/refunds`, { items, method: refund.method, restock: refund.restock, reason: refund.reason || undefined, approvalId });
+      notify.success('Refund done', `${r.refundNo}: give back ${m(r.amount)}`);
+      refundDlg.value = false;
+      await open(sale.value.id);
+      list.load();
+    } catch (e) { notify.error(e); } finally { refunding.value = false; }
+  });
 }
 
 onMounted(() => {
@@ -140,10 +180,25 @@ onMounted(() => {
         </div>
         <div class="row mt no-print" style="justify-content: flex-end">
           <Button label="Print" icon="pi pi-print" severity="secondary" text @click="printReceipt" />
+          <Button v-if="canVoid" label="Void" icon="pi pi-ban" severity="danger" text @click="openVoid" />
           <Button v-if="canRefund" label="Refund" icon="pi pi-replay" severity="danger" outlined @click="openRefund" />
         </div>
       </div>
     </Drawer>
+
+    <ManagerApproval v-model:visible="apprDlg" :store-id="sale?.storeId ?? null" :action="appr.action" :sale-id="sale?.id" :message="appr.message" @approved="(a) => appr.then(a.approvalId)" />
+
+    <Dialog v-model:visible="voidDlg" header="Void the whole sale" modal :style="{ width: '440px' }" :breakpoints="{ '480px': '95vw' }">
+      <form class="form" @submit.prevent="doVoid">
+        <p v-if="sale" style="margin: 0">Cancels <b class="mono">{{ sale.receiptNo }}</b> and gives back <b>{{ m(sale.amountDue) }}</b> by {{ humanize(sale.payments[0]?.method ?? 'CASH') }}. Points, coupons and wallet are put back too.</p>
+        <div class="field"><label>Reason *</label><InputText v-model="voidForm.reason" maxlength="200" placeholder="Wrong order, customer changed mind…" autofocus /></div>
+        <label class="row"><ToggleSwitch v-model="voidForm.restock" /> Put items back into stock</label>
+        <div class="row" style="justify-content: flex-end">
+          <Button label="Cancel" severity="secondary" text @click="voidDlg = false" />
+          <Button type="submit" label="Void sale" icon="pi pi-ban" severity="danger" :loading="voiding" />
+        </div>
+      </form>
+    </Dialog>
 
     <Dialog v-model:visible="refundDlg" header="Refund items" modal :style="{ width: '600px' }" :breakpoints="{ '720px': '95vw' }">
       <div class="form">

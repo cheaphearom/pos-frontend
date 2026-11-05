@@ -12,6 +12,7 @@ import PosPayment, { type WalletCardInfo } from '@/components/pos/PosPayment.vue
 import PosOptions, { type ChosenOption, type OptionGroup } from '@/components/pos/PosOptions.vue';
 import { optionsText } from '@/utils/modifiers';
 import PosReceipt from '@/components/pos/PosReceipt.vue';
+import ManagerApproval from '@/components/ManagerApproval.vue';
 import { useNotify } from '@/composables/useNotify';
 import { useCatalog, type CatalogItem } from '@/pos/catalog';
 import { isNetworkError, online } from '@/pos/network';
@@ -52,6 +53,8 @@ interface Cart {
   discount: number;
   discountPercent: number;
   note: string;
+  /** Manager approval for a discount above the cashier limit */
+  approval?: { id: string; manager: string; percent: number } | null;
 }
 const CART_KEY = `pos.cart:${app.currentStoreId}`;
 const HELD_KEY = `pos.held:${app.currentStoreId}`;
@@ -153,6 +156,30 @@ const priced = computed(() => {
   }
 });
 const totals = computed(() => priced.value.totals);
+
+// ───────────── Cashier controls: discount limit ─────────────
+/** Manual discount as % of the sale after promotions (coupons and points do not count), like the server. */
+const manualAmount = computed(() => {
+  const t = totals.value;
+  if (!t) return 0;
+  const promo = cart.lines.reduce((s, _l, i) => s + (promos.value[i]?.discount ?? 0), 0);
+  return Math.max(0, Math.round((Number(t.discountTotal) - promo - coupon.value.discount) * 100) / 100);
+});
+const manualPercent = computed(() => {
+  const t = totals.value;
+  if (!t) return 0;
+  const promo = cart.lines.reduce((s, _l, i) => s + (promos.value[i]?.discount ?? 0), 0);
+  const base = Number(t.subtotal) - promo;
+  return base > 0 && manualAmount.value > 0.004 ? Math.round((manualAmount.value / base) * 10000) / 100 : 0;
+});
+const discountLimit = computed(() => Number((store.value as any)?.cashierMaxDiscountPercent ?? 100));
+const needsDiscountPin = computed(() => auth.role === 'CASHIER' && manualPercent.value > discountLimit.value);
+const approvalDlg = ref(false);
+function onApproved(a: { approvalId: string; manager: string; percent?: number }) {
+  cart.approval = { id: a.approvalId, manager: a.manager, percent: a.percent ?? manualPercent.value };
+  notify.success(`Approved by ${a.manager}`, `Discount ${cart.approval.percent}%`);
+  openPay();
+}
 const loyalty = ref<{ earnRate: number; pointValue: number }>(readJson('pos.loyalty', { earnRate: 1, pointValue: 0.01 }));
 const pointsDiscount = computed(() => (cart.customer && cart.redeemPoints ? pointsValue(cart.redeemPoints, loyalty.value.pointValue) : 0));
 const amountDue = computed(() => Math.round(((totals.value?.total ?? 0) - pointsDiscount.value) * 100) / 100);
@@ -400,6 +427,11 @@ function openPay() {
   if (!cart.lines.length) return;
   if (priced.value.error) return notify.error(priced.value.error);
   if (coupon.value.error) return notify.error(coupon.value.error);
+  if (needsDiscountPin.value && !(cart.approval && cart.approval.percent >= manualPercent.value)) {
+    if (!online.value) return notify.error(`Discounts above ${discountLimit.value}% need a manager PIN and a connection`);
+    approvalDlg.value = true;
+    return;
+  }
   if (online.value && !shift.value) {
     shiftDlg.value = true;
     return;
@@ -424,6 +456,7 @@ async function complete(payments: { method: string; amount: number; reference?: 
     couponCode: cart.coupon?.code,
     discount: cart.discount || undefined,
     discountPercent: cart.discountPercent || undefined,
+    approvalId: needsDiscountPin.value ? cart.approval?.id : undefined,
     note: cart.note || undefined,
   };
   try {
@@ -444,6 +477,7 @@ async function complete(payments: { method: string; amount: number; reference?: 
     receiptDlg.value = true;
     Object.assign(cart, newCart());
   } catch (e) {
+    if (e instanceof ApiError && e.status === 403 && /approval/i.test(e.message)) cart.approval = null; // expired or used: ask again
     notify.error(e);
   } finally {
     paying.value = false;
@@ -762,7 +796,7 @@ async function logout() {
         <div class="sum">
           <Message v-if="priced.error" severity="error" :closable="false" size="small">{{ priced.error }}</Message>
           <div class="r"><span>Subtotal <span class="muted small">({{ qty(itemCount) }} items)</span></span><span class="num">{{ m(totals?.subtotal ?? 0) }}</span></div>
-          <div v-if="totals?.discountTotal" class="r"><span>Discount</span><span class="num neg">−{{ m(totals.discountTotal) }}</span></div>
+          <div v-if="totals?.discountTotal" class="r"><span>Discount<span v-if="needsDiscountPin" class="small" :class="cart.approval && cart.approval.percent >= manualPercent ? 'muted' : 'neg'"> · {{ cart.approval && cart.approval.percent >= manualPercent ? `approved by ${cart.approval.manager}` : 'needs manager PIN' }}</span></span><span class="num neg">−{{ m(totals.discountTotal) }}</span></div>
           <div v-if="cart.coupon" class="r coupon-row">
             <span><i class="pi pi-ticket" /> {{ cart.coupon.name }} <span class="mono small">{{ cart.coupon.code }}</span>
               <Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Remove coupon" @click="cart.coupon = null" /></span>
@@ -832,10 +866,13 @@ async function logout() {
     </Dialog>
 
     <!-- Sale discount -->
+    <ManagerApproval v-model:visible="approvalDlg" :store-id="app.currentStoreId" action="DISCOUNT" :percent="manualPercent"
+      :message="`Discount of ${manualPercent}% (${m(manualAmount)}) is above the cashier limit of ${discountLimit}%.`" @approved="onApproved" />
     <Dialog v-model:visible="discDlg" header="Discount on whole sale" modal :style="{ width: '380px' }">
       <form class="form" @submit.prevent="applyDiscount">
         <SelectButton v-model="disc.type" :options="[{ l: 'Amount', v: 'amount' }, { l: 'Percent', v: 'percent' }]" option-label="l" option-value="v" :allow-empty="false" />
         <InputNumber v-model="disc.value" :min="0" :max="disc.type === 'percent' ? 100 : undefined" :max-fraction-digits="2" :suffix="disc.type === 'percent' ? ' %' : ''" fluid autofocus />
+        <small v-if="auth.role === 'CASHIER' && discountLimit < 100" class="muted">Up to {{ discountLimit }}% without a manager. More needs a manager PIN when paying.</small>
         <div class="row" style="justify-content: flex-end">
           <Button label="Remove" text severity="secondary" @click="disc.value = 0; applyDiscount()" />
           <Button type="submit" label="Apply" />

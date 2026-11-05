@@ -12,7 +12,7 @@ const rows = ref<Store[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
 const saving = ref(false);
-const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false });
+const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true });
 const form = reactive(empty());
 
 async function load() {
@@ -20,7 +20,7 @@ async function load() {
   try { rows.value = await api.get('/stores', { includeInactive: true }); } catch (e) { notify.error(e); } finally { loading.value = false; }
 }
 function open(s?: Store) {
-  Object.assign(form, s ? { ...empty(), ...Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v ?? ''])), taxPercent: Number(s.taxRate) * 100 } : empty());
+  Object.assign(form, s ? { ...empty(), ...Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v ?? ''])), taxPercent: Number(s.taxRate) * 100, cashierMaxDiscountPercent: Number((s as any).cashierMaxDiscountPercent ?? 10), refundNeedsApproval: (s as any).refundNeedsApproval !== false, voidNeedsApproval: (s as any).voidNeedsApproval !== false } : empty());
   dialog.value = true;
 }
 async function save() {
@@ -31,6 +31,7 @@ async function save() {
       currency: form.currency.toUpperCase(), taxRate: Number((form.taxPercent / 100).toFixed(4)),
       khqrAccountId: form.khqrAccountId || null, khqrMerchantName: form.khqrMerchantName || null, khqrCity: form.khqrCity || null,
       khqrMerchantId: form.khqrMerchantId || null, khqrBank: form.khqrBank || null, hasKitchen: !!form.hasKitchen, onlineOrdering: !!form.onlineOrdering,
+      cashierMaxDiscountPercent: Number(form.cashierMaxDiscountPercent ?? 0), refundNeedsApproval: !!form.refundNeedsApproval, voidNeedsApproval: !!form.voidNeedsApproval,
     };
     if (form.id) await api.patch(`/stores/${form.id}`, { ...body, isActive: form.isActive });
     else await api.post('/stores', body);
@@ -103,6 +104,14 @@ onMounted(load);
         <div v-if="form.onlineOrdering && form.code" class="small muted">
           Order page: <a :href="`/order/${form.code}`" target="_blank">{{ origin }}/order/{{ form.code }}</a>
           <Button v-if="form.id" label="Print table QR codes" icon="pi pi-qrcode" size="small" text @click="openQr" />
+        </div>
+        <h3 style="margin: 8px 0 0">Cashier controls</h3>
+        <div class="form-2">
+          <div class="field"><label>Cashier discount limit</label><InputNumber v-model="form.cashierMaxDiscountPercent" suffix=" %" :min="0" :max="100" :max-fraction-digits="2" fluid /><span class="hint">Manual discounts above this need a manager PIN (promotions and coupons do not count)</span></div>
+          <div class="field" style="align-content: center; gap: 10px">
+            <label class="row"><ToggleSwitch v-model="form.refundNeedsApproval" /> Cashier refunds need a manager PIN</label>
+            <label class="row"><ToggleSwitch v-model="form.voidNeedsApproval" /> Cashier voids need a manager PIN</label>
+          </div>
         </div>
         <h3 style="margin: 8px 0 0">KHQR payments (Bakong)</h3>
         <div class="form-2">

@@ -40,7 +40,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   // Ingredients on the products page, with the pack helper
   await ad.goto(W + '/products'); await ad.waitForTimeout(800);
   await ad.locator('.p-selectbutton').getByText('Ingredients', { exact: true }).click(); await ad.waitForTimeout(1000);
-  ok((await ad.locator('.p-datatable-tbody tr').count()) === 12, 'products page: 12 ingredients');
+  ok((await ad.locator('.p-datatable-tbody tr').count()) === 19, 'products page: 19 ingredients (café + bakery)');
   await ad.getByRole('button', { name: 'New ingredient' }).click(); await ad.waitForTimeout(300);
   await ad.locator('.p-dialog input').nth(0).fill('IN-099'); await ad.locator('.p-dialog input').nth(2).fill('Condensed milk');
   await ad.locator('.p-dialog input[placeholder="Pack size"]').fill('390'); await ad.locator('.p-dialog input[placeholder="Pack price"]').fill('1.95'); await ad.locator('.p-dialog input[placeholder="Pack price"]').blur(); await ad.waitForTimeout(300);

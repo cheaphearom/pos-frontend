@@ -5,8 +5,10 @@ import type { Role } from '@/api/types';
 import { ROLE_LABEL } from '@/api/types';
 import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
+import ApprovalPinDialog from '@/components/ApprovalPinDialog.vue';
 
 const auth = useAuth();
+const pinDlg = ref(false);
 const app = useApp();
 const route = useRoute();
 const router = useRouter();
@@ -46,6 +48,7 @@ const sections: { title: string; items: NavItem[] }[] = [
   { title: 'Administration', items: [
     { to: '/users', label: 'Users', icon: 'pi pi-users', roles: ['STORE_MANAGER'] },
     { to: '/stores', label: 'Stores', icon: 'pi pi-building', roles: ['SUPER_ADMIN'] },
+    { to: '/audit', label: 'Audit log', icon: 'pi pi-shield', roles: ['STORE_MANAGER'] },
     { to: '/integrations', label: 'Integrations', icon: 'pi pi-link', roles: ['SUPER_ADMIN'] },
   ] },
 ];
@@ -115,6 +118,8 @@ async function logout() {
           <div class="name">{{ auth.user?.fullName }}</div>
           <div class="role">{{ auth.role ? ROLE_LABEL[auth.role] : '' }}</div>
         </div>
+        <Button v-if="auth.isManager" icon="pi pi-key" text rounded aria-label="My approval PIN" v-tooltip.bottom="'My approval PIN'" @click="pinDlg = true" />
+        <ApprovalPinDialog v-model:visible="pinDlg" />
         <Button icon="pi pi-sign-out" text rounded aria-label="Log out" v-tooltip.bottom="'Log out'" @click="logout" />
       </header>
       <main>
