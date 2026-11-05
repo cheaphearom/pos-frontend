@@ -639,7 +639,7 @@ async function logout() {
         </div>
         <div class="cats">
           <button class="chip" :class="{ on: !category }" @click="category = null">All</button>
-          <button v-for="c in categories" :key="c.id" class="chip" :class="{ on: category === c.id }" @click="category = category === c.id ? null : c.id">{{ c.name }}</button>
+          <button v-for="c in categories.filter((x) => catalog.items.value.some((p) => p.categoryId === x.id))" :key="c.id" class="chip" :class="{ on: category === c.id }" @click="category = category === c.id ? null : c.id">{{ c.name }}</button>
         </div>
         <div class="tiles">
           <button v-for="p in results" :key="p.id" class="tile" @click="addProduct(p); focusSearch()">

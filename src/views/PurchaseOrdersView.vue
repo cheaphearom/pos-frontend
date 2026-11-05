@@ -160,7 +160,7 @@ async function doReceive() {
           <Column header="Product"><template #body="{ data }">{{ data.product.name }} <span class="mono small muted">{{ data.product.sku }}</span></template></Column>
           <Column header="In stock" class="right"><template #body="{ data }">{{ data.product.stock !== undefined ? qty(data.product.stock) : '' }}</template></Column>
           <Column header="Quantity" style="width: 140px"><template #body="{ data }"><InputNumber v-model="data.quantity" :min="0.001" :max-fraction-digits="3" fluid size="small" /></template></Column>
-          <Column header="Unit cost" style="width: 130px"><template #body="{ data }"><InputNumber v-model="data.unitCost" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" fluid size="small" /></template></Column>
+          <Column header="Unit cost" style="width: 130px"><template #body="{ data }"><InputNumber v-model="data.unitCost" :min="0" :min-fraction-digits="2" :max-fraction-digits="6" fluid size="small" /></template></Column>
           <Column header="Line total" class="right"><template #body="{ data }">{{ m(data.quantity * data.unitCost) }}</template></Column>
           <Column style="width: 44px"><template #body="{ index }"><Button icon="pi pi-times" text rounded severity="secondary" aria-label="Remove" @click="form.items.splice(index, 1)" /></template></Column>
         </DataTable>
@@ -232,7 +232,7 @@ async function doReceive() {
           <Column field="name" header="Product" />
           <Column header="Still to come" class="right"><template #body="{ data }">{{ qty(data.left) }}</template></Column>
           <Column header="Received now" style="width: 140px"><template #body="{ data }"><InputNumber v-model="data.quantity" :min="0" :max="data.left" :max-fraction-digits="3" fluid size="small" /></template></Column>
-          <Column header="Invoice cost" style="width: 130px"><template #body="{ data }"><InputNumber v-model="data.unitCost" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" fluid size="small" /></template></Column>
+          <Column header="Invoice cost" style="width: 130px"><template #body="{ data }"><InputNumber v-model="data.unitCost" :min="0" :min-fraction-digits="2" :max-fraction-digits="6" fluid size="small" /></template></Column>
         </DataTable>
         <div class="form-2">
           <div class="field"><label>Supplier invoice / delivery note no.</label><InputText v-model="recv.reference" /></div>

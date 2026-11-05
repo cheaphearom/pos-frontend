@@ -5,13 +5,13 @@ import { api } from '@/api/client';
 import type { Product } from '@/api/types';
 import { qty } from '@/utils/format';
 
-const props = defineProps<{ storeId?: string | null; placeholder?: string }>();
+const props = defineProps<{ storeId?: string | null; placeholder?: string; kind?: 'sellable' | 'ingredient' }>();
 const emit = defineEmits<{ select: [Product] }>();
 const value = ref<any>(null);
 const suggestions = ref<Product[]>([]);
 
 async function search(e: { query: string }) {
-  const res = await api.get('/products', { search: e.query, storeId: props.storeId ?? undefined, limit: 15 });
+  const res = await api.get('/products', { search: e.query, storeId: props.storeId ?? undefined, kind: props.kind, limit: 15 });
   suggestions.value = res.data;
 }
 

@@ -32,6 +32,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'sales', component: () => import('./views/SalesView.vue'), meta: { title: 'Sales' } },
       { path: 'shifts', component: () => import('./views/ShiftsView.vue'), meta: { title: 'Shifts' } },
       { path: 'products', component: () => import('./views/ProductsView.vue'), meta: { title: 'Products' } },
+      { path: 'recipes', component: () => import('./views/RecipesView.vue'), meta: { title: 'Recipes', roles: M } },
       { path: 'modifiers', component: () => import('./views/ModifiersView.vue'), meta: { title: 'Drink options', roles: M } },
       { path: 'categories', component: () => import('./views/CategoriesView.vue'), meta: { title: 'Categories', roles: A } },
       { path: 'inventory', component: () => import('./views/InventoryView.vue'), meta: { title: 'Inventory', roles: M } },

@@ -38,6 +38,7 @@ export interface Product {
   isActive: boolean;
   price?: string;
   stock?: string;
+  isIngredient?: boolean;
 }
 
 export const ROLE_LABEL: Record<Role, string> = {

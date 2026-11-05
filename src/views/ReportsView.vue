@@ -22,7 +22,7 @@ async function load() {
   loading.value = true;
   try {
     const p = params.value;
-    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv] = await Promise.all([
+    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients] = await Promise.all([
       api.get('/reports/sales-summary', { ...p, groupBy: f.groupBy }),
       api.get('/reports/profit', { ...p, groupBy: f.groupBy }),
       api.get('/reports/top-products', { ...p, limit: 20 }),
@@ -33,8 +33,9 @@ async function load() {
       api.get('/reports/promotions', p),
       api.get('/reports/wallet', p),
       api.get('/reports/coupons-vouchers', p),
+      api.get('/reports/ingredient-usage', p),
     ]);
-    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv });
+    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients });
   } catch (e) {
     notify.error(e);
   } finally {
@@ -149,6 +150,16 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
             <Column header="Refunds" class="right"><template #body="{ data }">{{ m(data.refunds) }}</template></Column>
           </DataTable>
         </div>
+      </div>
+
+      <div class="card mt">
+        <div class="row" style="justify-content: space-between"><h3>Ingredients used</h3><span class="muted small">total {{ m(r.ingredients.data.reduce((s: number, x: any) => s + x.cost, 0)) }}</span></div>
+        <DataTable :value="r.ingredients.data" size="small" scrollable scroll-height="320px">
+          <template #empty><span class="muted">No recipe ingredients used in this period</span></template>
+          <Column header="Ingredient"><template #body="{ data }">{{ data.name }} <span class="mono small muted">{{ data.sku }}</span></template></Column>
+          <Column header="Used" class="right"><template #body="{ data }">{{ num(data.used, 1) }} {{ data.unit }}</template></Column>
+          <Column header="Cost" class="right"><template #body="{ data }">{{ m(data.cost) }}</template></Column>
+        </DataTable>
       </div>
 
       <div class="card mt">
