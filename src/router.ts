@@ -23,6 +23,9 @@ const routes: RouteRecordRaw[] = [
   { path: '/kitchen', component: () => import('./views/KitchenView.vue'), meta: { title: 'Barista screen' } },
   // Pickup board for a TV: public, shows queue numbers only.
   { path: '/board', component: () => import('./views/BoardView.vue'), meta: { public: true, title: 'Order board' } },
+  // Online ordering for customers (public)
+  { path: '/order/status/:token', component: () => import('./views/OrderStatusView.vue'), meta: { public: true, title: 'Your order' } },
+  { path: '/order/:code', component: () => import('./views/OrderView.vue'), meta: { public: true, title: 'Order online' } },
   { path: '/pos', component: () => import('./views/PosView.vue'), meta: { title: 'POS' } },
   {
     path: '/',

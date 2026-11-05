@@ -15,7 +15,7 @@ const categories = ref<Category[]>([]);
 const list = usePagedList<Product>('/products', { search: '', categoryId: null, storeId: app.currentStoreId, includeInactive: false, kind: null as string | null });
 
 const cur = computed(() => app.currentStore?.currency ?? 'USD');
-const empty = () => ({ id: '', sku: '', barcode: '', name: '', description: '', categoryId: null as string | null, unit: 'pcs', costPrice: 0, sellPrice: 0, taxable: true, trackStock: true, isActive: true, imageUrl: '', modifierGroupIds: [] as string[], isIngredient: false });
+const empty = () => ({ id: '', sku: '', barcode: '', name: '', description: '', categoryId: null as string | null, unit: 'pcs', costPrice: 0, sellPrice: 0, taxable: true, trackStock: true, isActive: true, imageUrl: '', modifierGroupIds: [] as string[], isIngredient: false, onlineAvailable: false });
 const pack = reactive({ size: null as number | null, price: null as number | null });
 function applyPack() {
   if (pack.size && pack.price !== null) form.costPrice = Math.round((pack.price / pack.size) * 1e6) / 1e6;
@@ -36,6 +36,7 @@ function edit(p: Product) {
     ...empty(), ...p, barcode: p.barcode ?? '', description: p.description ?? '', costPrice: Number(p.costPrice), sellPrice: Number(p.sellPrice),
     imageUrl: (p as any).imageUrl ?? '', modifierGroupIds: ((p as any).modifierGroups ?? []).map((m: any) => m.groupId),
     isIngredient: !!(p as any).isIngredient,
+    onlineAvailable: !!(p as any).onlineAvailable,
   });
   Object.assign(pack, { size: null, price: null });
   dialog.value = true;
@@ -155,6 +156,7 @@ onMounted(async () => {
           <label class="row"><ToggleSwitch v-model="form.isIngredient" /> Ingredient (used in recipes, not sold)</label>
           <label class="row"><ToggleSwitch v-model="form.taxable" /> Taxable</label>
           <label class="row"><ToggleSwitch v-model="form.trackStock" /> Track stock</label>
+          <label v-if="!form.isIngredient" class="row"><ToggleSwitch v-model="form.onlineAvailable" /> Sell online</label>
           <label v-if="form.id" class="row"><ToggleSwitch v-model="form.isActive" /> Active (for sale)</label>
         </div>
         <div class="row" style="justify-content: flex-end">

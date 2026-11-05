@@ -45,8 +45,9 @@ interface Cart {
   wallet?: WalletCardInfo | null;
   coupon?: (CouponRule & { code: string }) | null;
   voucher?: { code: string; balance: string } | null;
-  orderType?: 'TAKEAWAY' | 'DINE_IN';
+  orderType?: 'TAKEAWAY' | 'DINE_IN' | 'PICKUP';
   tableNo?: string;
+  onlineOrderId?: string;
   redeemPoints: number;
   discount: number;
   discountPercent: number;
@@ -412,6 +413,7 @@ async function complete(payments: { method: string; amount: number; reference?: 
       modifiers: l.modifiers?.length ? l.modifiers.map((o) => o.id) : undefined, note: l.note || undefined,
     })),
     ...(store.value?.hasKitchen && { orderType: cart.orderType ?? 'TAKEAWAY', tableNo: cart.orderType === 'DINE_IN' && cart.tableNo ? cart.tableNo : undefined }),
+    onlineOrderId: cart.onlineOrderId,
     payments,
     customerId: cart.customer?.id,
     redeemPoints: cart.redeemPoints || undefined,
@@ -448,6 +450,7 @@ async function complete(payments: { method: string; amount: number; reference?: 
 async function saveOffline(body: any, payments: { method: string; amount: number }[]) {
   if (body.redeemPoints) throw new Error('Points cannot be used while offline. Remove the points and try again.');
   if (body.couponCode) throw new Error('Coupons cannot be used while offline. Remove the coupon and try again.');
+  if (body.onlineOrderId) throw new Error('Online orders need a connection.');
   if (payments.some((p: any) => p.method === 'VOUCHER' || p.method === 'WALLET')) throw new Error('Vouchers and wallet cards need a connection.');
   const t = totals.value!;
   const paid = payments.reduce((s, p) => s + p.amount, 0);
@@ -477,6 +480,52 @@ function nextSale() {
   receiptDlg.value = false;
   focusSearch();
 }
+
+// ───────────── Online orders (order ahead / table QR) ─────────────
+const onlineOrders = ref<any[]>([]);
+const onlineDlg = ref(false);
+const onlineBusy = ref('');
+let onlineTimer: ReturnType<typeof setInterval> | undefined;
+async function loadOnline() {
+  if (!online.value || !(store.value as any)?.onlineOrdering) return;
+  try { onlineOrders.value = await api.get('/online-orders', { storeId: app.currentStoreId }); } catch { /* keep the last list */ }
+}
+async function confirmOnline(o: any) {
+  onlineBusy.value = o.id;
+  try {
+    const r = await api.post(`/online-orders/${o.id}/confirm-payment`);
+    if (r.status === 'PAID') notify.success('Payment confirmed', `${o.customerName}'s order went to the barista`);
+    else notify.error(r.error ?? 'Could not create the sale');
+    loadOnline();
+  } catch (e) { notify.error(e); } finally { onlineBusy.value = ''; }
+}
+async function cancelOnline(o: any) {
+  if (!confirm(`Cancel ${o.customerName}'s online order?`)) return;
+  try { await api.post(`/online-orders/${o.id}/cancel`); loadOnline(); } catch (e) { notify.error(e); }
+}
+/** Pay-at-counter: put the online order into the cart, then take payment as usual. */
+async function takeOnline(o: any) {
+  if (cart.lines.length) hold();
+  const full = await api.get(`/online-orders/${o.id}`);
+  const missing: string[] = [];
+  for (const l of full.lines) {
+    const p = catalog.items.value.find((x) => x.id === l.productId);
+    if (!p) { missing.push(l.name); continue; }
+    pushLine(p, Number(l.quantity), (l.modifiers ?? []).map((m: any) => ({ id: m.id, group: m.group, option: m.option, price: m.price })), l.note ?? '');
+  }
+  if (missing.length) notify.error(`Not on this till's product list: ${missing.join(', ')}`);
+  cart.onlineOrderId = o.id;
+  cart.orderType = full.orderType === 'DINE_IN' ? 'DINE_IN' : 'PICKUP';
+  cart.tableNo = full.tableNo ?? '';
+  cart.note = `Online · ${full.customerName}${full.phone ? ' · ' + full.phone : ''}`;
+  if (full.phone) {
+    try { setCustomer(await api.get('/customers/lookup', { code: full.phone })); } catch { /* not a member */ }
+  }
+  if (full.couponCode) await scanCode(full.couponCode);
+  onlineDlg.value = false;
+  notify.success(`${full.customerName}'s order is in the cart`, 'Take payment as usual');
+}
+const waitingOnline = computed(() => onlineOrders.value.length);
 
 // ───────────── Customer display (second screen) ─────────────
 const display = displayChannel(app.currentStoreId!);
@@ -567,7 +616,7 @@ async function loadPromos() {
 }
 
 function onKey(e: KeyboardEvent) {
-  const dialogOpen = optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value;
+  const dialogOpen = onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value;
   if (e.key === 'F9' || (e.key === 'Enter' && e.ctrlKey)) { e.preventDefault(); if (!dialogOpen) openPay(); }
   else if (e.key === 'F2') { e.preventDefault(); focusSearch(); }
   else if (e.key === 'F4' && !dialogOpen) { e.preventDefault(); custDlg.value = true; }
@@ -584,6 +633,8 @@ onMounted(async () => {
     if (!hadLocal) notify.success('Downloading products…');
     await refreshData();
   }
+  loadOnline();
+  onlineTimer = setInterval(loadOnline, 10_000);
   syncTimer = setInterval(() => {
     if (!online.value) return;
     catalog.sync().catch(() => undefined);
@@ -592,6 +643,7 @@ onMounted(async () => {
   window.addEventListener('keydown', onKey);
 });
 onBeforeUnmount(() => {
+  clearInterval(onlineTimer);
   display.close();
   clearInterval(displayWatch);
   clearTimeout(doneTimer);
@@ -620,6 +672,7 @@ async function logout() {
       <div class="spacer" />
       <Tag v-if="!online" severity="danger" icon="pi pi-wifi" value="OFFLINE" />
       <Tag v-else severity="success" value="Online" />
+      <Button v-if="(store as any)?.onlineOrdering" :label="`Online${waitingOnline ? ' (' + waitingOnline + ')' : ''}`" icon="pi pi-globe" size="small" :severity="waitingOnline ? 'warn' : 'secondary'" :outlined="!!waitingOnline" :text="!waitingOnline" @click="loadOnline(); onlineDlg = true" />
       <Button icon="pi pi-wallet" label="Top up" size="small" text :disabled="!online" v-tooltip.bottom="'Top up a wallet card'" @click="openTopup()" />
       <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
@@ -813,6 +866,23 @@ async function logout() {
         <div class="field"><label>Opening cash</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus /></div>
         <Button type="submit" label="Open shift" icon="pi pi-play" />
       </form>
+    </Dialog>
+
+    <!-- Online orders -->
+    <Dialog v-model:visible="onlineDlg" header="Online orders" modal :style="{ width: '620px' }" :breakpoints="{ '680px': '100vw' }">
+      <div v-if="!onlineOrders.length" class="muted c" style="padding: 20px">No online orders waiting. Paid KHQR orders go straight to the barista screen.</div>
+      <div v-for="o in onlineOrders" :key="o.id" class="held">
+        <div style="min-width: 0">
+          <b>{{ o.customerName }}</b> <span class="muted small">{{ o.orderType === 'DINE_IN' ? 'Table ' + o.tableNo : 'Pickup' }} · {{ new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span>
+          <div class="small muted">{{ o.lines.map((l: any) => `${Number(l.quantity)}× ${l.name}`).join(', ') }}</div>
+          <div class="small"><b>{{ m(o.total) }}</b> · <span :class="o.status === 'FAILED' ? 'neg' : ''">{{ o.status === 'PENDING_PAYMENT' ? 'Waiting for KHQR' : o.status === 'PAY_AT_COUNTER' ? 'Pays at the counter' : 'Problem: ' + o.error }}</span></div>
+        </div>
+        <div class="row" style="flex-shrink: 0">
+          <Button icon="pi pi-times" text rounded severity="danger" aria-label="Cancel order" @click="cancelOnline(o)" />
+          <Button v-if="o.status === 'PAY_AT_COUNTER'" label="Take payment" size="small" @click="takeOnline(o)" />
+          <Button v-else label="Payment received" size="small" severity="success" :loading="onlineBusy === o.id" v-tooltip.left="'Check the KHQR payment arrived in your bank app first'" @click="confirmOnline(o)" />
+        </div>
+      </div>
     </Dialog>
 
     <!-- Gift voucher: sell -->

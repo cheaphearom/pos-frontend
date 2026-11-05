@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import QRCode from 'qrcode';
 import { onMounted, reactive, ref } from 'vue';
 import { api } from '@/api/client';
 import type { Store } from '@/api/types';
@@ -11,7 +12,7 @@ const rows = ref<Store[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
 const saving = ref(false);
-const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false });
+const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false });
 const form = reactive(empty());
 
 async function load() {
@@ -29,7 +30,7 @@ async function save() {
       code: form.code.toUpperCase(), name: form.name, address: form.address || undefined, phone: form.phone || undefined,
       currency: form.currency.toUpperCase(), taxRate: Number((form.taxPercent / 100).toFixed(4)),
       khqrAccountId: form.khqrAccountId || null, khqrMerchantName: form.khqrMerchantName || null, khqrCity: form.khqrCity || null,
-      khqrMerchantId: form.khqrMerchantId || null, khqrBank: form.khqrBank || null, hasKitchen: !!form.hasKitchen,
+      khqrMerchantId: form.khqrMerchantId || null, khqrBank: form.khqrBank || null, hasKitchen: !!form.hasKitchen, onlineOrdering: !!form.onlineOrdering,
     };
     if (form.id) await api.patch(`/stores/${form.id}`, { ...body, isActive: form.isActive });
     else await api.post('/stores', body);
@@ -38,6 +39,26 @@ async function save() {
     await Promise.all([load(), app.loadStores()]);
   } catch (e) { notify.error(e); } finally { saving.value = false; }
 }
+// ── Table QR codes (printable)
+const origin = window.location.origin;
+const qrDlg = ref(false);
+const qrTables = ref(12);
+const qrCodes = ref<{ label: string; url: string; img: string }[]>([]);
+function openQr() {
+  qrDlg.value = true;
+  makeQr();
+}
+async function makeQr() {
+  const list = [{ label: 'Order ahead', url: `${origin}/order/${form.code}` }];
+  for (let t = 1; t <= Math.min(qrTables.value, 100); t++) list.push({ label: `Table ${t}`, url: `${origin}/order/${form.code}?table=${t}` });
+  qrCodes.value = await Promise.all(list.map(async (x) => ({ ...x, img: await QRCode.toDataURL(x.url, { width: 360, margin: 1 }) })));
+}
+function printQr() {
+  document.body.classList.add('printing-qr');
+  window.print();
+  setTimeout(() => document.body.classList.remove('printing-qr'), 500);
+}
+
 onMounted(load);
 </script>
 
@@ -56,6 +77,7 @@ onMounted(load);
         <Column field="currency" header="Currency" />
         <Column header="Tax" class="right"><template #body="{ data }">{{ (Number(data.taxRate) * 100).toFixed(2).replace(/\.?0+$/, '') }}%</template></Column>
         <Column header="Café"><template #body="{ data }"><i v-if="data.hasKitchen" class="pi pi-check" /></template></Column>
+        <Column header="Online"><template #body="{ data }"><a v-if="data.onlineOrdering" :href="`/order/${data.code}`" target="_blank" @click.stop><i class="pi pi-external-link" /></a></template></Column>
         <Column header="KHQR"><template #body="{ data }"><span v-if="data.khqrAccountId" class="mono small">{{ data.khqrAccountId }}</span><span v-else class="muted">off</span></template></Column>
         <Column header="Status"><template #body="{ data }"><Tag :value="data.isActive ? 'active' : 'inactive'" :severity="data.isActive ? 'success' : 'secondary'" /></template></Column>
       </DataTable>
@@ -77,6 +99,11 @@ onMounted(load);
           <div v-if="form.id" class="field"><label>Status</label><label class="row"><ToggleSwitch v-model="form.isActive" /> Active</label></div>
         </div>
         <label class="row"><ToggleSwitch v-model="form.hasKitchen" /> Café mode: queue numbers, dine-in / takeaway, barista screen</label>
+        <label class="row"><ToggleSwitch v-model="form.onlineOrdering" /> Online ordering (order ahead and table QR codes)</label>
+        <div v-if="form.onlineOrdering && form.code" class="small muted">
+          Order page: <a :href="`/order/${form.code}`" target="_blank">{{ origin }}/order/{{ form.code }}</a>
+          <Button v-if="form.id" label="Print table QR codes" icon="pi pi-qrcode" size="small" text @click="openQr" />
+        </div>
         <h3 style="margin: 8px 0 0">KHQR payments (Bakong)</h3>
         <div class="form-2">
           <div class="field"><label>Bakong account ID</label><InputText v-model="form.khqrAccountId" placeholder="myshop@aclb" maxlength="32" /><span class="hint">Leave empty to turn KHQR off for this store</span></div>
@@ -90,5 +117,34 @@ onMounted(load);
         <div class="row" style="justify-content: flex-end"><Button type="submit" label="Save" icon="pi pi-check" :loading="saving" /></div>
       </form>
     </Dialog>
+
+    <Dialog v-model:visible="qrDlg" header="Table QR codes" modal :style="{ width: '900px' }" :breakpoints="{ '940px': '98vw' }">
+      <div class="row" style="margin-bottom: 12px">
+        <span>Tables</span><InputNumber v-model="qrTables" :min="1" :max="100" :input-style="{ width: '80px' }" @update:model-value="makeQr" />
+        <span class="spacer" style="flex: 1" />
+        <Button label="Print" icon="pi pi-print" @click="printQr" />
+      </div>
+      <div id="print-qr" class="qr-grid">
+        <div v-for="q in qrCodes" :key="q.url" class="qr-card">
+          <div class="qr-store">{{ form.name }}</div>
+          <img :src="q.img" :alt="q.label" />
+          <b>{{ q.label }}</b>
+          <div class="qr-hint">Scan to order · pay with KHQR</div>
+        </div>
+      </div>
+    </Dialog>
   </div>
 </template>
+
+<style>
+.qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.qr-card { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; text-align: center; display: grid; gap: 6px; justify-items: center; break-inside: avoid; }
+.qr-card img { width: 160px; height: 160px; }
+.qr-store { font-weight: 700; }
+.qr-hint { font-size: 12px; color: var(--text-2); }
+@media print {
+  body.printing-qr * { visibility: hidden; }
+  body.printing-qr #print-qr, body.printing-qr #print-qr * { visibility: visible; color: #000 !important; }
+  body.printing-qr #print-qr { position: absolute; left: 0; top: 0; width: 100%; grid-template-columns: repeat(3, 1fr); }
+}
+</style>

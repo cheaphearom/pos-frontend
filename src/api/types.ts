@@ -17,6 +17,7 @@ export interface Store extends StoreRef {
   taxRate: string;
   isActive: boolean;
   hasKitchen?: boolean;
+  onlineOrdering?: boolean;
   khqrAccountId?: string | null;
 }
 
