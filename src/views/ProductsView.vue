@@ -15,7 +15,7 @@ const categories = ref<Category[]>([]);
 const list = usePagedList<Product>('/products', { search: '', categoryId: null, storeId: app.currentStoreId, includeInactive: false, kind: null as string | null });
 
 const cur = computed(() => app.currentStore?.currency ?? 'USD');
-const empty = () => ({ id: '', sku: '', barcode: '', name: '', description: '', categoryId: null as string | null, unit: 'pcs', costPrice: 0, sellPrice: 0, taxable: true, trackStock: true, isActive: true, imageUrl: '', modifierGroupIds: [] as string[], isIngredient: false, onlineAvailable: false, madeInHouse: false, batchYield: 1, shelfLifeHours: null as number | null });
+const empty = () => ({ id: '', sku: '', barcode: '', name: '', nameKm: '', description: '', categoryId: null as string | null, unit: 'pcs', costPrice: 0, sellPrice: 0, taxable: true, trackStock: true, isActive: true, imageUrl: '', modifierGroupIds: [] as string[], isIngredient: false, onlineAvailable: false, madeInHouse: false, batchYield: 1, shelfLifeHours: null as number | null });
 const pack = reactive({ size: null as number | null, price: null as number | null });
 function applyPack() {
   if (pack.size && pack.price !== null) form.costPrice = Math.round((pack.price / pack.size) * 1e6) / 1e6;
@@ -33,7 +33,7 @@ function openNew(ingredient = false) {
 }
 function edit(p: Product) {
   Object.assign(form, {
-    ...empty(), ...p, barcode: p.barcode ?? '', description: p.description ?? '', costPrice: Number(p.costPrice), sellPrice: Number(p.sellPrice),
+    ...empty(), ...p, barcode: p.barcode ?? '', nameKm: (p as any).nameKm ?? '', description: p.description ?? '', costPrice: Number(p.costPrice), sellPrice: Number(p.sellPrice),
     imageUrl: (p as any).imageUrl ?? '', modifierGroupIds: ((p as any).modifierGroups ?? []).map((m: any) => m.groupId),
     isIngredient: !!(p as any).isIngredient,
     onlineAvailable: !!(p as any).onlineAvailable,
@@ -47,7 +47,7 @@ async function save() {
   saving.value = true;
   try {
     const { id, ...body } = form;
-    const payload = { ...body, barcode: body.barcode || undefined, description: body.description || undefined, categoryId: body.categoryId || undefined, imageUrl: body.imageUrl || null };
+    const payload = { ...body, barcode: body.barcode || undefined, description: body.description || undefined, nameKm: body.nameKm.trim() || null, categoryId: body.categoryId || undefined, imageUrl: body.imageUrl || null };
     if (id) await api.patch(`/products/${id}`, payload);
     else await api.post('/products', { ...payload, isActive: undefined });
     notify.success(id ? 'Product updated' : 'Product created', form.name);
@@ -103,7 +103,7 @@ onMounted(async () => {
         <Column field="sku" header="SKU"><template #body="{ data }"><span class="mono">{{ data.sku }}</span></template></Column>
         <Column field="name" header="Name">
           <template #body="{ data }">
-            {{ data.name }} <Tag v-if="!data.isActive" value="inactive" severity="secondary" />
+            {{ data.name }} <span v-if="data.nameKm" class="muted small">· {{ data.nameKm }}</span> <Tag v-if="!data.isActive" value="inactive" severity="secondary" />
             <Tag v-if="data.isIngredient" value="ingredient" severity="warn" style="margin-left: 4px" />
             <Tag v-if="data.madeInHouse" value="bakery" severity="info" style="margin-left: 4px" />
             <Tag v-if="data.modifierGroups?.length" :value="`${data.modifierGroups.length} options`" severity="info" style="margin-left: 4px" />
@@ -136,6 +136,7 @@ onMounted(async () => {
           <div class="field"><label>Barcode</label><InputText v-model="form.barcode" placeholder="Scan or type" /></div>
         </div>
         <div class="field"><label>Name *</label><InputText v-model="form.name" required /></div>
+        <div class="field"><label>Khmer name <span class="hint">(shown on the POS, menu and receipt in Khmer)</span></label><InputText v-model="form.nameKm" maxlength="200" placeholder="ឧ. កាហ្វេទឹកដោះគោទឹកកក" /></div>
         <div class="form-2">
           <div class="field"><label>Category</label><Select v-model="form.categoryId" :options="categories" option-label="name" option-value="id" show-clear placeholder="None" /></div>
           <div class="field"><label>Unit</label><InputText v-model="form.unit" placeholder="pcs, kg, box…" /></div>

@@ -11,6 +11,7 @@ import App from './App.vue';
 import { registerComponents } from './components/register';
 import { router } from './router';
 import './styles.css';
+import { startTranslator } from './i18n';
 
 // Blue brand colour, matching the charts.
 const Theme = definePreset(Aura, {
@@ -31,6 +32,7 @@ app.use(ConfirmationService);
 app.directive('tooltip', Tooltip);
 registerComponents(app);
 app.mount('#app');
+startTranslator(); // ខ្មែរ / English (src/i18n)
 
 // Offline support (production builds only; needs HTTPS or localhost).
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

@@ -1,0 +1,210 @@
+/**
+ * Khmer translations. Key = the English text exactly as it appears on screen (spaces at the ends are ignored).
+ * To translate more of the app, add lines here; anything missing stays in English.
+ * Please have a native speaker review wording for your brand.
+ */
+export const KM_EXACT: Record<string, string> = {
+  // ── Common
+  Save: 'រក្សាទុក', Cancel: 'បោះបង់', Delete: 'លុប', Edit: 'កែប្រែ', Remove: 'ដកចេញ', Close: 'បិទ', Back: 'ត្រឡប់ក្រោយ',
+  Apply: 'អនុវត្ត', Done: 'រួចរាល់', Find: 'ស្វែងរក', Search: 'ស្វែងរក', Print: 'បោះពុម្ព', Retry: 'ព្យាយាមម្តងទៀត',
+  Copy: 'ចម្លង', Add: 'បន្ថែម', New: 'ថ្មី', All: 'ទាំងអស់', None: 'គ្មាន', Yes: 'បាទ/ចាស', No: 'ទេ', More: 'ច្រើនទៀត', Less: 'តិចជាង',
+  'Load more': 'បង្ហាញបន្ថែម', 'No data': 'គ្មានទិន្នន័យ', Saved: 'បានរក្សាទុក', Error: 'កំហុស', Name: 'ឈ្មោះ', 'Name *': 'ឈ្មោះ *',
+  Phone: 'ទូរស័ព្ទ', Email: 'អ៊ីមែល', Address: 'អាសយដ្ឋាន', Note: 'កំណត់ចំណាំ', Status: 'ស្ថានភាព', Type: 'ប្រភេទ', Date: 'កាលបរិច្ឆេទ',
+  Time: 'ម៉ោង', When: 'ពេលណា', From: 'ពី', To: 'ដល់', Code: 'លេខកូដ', Value: 'តម្លៃ', Amount: 'ចំនួនទឹកប្រាក់', Reason: 'មូលហេតុ',
+  'Reason *': 'មូលហេតុ *', Active: 'សកម្ម', Closed: 'បានបិទ', Never: 'មិនដែល', Now: 'ឥឡូវ', Today: 'ថ្ងៃនេះ', '7 days': '៧ ថ្ងៃ',
+  '30 days': '៣០ ថ្ងៃ', '90 days': '៩០ ថ្ងៃ', 'Any date': 'គ្រប់ថ្ងៃ', Optional: 'ស្រេចចិត្ត', '(optional)': '(ស្រេចចិត្ត)', Description: 'ការពិពណ៌នា',
+  Details: 'ព័ត៌មានលម្អិត', Reference: 'លេខយោង', Created: 'បានបង្កើត', Expires: 'ផុតកំណត់', Used: 'បានប្រើ', Left: 'នៅសល់',
+
+  // ── Money, sales
+  Total: 'សរុប', TOTAL: 'សរុប', Subtotal: 'សរុបរង', Discount: 'បញ្ចុះតម្លៃ', Tax: 'ពន្ធ', Change: 'ប្រាក់អាប់', Paid: 'បានបង់',
+  Price: 'តម្លៃ', Cost: 'ថ្លៃដើម', Quantity: 'ចំនួន', Qty: 'ចំនួន', Items: 'មុខទំនិញ', Item: 'មុខទំនិញ', Product: 'ទំនិញ', Products: 'ទំនិញ',
+  Balance: 'សមតុល្យ', Receipt: 'វិក្កយបត្រ', Payment: 'ការបង់ប្រាក់', Payments: 'ការបង់ប្រាក់', Pay: 'បង់ប្រាក់', Cash: 'សាច់ប្រាក់',
+  'Cash $': 'សាច់ប្រាក់ $', 'Cash ៛': 'សាច់ប្រាក់ ៛', Card: 'កាត', KHQR: 'KHQR', 'Bank transfer': 'ផ្ទេរតាមធនាគារ', 'Other e-wallet': 'កាបូបអេឡិចត្រូនិកផ្សេង',
+  'Wallet card': 'កាតកាបូប', Voucher: 'ប័ណ្ណ', Coupon: 'គូប៉ុង', Refund: 'សងប្រាក់វិញ', Refunds: 'ការសងប្រាក់វិញ', Void: 'លុបចោល',
+  Sales: 'ការលក់', Sale: 'ការលក់', Cashier: 'អ្នកគិតលុយ', Store: 'ហាង', Stores: 'ហាង', Customer: 'អតិថិជន', Customers: 'អតិថិជន',
+  Member: 'សមាជិក', Points: 'ពិន្ទុ', 'Points earned': 'ពិន្ទុទទួលបាន', Visits: 'ការមកលេង', 'Total spent': 'ចំណាយសរុប', Profit: 'ប្រាក់ចំណេញ',
+  Revenue: 'ចំណូល', Net: 'សុទ្ធ', Margin: 'កម្រៃ', 'In stock': 'មានក្នុងស្តុក', Stock: 'ស្តុក', Category: 'ប្រភេទ', Categories: 'ប្រភេទ',
+  'Amount due': 'ចំនួនត្រូវបង់', 'Still to pay': 'នៅខ្វះ', 'Complete sale': 'បញ្ចប់ការលក់', 'Sale complete': 'ការលក់បានបញ្ចប់',
+  'New sale (Enter)': 'ការលក់ថ្មី (Enter)', 'Total in riel': 'សរុបជារៀល', 'Give change as': 'អាប់ជា', 'All ៛': 'រៀលទាំងអស់', 'All $': 'ដុល្លារទាំងអស់',
+  'Dollars received': 'ដុល្លារដែលទទួល', 'Riel received': 'រៀលដែលទទួល', 'Your change': 'ប្រាក់អាប់របស់អ្នក',
+  'Thank you! Please come again.': 'សូមអរគុណ! សូមអញ្ជើញមកម្តងទៀត។', 'Thank you!': 'សូមអរគុណ!', 'Please come again': 'សូមអញ្ជើញមកម្តងទៀត',
+
+  // ── POS screen
+  'Scan barcode or search… (F2)   e.g. 3*8850000001 for 3 pcs': 'ស្កេនបាកូដ ឬស្វែងរក… (F2)   ឧ. 3*8850000001 សម្រាប់ ៣',
+  'Scan or tap a product to start': 'ស្កេន ឬចុចលើទំនិញដើម្បីចាប់ផ្តើម', 'Add member (F4)': 'បន្ថែមសមាជិក (F4)', Hold: 'ផ្អាក', Clear: 'សម្អាត',
+  'Held sales': 'ការលក់ដែលបានផ្អាក', Recall: 'ហៅមកវិញ', 'Sale on hold': 'ការលក់ត្រូវបានផ្អាក', 'Discount on whole sale': 'បញ្ចុះតម្លៃលើការលក់ទាំងមូល',
+  'Discount on this line (amount)': 'បញ្ចុះតម្លៃលើមុខនេះ (ចំនួនទឹកប្រាក់)', 'Edit line': 'កែមុខទំនិញ', 'Remove item': 'ដកមុខទំនិញចេញ',
+  'Remove customer': 'ដកអតិថិជនចេញ', 'Remove coupon': 'ដកគូប៉ុងចេញ', 'Remove voucher': 'ដកប័ណ្ណចេញ', 'Use points': 'ប្រើពិន្ទុ',
+  'Loyalty member': 'សមាជិកភក្តីភាព', 'Register member': 'ចុះឈ្មោះសមាជិក', 'Phone number or member card': 'លេខទូរស័ព្ទ ឬកាតសមាជិក',
+  'No member found. Register a new one:': 'រកមិនឃើញសមាជិក។ ចុះឈ្មោះថ្មី៖', 'Open shift': 'បើកវេន', 'Close shift': 'បិទវេន', 'Open your shift': 'បើកវេនរបស់អ្នក',
+  'Opening cash': 'សាច់ប្រាក់ដើមវេន', 'Opening cash (dollars)': 'សាច់ប្រាក់ដើមវេន (ដុល្លារ)', 'Opening riel': 'រៀលដើមវេន', 'Shift opened': 'បានបើកវេន',
+  'Count the cash in the drawer before you start selling.': 'រាប់សាច់ប្រាក់ក្នុងថតមុនចាប់ផ្តើមលក់។', Takeaway: 'ខ្ចប់យកទៅ', 'Dine-in': 'ញ៉ាំនៅហាង',
+  Pickup: 'មកយកផ្ទាល់', Online: 'អនឡាញ', Offline: 'គ្មានអ៊ីនធឺណិត', 'Customer display': 'អេក្រង់អតិថិជន', 'Display on': 'អេក្រង់បើក', 'Top up': 'បញ្ចូលទឹកប្រាក់',
+  'Online orders': 'ការកម្ម៉ង់អនឡាញ', 'Take payment': 'ទទួលការបង់ប្រាក់', 'Payment received': 'បានទទួលការបង់ប្រាក់', 'Payment confirmed': 'ការបង់ប្រាក់បានបញ្ជាក់',
+  'F9 pay · F2 search · F4 member': 'F9 បង់ · F2 ស្វែងរក · F4 សមាជិក', 'Sales waiting to upload': 'ការលក់កំពុងរង់ចាំបញ្ជូន', 'Upload now': 'បញ្ជូនឥឡូវ',
+  'Offline: saved on this device and will upload automatically.': 'គ្មានអ៊ីនធឺណិត៖ បានរក្សាទុកលើឧបករណ៍នេះ ហើយនឹងបញ្ជូនដោយស្វ័យប្រវត្តិ។',
+  'Saved offline · will sync automatically': 'បានរក្សាទុកក្រៅបណ្តាញ · នឹងធ្វើសមកាលកម្មដោយស្វ័យប្រវត្តិ', 'Downloading products…': 'កំពុងទាញយកទំនិញ…',
+  'Sell gift voucher': 'លក់ប័ណ្ណអំណោយ', 'New wallet card': 'កាតកាបូបថ្មី', 'Top up wallet card': 'បញ្ចូលទឹកប្រាក់កាតកាបូប', 'Find card': 'ស្វែងរកកាត',
+  'Card activated': 'កាតបានដំណើរការ', 'Activate card': 'ដំណើរការកាត', 'Customer pays by': 'អតិថិជនបង់តាម', 'The customer types it': 'អតិថិជនវាយបញ្ចូល',
+  'Note for the barista': 'កំណត់ចំណាំសម្រាប់អ្នកឆុង', 'e.g. less sweet, very hot': 'ឧ. ផ្អែមតិច ក្តៅខ្លាំង', Table: 'តុ', Order: 'ការកម្ម៉ង់',
+  'Up to 10% without a manager. More needs a manager PIN when paying.': 'រហូតដល់ ១០% ដោយគ្មានអ្នកគ្រប់គ្រង។ លើសនេះត្រូវការ PIN អ្នកគ្រប់គ្រងពេលបង់ប្រាក់។',
+  'needs manager PIN': 'ត្រូវការ PIN អ្នកគ្រប់គ្រង', Percent: 'ភាគរយ',
+
+  // ── Payment dialog
+  'The customer scans with any Cambodian banking app.': 'អតិថិជនស្កេនដោយកម្មវិធីធនាគារណាមួយនៅកម្ពុជា។', 'This QR has expired.': 'QR នេះផុតកំណត់ហើយ។',
+  'New QR': 'QR ថ្មី', 'Customer has paid': 'អតិថិជនបានបង់', 'Check the payment arrived in your bank app before confirming.': 'ពិនិត្យថាប្រាក់បានចូលក្នុងកម្មវិធីធនាគារ មុនពេលបញ្ជាក់។',
+  'Wallet cards need an internet connection.': 'កាតកាបូបត្រូវការអ៊ីនធឺណិត។', 'Scan the wallet card': 'ស្កេនកាតកាបូប', 'Card number': 'លេខកាត', 'Amount from card': 'ចំនួនពីកាត',
+  'Customer PIN': 'PIN អតិថិជន', 'Pay from card': 'បង់ពីកាត', 'Other card': 'កាតផ្សេង', 'Vouchers need an internet connection.': 'ប័ណ្ណត្រូវការអ៊ីនធឺណិត។',
+  'Scan the voucher': 'ស្កេនប័ណ្ណ', 'Voucher code': 'លេខកូដប័ណ្ណ', 'Amount from voucher': 'ចំនួនពីប័ណ្ណ', 'Use voucher': 'ប្រើប័ណ្ណ', 'Other voucher': 'ប័ណ្ណផ្សេង',
+  'What is not spent stays on the voucher. No change is given.': 'ចំនួនមិនបានចាយនៅសល់លើប័ណ្ណ។ មិនមានប្រាក់អាប់ទេ។',
+  'Reference (approval code, transaction id)': 'លេខយោង (លេខអនុម័ត លេខប្រតិបត្តិការ)', 'Remove payment': 'ដកការបង់ប្រាក់ចេញ',
+  'KHQR payment received': 'បានទទួលការបង់ប្រាក់ KHQR', 'Ask the customer to type the card PIN': 'សូមឲ្យអតិថិជនវាយ PIN កាត',
+  'Offline: KHQR codes cannot be checked. Enter the bank reference after checking the payment.': 'គ្មានអ៊ីនធឺណិត៖ មិនអាចពិនិត្យ KHQR បាន។ បញ្ចូលលេខយោងធនាគារ បន្ទាប់ពីពិនិត្យការបង់ប្រាក់។',
+  'Manager approval': 'ការអនុម័តពីអ្នកគ្រប់គ្រង', 'Manager: type your approval PIN': 'អ្នកគ្រប់គ្រង៖ សូមវាយ PIN អនុម័តរបស់អ្នក', Approve: 'អនុម័ត',
+  'My approval PIN': 'PIN អនុម័តរបស់ខ្ញុំ',
+
+  // ── Receipt / sales page
+  'Put items back into stock': 'ដាក់ទំនិញចូលស្តុកវិញ', 'Refund items': 'សងប្រាក់ទំនិញ', 'Refund everything': 'សងទាំងអស់', 'Void the whole sale': 'លុបចោលការលក់ទាំងមូល',
+  'Void sale': 'លុបចោលការលក់', 'Refund done': 'បានសងប្រាក់វិញ', 'Sale voided': 'ការលក់ត្រូវបានលុបចោល', 'Give money back by': 'សងប្រាក់តាម',
+
+  // ── Shifts
+  Shifts: 'វេន', 'Shift summary': 'សង្ខេបវេន', Opened: 'បានបើក', Expected: 'រំពឹងទុក', Counted: 'បានរាប់', Difference: 'ភាពខុសគ្នា',
+  'Riel drawer': 'ថតរៀល', 'Expected riel': 'រៀលរំពឹងទុក', 'Riel counted': 'រៀលបានរាប់', 'Riel change given': 'រៀលអាប់ឲ្យ',
+  'Cash refunds': 'សងប្រាក់ជាសាច់ប្រាក់', 'Expected in drawer': 'រំពឹងទុកក្នុងថត', 'Cash counted in the drawer': 'សាច់ប្រាក់រាប់ក្នុងថត',
+  'Dollars counted in the drawer': 'ដុល្លាររាប់ក្នុងថត', 'Dollars in the drawer now': 'ដុល្លារក្នុងថតឥឡូវ', 'Riel in the drawer now': 'រៀលក្នុងថតឥឡូវ',
+  'Cash in the drawer now': 'សាច់ប្រាក់ក្នុងថតឥឡូវ', 'My shift': 'វេនរបស់ខ្ញុំ',
+
+  // ── Menu (admin)
+  'POS Admin': 'ផ្ទាំងគ្រប់គ្រង POS', Overview: 'ទិដ្ឋភាពទូទៅ', Dashboard: 'ផ្ទាំងព័ត៌មាន', Reports: 'របាយការណ៍', Selling: 'ការលក់',
+  'Barista screen': 'អេក្រង់អ្នកឆុង', 'Wallet cards': 'កាតកាបូប', 'Catalogue & stock': 'ទំនិញ និងស្តុក', 'Drink options': 'ជម្រើសភេសជ្ជៈ',
+  Recipes: 'រូបមន្ត', 'Bakery production': 'ផលិតកម្មនំ', Inventory: 'សារពើភ័ណ្ឌ', Transfers: 'ការផ្ទេរ', Marketing: 'ទីផ្សារ',
+  Promotions: 'ប្រូម៉ូសិន', Coupons: 'គូប៉ុង', 'Gift vouchers': 'ប័ណ្ណអំណោយ', Purchasing: 'ការទិញ', 'Purchase orders': 'បញ្ជាទិញ',
+  Suppliers: 'អ្នកផ្គត់ផ្គង់', Administration: 'រដ្ឋបាល', Users: 'អ្នកប្រើ', 'Audit log': 'កំណត់ហេតុសវនកម្ម', Integrations: 'ការភ្ជាប់',
+  'Open POS': 'បើក POS', 'Log out': 'ចាកចេញ', 'Select store': 'ជ្រើសរើសហាង', 'Toggle dark mode': 'ប្តូរពណ៌ងងឹត', Menu: 'ម៉ឺនុយ',
+  'Store manager': 'អ្នកគ្រប់គ្រងហាង', 'Super admin': 'អ្នកគ្រប់គ្រងជាន់ខ្ពស់',
+  'You are not assigned to any store yet. Ask an administrator to add you to a store.': 'អ្នកមិនទាន់ត្រូវបានចាត់ឲ្យទៅហាងណាទេ។ សូមសុំអ្នកគ្រប់គ្រងបន្ថែមអ្នក។',
+
+  // ── Login
+  'Sign in': 'ចូល', 'Sign in to manage your stores': 'ចូលដើម្បីគ្រប់គ្រងហាងរបស់អ្នក', Password: 'ពាក្យសម្ងាត់', 'Log in': 'ចូល',
+
+  // ── Dashboard
+  'Net sales today': 'ការលក់សុទ្ធថ្ងៃនេះ', 'Average sale': 'ការលក់ជាមធ្យម', 'Low-stock items': 'ទំនិញជិតអស់ស្តុក', 'Net sales, last 30 days': 'ការលក់សុទ្ធ ៣០ ថ្ងៃចុងក្រោយ',
+  'Top products today': 'ទំនិញលក់ដាច់ថ្ងៃនេះ', 'No sales yet today': 'មិនទាន់មានការលក់ថ្ងៃនេះ', 'Today by store': 'ថ្ងៃនេះតាមហាង', 'No sales yet': 'មិនទាន់មានការលក់',
+  'View shift summary →': 'មើលសង្ខេបវេន →',
+
+  // ── Barista / board
+  Preparing: 'កំពុងរៀបចំ', Ready: 'រួចរាល់', 'Ready – please collect': 'រួចរាល់ – សូមមកយក', Start: 'ចាប់ផ្តើម', Collected: 'បានយក',
+  'Full screen': 'ពេញអេក្រង់', 'Double-click for full screen': 'ចុចពីរដងសម្រាប់ពេញអេក្រង់',
+
+  // ── Customer display
+  "Today's deal": 'ការផ្តល់ជូនថ្ងៃនេះ', 'We accept': 'យើងទទួល', 'Waiting for the POS…': 'កំពុងរង់ចាំ POS…', 'Your order number': 'លេខការកម្ម៉ង់របស់អ្នក',
+  'Scan to pay': 'ស្កេនដើម្បីបង់', 'You save': 'អ្នកសន្សំបាន', 'This browser cannot connect to the POS. Use Chrome or Edge.': 'កម្មវិធីរុករកនេះមិនអាចភ្ជាប់ POS បានទេ។ សូមប្រើ Chrome ឬ Edge។',
+
+  // ── Online ordering
+  'Your order': 'ការកម្ម៉ង់របស់អ្នក', 'Coupon code': 'លេខកូដគូប៉ុង', 'Anything we should know?': 'មានអ្វីដែលយើងគួរដឹងទេ?', Sorry: 'សូមអភ័យទោស',
+  'My order': 'ការកម្ម៉ង់របស់ខ្ញុំ', 'View order': 'មើលការកម្ម៉ង់', 'Your order is empty': 'ការកម្ម៉ង់របស់អ្នកទទេ', 'Your name *': 'ឈ្មោះរបស់អ្នក *',
+  '(members earn points)': '(សមាជិកទទួលបានពិន្ទុ)', 'Member? Log in to use points and your wallet': 'ជាសមាជិក? ចូលដើម្បីប្រើពិន្ទុ និងកាបូបរបស់អ្នក',
+  'KHQR now': 'បង់ KHQR ឥឡូវ', 'Pay at counter': 'បង់នៅបញ្ជរ', 'Place order': 'ដាក់ការកម្ម៉ង់', 'Order online': 'កម្ម៉ង់អនឡាញ',
+  'Your wallet balance is not enough. Top up at the counter, or choose another payment.': 'សមតុល្យកាបូបមិនគ្រប់គ្រាន់។ សូមបញ្ចូលទឹកប្រាក់នៅបញ្ជរ ឬជ្រើសការបង់ប្រាក់ផ្សេង។',
+  'Order ahead · pick up at the counter': 'កម្ម៉ង់ជាមុន · មកយកនៅបញ្ជរ', 'Order not found': 'រកមិនឃើញការកម្ម៉ង់', 'Pay with KHQR': 'បង់ដោយ KHQR',
+  'Scan with any Cambodian banking app. Paying on this phone? Save the picture and open it from your banking app.': 'ស្កេនដោយកម្មវិធីធនាគារណាមួយ។ បង់ពីទូរស័ព្ទនេះ? រក្សាទុករូបភាព ហើយបើកវាពីកម្មវិធីធនាគាររបស់អ្នក។',
+  'Save QR picture': 'រក្សាទុករូប QR', 'Please pay at the counter': 'សូមបង់ប្រាក់នៅបញ្ជរ', 'Tell the cashier your name:': 'សូមប្រាប់អ្នកគិតលុយពីឈ្មោះរបស់អ្នក៖',
+  'Your order starts as soon as it is paid.': 'ការកម្ម៉ង់របស់អ្នកនឹងចាប់ផ្តើមភ្លាមៗពេលបង់ប្រាក់រួច។', 'Order number': 'លេខការកម្ម៉ង់', 'Enjoy! Thank you': 'សូមរីករាយ! សូមអរគុណ',
+  'This order was cancelled by the café. Please ask at the counter.': 'ការកម្ម៉ង់នេះត្រូវបានហាងលុបចោល។ សូមសួរនៅបញ្ជរ។', 'Back to my account': 'ត្រឡប់ទៅគណនីរបស់ខ្ញុំ',
+  'Order more': 'កម្ម៉ង់បន្ថែម', 'Order received': 'បានទទួលការកម្ម៉ង់', 'Being prepared…': 'កំពុងរៀបចំ…', 'Payment time ran out': 'ផុតពេលបង់ប្រាក់',
+  'Order cancelled': 'ការកម្ម៉ង់ត្រូវបានលុបចោល', 'We received your payment': 'យើងបានទទួលការបង់ប្រាក់របស់អ្នក', 'Paid from wallet': 'បានបង់ពីកាបូប',
+  'Please collect at the counter.': 'សូមមកយកនៅបញ្ជរ។', 'We are bringing it to your table.': 'យើងកំពុងយកទៅតុរបស់អ្នក។',
+  'You have not been charged. Please order again.': 'អ្នកមិនត្រូវបានគិតប្រាក់ទេ។ សូមកម្ម៉ង់ម្តងទៀត។', 'Please show this page at the counter so we can help you.': 'សូមបង្ហាញទំព័រនេះនៅបញ្ជរ ដើម្បីយើងជួយអ្នក។',
+  options: 'ជម្រើស', 'Sold out': 'អស់ហើយ', 'Your name': 'ឈ្មោះរបស់អ្នក', Required: 'ចាំបាច់', 'Pay with wallet': 'បង់ពីកាបូប',
+
+  // ── Drink options (common names)
+  Size: 'ទំហំ', Small: 'តូច', Medium: 'មធ្យម', Large: 'ធំ', Sugar: 'ស្ករ', Ice: 'ទឹកកក', Milk: 'ទឹកដោះគោ', Extras: 'បន្ថែម',
+  'Less ice': 'ទឹកកកតិច', 'No ice': 'គ្មានទឹកកក', 'Normal ice': 'ទឹកកកធម្មតា', 'Extra ice': 'ទឹកកកច្រើន', 'Fresh milk': 'ទឹកដោះគោស្រស់', 'Oat milk': 'ទឹកដោះ Oat',
+  'Soy milk': 'ទឹកសណ្តែក', 'Extra shot': 'កាហ្វេបន្ថែម១ដង', 'Whipped cream': 'ក្រែម', 'Caramel syrup': 'ស៊ីរ៉ូការ៉ាមែល', Hot: 'ក្តៅ', Iced: 'ទឹកកក',
+  'Add to order': 'បន្ថែមទៅការកម្ម៉ង់',
+
+  // ── Member app
+  Home: 'ទំព័រដើម', History: 'ប្រវត្តិ', Me: 'ខ្ញុំ', Wallet: 'កាបូប', 'My points': 'ពិន្ទុរបស់ខ្ញុំ', 'Points history': 'ប្រវត្តិពិន្ទុ',
+  'Order ahead': 'កម្ម៉ង់ជាមុន', 'skip the queue': 'មិនបាច់តម្រង់ជួរ', 'Your orders now': 'ការកម្ម៉ង់របស់អ្នកឥឡូវ', 'Member QR': 'QR សមាជិក',
+  'Show member QR': 'បង្ហាញ QR សមាជិក', 'No wallet card yet. Ask at the counter for a card and top up to pay faster.': 'មិនទាន់មានកាតកាបូប។ សូមសុំកាតនៅបញ្ជរ ហើយបញ្ចូលទឹកប្រាក់ដើម្បីបង់លឿនជាង។',
+  'No purchases yet. Show your member QR at the counter to collect points.': 'មិនទាន់មានការទិញ។ បង្ហាញ QR សមាជិកនៅបញ្ជរដើម្បីប្រមូលពិន្ទុ។',
+  'No points yet.': 'មិនទាន់មានពិន្ទុ។', 'No transactions yet': 'មិនទាន់មានប្រតិបត្តិការ', 'Lost your phone? Log out on all phones': 'បាត់ទូរស័ព្ទ? ចាកចេញពីទូរស័ព្ទទាំងអស់',
+  'Member no.': 'លេខសមាជិក', 'Send code': 'ផ្ញើលេខកូដ', 'Change number': 'ប្តូរលេខ', 'Resend code': 'ផ្ញើលេខកូដម្តងទៀត', 'Create my membership': 'បង្កើតសមាជិកភាពរបស់ខ្ញុំ',
+  'Earn points on every drink, pay with your wallet and order ahead.': 'ទទួលពិន្ទុរាល់ភេសជ្ជៈ បង់ពីកាបូប និងកម្ម៉ង់ជាមុន។', 'Phone number': 'លេខទូរស័ព្ទ',
+  'We send you a 6-digit code. New number? You become a member.': 'យើងផ្ញើលេខកូដ ៦ ខ្ទង់ទៅអ្នក។ លេខថ្មី? អ្នកនឹងក្លាយជាសមាជិក។',
+  'Test mode (no SMS set up): your code is': 'របៀបសាកល្បង (មិនទាន់មាន SMS)៖ លេខកូដរបស់អ្នកគឺ', "Welcome! What's your name?": 'សូមស្វាគមន៍! តើអ្នកឈ្មោះអ្វី?',
+  'Choose where you will pick up. We start making it as soon as it is paid.': 'ជ្រើសកន្លែងមកយក។ យើងចាប់ផ្តើមធ្វើភ្លាមៗពេលបង់ប្រាក់រួច។', 'Last visited': 'បានមកចុងក្រោយ',
+  'No store takes online orders right now.': 'ឥឡូវនេះគ្មានហាងទទួលការកម្ម៉ង់អនឡាញទេ។', 'Order this again': 'កម្ម៉ង់មុខនេះម្តងទៀត', 
+  'Good morning,': 'អរុណសួស្តី,', 'Good afternoon,': 'ទិវាសួស្តី,', 'Good evening,': 'សាយ័ណ្ហសួស្តី,', 
+  Earned: 'បានទទួល', 'Adjusted by the store': 'កែតម្រូវដោយហាង', 'Taken back (refund)': 'បានដកវិញ (សងប្រាក់)', 'Given back (refund)': 'បានផ្តល់វិញ (សងប្រាក់)',
+  'Moved in': 'ផ្ទេរចូល', 'Moved out': 'ផ្ទេរចេញ', Adjustment: 'ការកែតម្រូវ',
+
+  'Khmer name': 'ឈ្មោះជាភាសាខ្មែរ', '(shown when the screen is in Khmer)': '(បង្ហាញពេលអេក្រង់ជាភាសាខ្មែរ)', '(shown on the POS, menu and receipt in Khmer)': '(បង្ហាញលើ POS ម៉ឺនុយ និងវិក្កយបត្រជាភាសាខ្មែរ)',
+  // ── Admin pages (most used)
+  'New product': 'ទំនិញថ្មី', 'New ingredient': 'គ្រឿងផ្សំថ្មី', 'All categories': 'គ្រប់ប្រភេទ', 'Show inactive': 'បង្ហាញដែលមិនសកម្ម', 'No products found': 'រកមិនឃើញទំនិញ',
+  'SKU *': 'លេខកូដទំនិញ *', SKU: 'លេខកូដទំនិញ', Barcode: 'បាកូដ', Unit: 'ឯកតា', 'Selling price *': 'តម្លៃលក់ *', '(before tax)': '(មុនពន្ធ)', 'Cost price': 'ថ្លៃដើម',
+  Taxable: 'ជាប់ពន្ធ', 'Track stock': 'តាមដានស្តុក', 'Sell online': 'លក់អនឡាញ', 'Made here (bakery)': 'ផលិតនៅទីនេះ (នំ)', 'Active (for sale)': 'សកម្ម (សម្រាប់លក់)',
+  'Pieces per batch': 'ចំនួនក្នុងមួយបាច់', 'Fresh for (hours)': 'ស្រស់រយៈពេល (ម៉ោង)', 'Photo URL': 'តំណរូបភាព', Ingredient: 'គ្រឿងផ្សំ', Ingredients: 'គ្រឿងផ្សំ',
+  'Ingredient (used in recipes, not sold)': 'គ្រឿងផ្សំ (ប្រើក្នុងរូបមន្ត មិនលក់)', 'Pack size': 'ទំហំកញ្ចប់', 'Pack price': 'តម្លៃកញ្ចប់', Sellable: 'អាចលក់បាន',
+  'New store': 'ហាងថ្មី', 'Exchange rate': 'អត្រាប្តូរប្រាក់', 'Riel cash (USD / KHR)': 'សាច់ប្រាក់រៀល (USD / KHR)', Riel: 'រៀល', 'Cashier controls': 'ការគ្រប់គ្រងអ្នកគិតលុយ',
+  'Cashier discount limit': 'ដែនកំណត់បញ្ចុះតម្លៃរបស់អ្នកគិតលុយ', 'Cashier refunds need a manager PIN': 'ការសងប្រាក់ដោយអ្នកគិតលុយ ត្រូវការ PIN អ្នកគ្រប់គ្រង',
+  'Cashier voids need a manager PIN': 'ការលុបចោលដោយអ្នកគិតលុយ ត្រូវការ PIN អ្នកគ្រប់គ្រង', 'Tax rate (%)': 'អត្រាពន្ធ (%)', City: 'ទីក្រុង', Bank: 'ធនាគារ',
+  'Store saved': 'បានរក្សាទុកហាង', 'Print table QR codes': 'បោះពុម្ព QR តុ', Currency: 'រូបិយប័ណ្ណ', Tables: 'តុ', 'Take cash in riel and give change in riel': 'ទទួលសាច់ប្រាក់រៀល និងអាប់ជារៀល',
+  'Send stock': 'ផ្ញើស្តុក', 'Send stock to another store': 'ផ្ញើស្តុកទៅហាងផ្សេង', 'Destination store': 'ហាងគោលដៅ', Available: 'មាន', Send: 'ផ្ញើ', Receive: 'ទទួល',
+  'Cancel transfer': 'បោះបង់ការផ្ទេរ', 'No transfers': 'គ្មានការផ្ទេរ', 'Transfer sent': 'បានផ្ញើការផ្ទេរ', 'Adjust stock': 'កែស្តុក', 'Low stock': 'ស្តុកទាប', 'Reorder level': 'កម្រិតបញ្ជាទិញឡើងវិញ',
+  'Adjust points': 'កែពិន្ទុ', Vouchers: 'ប័ណ្ណ', 'Create vouchers': 'បង្កើតប័ណ្ណ', 'Check voucher': 'ពិនិត្យប័ណ្ណ', 'Not sold': 'មិនទាន់លក់', 'Unspent value': 'តម្លៃមិនទាន់ចាយ',
+  'New coupon': 'គូប៉ុងថ្មី', Campaign: 'យុទ្ធនាការ', 'Members only': 'សម្រាប់តែសមាជិក', Transactions: 'ប្រតិបត្តិការ', Serial: 'លេខស៊េរី', Activate: 'ដំណើរការ', Uses: 'ប្រើ',
+  'Receipt number': 'លេខវិក្កយបត្រ', 'No sales found': 'រកមិនឃើញការលក់', 'Can refund': 'អាចសងបាន', 'Refund qty': 'ចំនួនសង', Supplier: 'អ្នកផ្គត់ផ្គង់', 'Unit cost': 'ថ្លៃដើមក្នុងមួយឯកតា',
+  Ordered: 'បានបញ្ជា', 'Receive delivery': 'ទទួលទំនិញ', Deliveries: 'ការដឹកជញ្ជូន', Sent: 'បានផ្ញើ', 'Cancel order': 'បោះបង់ការកម្ម៉ង់', Period: 'រយៈពេល', Sold: 'បានលក់',
+  Pieces: 'ចំនួន', 'Remove PIN': 'ដក PIN ចេញ', 'Save PIN': 'រក្សាទុក PIN', 'Your password': 'ពាក្យសម្ងាត់របស់អ្នក', 'Type it again': 'វាយម្តងទៀត', 'New PIN (4–8 digits)': 'PIN ថ្មី (៤–៨ ខ្ទង់)',
+  Action: 'សកម្មភាព', What: 'អ្វី', 'Nothing recorded': 'មិនមានកំណត់ត្រា', 'Open the sale': 'បើកការលក់', 'Any action': 'គ្រប់សកម្មភាព', 'Receipt, user, text': 'វិក្កយបត្រ អ្នកប្រើ អត្ថបទ',
+  Role: 'តួនាទី', 'New user': 'អ្នកប្រើថ្មី', Cashiers: 'អ្នកគិតលុយ', Options: 'ជម្រើស', 'Add option': 'បន្ថែមជម្រើស', 'Option name': 'ឈ្មោះជម្រើស', 'New option group': 'ក្រុមជម្រើសថ្មី',
+  'Customer must choose': 'អតិថិជនត្រូវតែជ្រើស', 'Can choose several': 'អាចជ្រើសបានច្រើន', 'No limit': 'គ្មានដែនកំណត់', 'Discount given': 'បញ្ចុះតម្លៃដែលបានផ្តល់', Deal: 'ការផ្តល់ជូន',
+  'Name, SKU or barcode': 'ឈ្មោះ លេខកូដ ឬបាកូដ', 'Scan or type': 'ស្កេន ឬវាយ', 'Search above to add products': 'ស្វែងរកខាងលើដើម្បីបន្ថែមទំនិញ', 'No end': 'គ្មានថ្ងៃបញ្ចប់',
+  // ── Bakery / audit / misc admin basics
+  "Today's baking": 'ការដុតនំថ្ងៃនេះ', 'End of day': 'ចុងថ្ងៃ', 'Record waste': 'កត់ត្រាការខាតបង់', Bake: 'ដុត', 'Write off': 'កាត់ចេញ',
+  Expired: 'ផុតកំណត់', Leftovers: 'នៅសល់', 'Save waste': 'រក្សាទុកការខាតបង់', Batch: 'បាច់', Batches: 'បាច់',
+  Discounts: 'បញ្ចុះតម្លៃ', Voids: 'ការលុបចោល', 'Wrong PINs': 'PIN ខុស', 'Failed logins': 'ការចូលបរាជ័យ', 'By': 'ដោយ', 'Approved by': 'អនុម័តដោយ',
+  'This store': 'ហាងនេះ', 'All my stores': 'ហាងរបស់ខ្ញុំទាំងអស់', 'All stores': 'ហាងទាំងអស់', 'All statuses': 'គ្រប់ស្ថានភាព',
+};
+
+/** For text with numbers or names inside. The first matching pattern wins. */
+export const KM_PATTERNS: [RegExp, string | ((...m: string[]) => string)][] = [
+  [/^Pay (\$[\d,.]+)$/, 'បង់ $1'],
+  [/^Add (\$[\d,.]+)$/, 'បន្ថែម $1'],
+  [/^Held \((\d+)\)$/, 'បានផ្អាក ($1)'],
+  [/^Online \((\d+)\)$/, 'អនឡាញ ($1)'],
+  [/^Shift since (.+)$/, 'វេនចាប់ពី $1'],
+  [/^Subtotal \((\d+) items?\)$/, 'សរុបរង ($1 មុខ)'],
+  [/^\((\d+) items?\)$/, '($1 មុខ)'],
+  [/^Tax ([\d.]+)%$/, 'ពន្ធ $1%'],
+  [/^in riel \(([\d,]+)\)$/, 'ជារៀល ($1)'],
+  [/^· ([\d,]+) ៛ = \$1$/, '· $1 ៛ = $$1'],
+  [/^Show KHQR for (.+)$/, 'បង្ហាញ KHQR សម្រាប់ $1'],
+  [/^Waiting for payment… (.+)$/, 'កំពុងរង់ចាំការបង់ប្រាក់… $1'],
+  [/^= (\$[\d,.]+)$/, '= $1'],
+  [/^Place order · (.+)$/, 'ដាក់ការកម្ម៉ង់ · $1'],
+  [/^Pay with wallet · (.+)$/, 'បង់ពីកាបូប · $1'],
+  [/^Wallet (\$[\d,.]+)$/, 'កាបូប $1'],
+  [/^Use my points \((\d+) = (.+)\)$/, 'ប្រើពិន្ទុរបស់ខ្ញុំ ($1 = $2)'],
+  [/^(\d+) pts$/, '$1 ពិន្ទុ'],
+  [/^(\d+) points$/, '$1 ពិន្ទុ'],
+  [/^\+(\d+) points$/, '+$1 ពិន្ទុ'],
+  [/^You earned (\d+) points$/, 'អ្នកទទួលបាន $1 ពិន្ទុ'],
+  [/^worth (.+) · earn (\d+) points? per \$1$/, 'ស្មើ $1 · ទទួល $2 ពិន្ទុក្នុង $$1'],
+  [/^Code sent to (.+)$/, 'លេខកូដបានផ្ញើទៅ $1'],
+  [/^Resend in (\d+)s$/, 'ផ្ញើម្តងទៀតក្នុង $1 វិនាទី'],
+  [/^Table (.+) · we bring it to you$/, 'តុ $1 · យើងយកទៅជូនអ្នក'],
+  [/^Order · (.+)$/, 'កម្ម៉ង់ · $1'],
+  [/^Ready! (.*)$/, 'រួចរាល់! $1'],
+  [/^Discount of ([\d.]+)% \((.+)\) is above the cashier limit of ([\d.]+)%\.$/, 'បញ្ចុះតម្លៃ $1% ($2) លើសដែនកំណត់អ្នកគិតលុយ $3%។'],
+  [/^Wrong manager PIN \((\d+) tries? left\)$/, 'PIN អ្នកគ្រប់គ្រងខុស (នៅសល់ $1 ដង)'],
+  [/^Approved by (.+)$/, 'អនុម័តដោយ $1'],
+  [/^approved by (.+)$/, 'អនុម័តដោយ $1'],
+  [/^Baked ([\d.]+) × (.+)$/, 'បានដុត $1 × $2'],
+  [/^(\d+) items?$/, '$1 មុខ'],
+  [/^Left (.+)$/, 'នៅសល់ $1'],
+  [/^Balance (.+)$/, 'សមតុល្យ $1'],
+  [/^Riel received \((\d+)\)$/, 'រៀលបានទទួល ($1)'],
+  [/^(.+) · POS Admin$/, (_m, a) => `${KM_EXACT[a] ?? a} · ផ្ទាំងគ្រប់គ្រង POS`],
+];

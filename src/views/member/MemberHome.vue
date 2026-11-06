@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Member home: points, member QR, wallet cards and orders in progress. */
+import LangSwitch from '@/components/LangSwitch.vue';
 import QRCode from 'qrcode';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { cardShort, mem, memberSession, money } from '@/online/memberApi';
@@ -69,7 +70,8 @@ onBeforeUnmount(() => clearInterval(poll));
 
 <template>
   <div class="home">
-    <header>
+    <header class="mhead">
+      <LangSwitch class="mlang" />
       <div class="muted">{{ hello }},</div>
       <h2>{{ me?.name ?? memberSession.s?.name }}</h2>
     </header>
@@ -136,6 +138,8 @@ onBeforeUnmount(() => clearInterval(poll));
 <style scoped>
 .home { display: grid; gap: 14px; }
 header h2 { margin: 2px 0 0; font-size: 24px; }
+.mhead { position: relative; }
+.mlang { position: absolute; right: 0; top: 0; }
 .points { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 18px; border-radius: 18px; color: #fff; background: linear-gradient(135deg, #5b3a29, #a0673f); }
 .plabel { font-size: 13px; opacity: .85; }
 .pnum { font-size: 40px; font-weight: 900; line-height: 1.1; }

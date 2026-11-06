@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Purchase history: every receipt linked to the member (in store and online). */
+import { lang } from '@/i18n';
 import { onMounted, ref } from 'vue';
 import { mem, money } from '@/online/memberApi';
 
@@ -28,7 +29,7 @@ onMounted(() => { document.title = 'History'; next(); });
     <Message v-if="error" severity="error" :closable="false" size="small">{{ error }}</Message>
     <RouterLink v-for="o in rows" :key="o.id" :to="`/m/orders/${o.id}`" class="row-o card">
       <span class="oinfo">
-        <b>{{ o.summary || 'Order' }}</b>
+        <b>{{ (lang === 'km' && o.summaryKm) || o.summary || 'Order' }}</b>
         <span class="small muted">{{ when(o.createdAt) }} · {{ o.store.name }}{{ o.channel === 'ONLINE' ? ' · app' : '' }}</span>
         <span v-if="o.pointsEarned || o.pointsRedeemed" class="small pts">
           <template v-if="o.pointsEarned">+{{ o.pointsEarned }} points</template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LangSwitch from '@/components/LangSwitch.vue';
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '@/stores/auth';
@@ -32,6 +33,7 @@ async function submit() {
   <div class="login">
     <form class="box card" @submit.prevent="submit">
       <div class="logo"><i class="pi pi-shopping-cart" /></div>
+      <div style="display: flex; justify-content: flex-end"><LangSwitch /></div>
       <h1>POS Admin</h1>
       <p class="muted">Sign in to manage your stores</p>
       <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>

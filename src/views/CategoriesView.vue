@@ -10,7 +10,7 @@ const confirm = useConfirm();
 const rows = ref<Category[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
-const form = reactive({ id: '', name: '', parentId: null as string | null });
+const form = reactive({ id: '', name: '', nameKm: '', parentId: null as string | null });
 
 const nameOf = (id: string | null) => rows.value.find((c) => c.id === id)?.name ?? '—';
 const parents = computed(() => rows.value.filter((c) => c.id !== form.id));
@@ -20,12 +20,12 @@ async function load() {
   try { rows.value = await api.get('/categories'); } catch (e) { notify.error(e); } finally { loading.value = false; }
 }
 function open(c?: Category) {
-  Object.assign(form, c ? { id: c.id, name: c.name, parentId: c.parentId } : { id: '', name: '', parentId: null });
+  Object.assign(form, c ? { id: c.id, name: c.name, nameKm: (c as any).nameKm ?? '', parentId: c.parentId } : { id: '', name: '', nameKm: '', parentId: null });
   dialog.value = true;
 }
 async function save() {
   try {
-    const body = { name: form.name, parentId: form.parentId ?? undefined };
+    const body = { name: form.name, nameKm: form.nameKm.trim() || null, parentId: form.parentId ?? undefined };
     if (form.id) await api.patch(`/categories/${form.id}`, body);
     else await api.post('/categories', body);
     dialog.value = false;
@@ -55,7 +55,7 @@ onMounted(load);
     </div>
     <div class="card">
       <DataTable :value="rows" :loading="loading" size="small">
-        <Column field="name" header="Name" />
+        <Column header="Name"><template #body="{ data }">{{ data.name }} <span v-if="data.nameKm" class="muted">· {{ data.nameKm }}</span></template></Column>
         <Column header="Parent"><template #body="{ data }">{{ nameOf(data.parentId) }}</template></Column>
         <Column header="Products" class="right"><template #body="{ data }">{{ data._count?.products ?? 0 }}</template></Column>
         <Column class="right" style="width: 110px">
@@ -69,6 +69,7 @@ onMounted(load);
     <Dialog v-model:visible="dialog" :header="form.id ? 'Edit category' : 'New category'" modal :style="{ width: '420px' }">
       <form class="form" @submit.prevent="save">
         <div class="field"><label>Name</label><InputText v-model="form.name" required autofocus /></div>
+        <div class="field"><label>Khmer name <span class="hint">(shown when the screen is in Khmer)</span></label><InputText v-model="form.nameKm" maxlength="100" /></div>
         <div class="field"><label>Parent category</label><Select v-model="form.parentId" :options="parents" option-label="name" option-value="id" show-clear placeholder="None (top level)" /></div>
         <div class="row" style="justify-content: flex-end"><Button type="submit" label="Save" icon="pi pi-check" /></div>
       </form>

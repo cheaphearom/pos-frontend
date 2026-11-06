@@ -5,6 +5,8 @@
  * - Works offline: products come from the local catalogue, prices are calculated on the
  *   device with the same rules as the server, and sales wait in a queue until online.
  */
+import { localName } from '@/i18n';
+import LangSwitch from '@/components/LangSwitch.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { api, ApiError } from '@/api/client';
@@ -38,7 +40,7 @@ const m = (v: number | string) => money(v, cur.value);
 const catalog = useCatalog(app.currentStoreId!);
 
 // ───────────── Cart (kept in localStorage so a reload does not lose it) ─────────────
-interface Line { productId: string; categoryId?: string | null; name: string; sku: string; unit: string; price: string; taxable: boolean; trackStock: boolean; quantity: number; discount: number; modifiers?: ChosenOption[]; note?: string }
+interface Line { productId: string; categoryId?: string | null; name: string; nameKm?: string | null; sku: string; unit: string; price: string; taxable: boolean; trackStock: boolean; quantity: number; discount: number; modifiers?: ChosenOption[]; note?: string }
 interface Cart {
   clientRef: string;
   startedAt: string;
@@ -94,7 +96,7 @@ function pushLine(p: CatalogItem, quantity: number, modifiers: ChosenOption[] = 
   const line = cart.lines.find((l) => l.productId === p.id && !l.discount && sameOptions(l.modifiers, modifiers) && (l.note ?? '') === note);
   if (line) line.quantity = round3(line.quantity + quantity);
   else cart.lines.push({
-    productId: p.id, categoryId: p.categoryId, name: p.name, sku: p.sku, unit: p.unit, price: (Number(p.price) + extra).toFixed(2),
+    productId: p.id, categoryId: p.categoryId, name: p.name, nameKm: (p as any).nameKm ?? null, sku: p.sku, unit: p.unit, price: (Number(p.price) + extra).toFixed(2),
     taxable: p.taxable, trackStock: p.trackStock, quantity, discount: 0, modifiers, note,
   });
   if (p.trackStock && Number(p.stock) - (line?.quantity ?? quantity) < 0) notify.error(`Low stock: ${p.name} shows ${qty(p.stock)} left`);
@@ -193,7 +195,7 @@ const itemCount = computed(() => cart.lines.reduce((s, l) => s + (l.unit === 'pc
 // ───────────── Product search / scanning ─────────────
 const search = ref('');
 const category = ref<string | null>(null);
-const categories = ref<{ id: string; name: string }[]>(readJson('pos.categories', []));
+const categories = ref<{ id: string; name: string; nameKm?: string | null }[]>(readJson('pos.categories', []));
 const searchEl = ref<HTMLInputElement | null>(null);
 const results = computed(() => catalog.search(search.value, category.value, 60));
 const selected = ref(-1);
@@ -502,7 +504,7 @@ async function saveOffline(body: any, payments: { method: string; amount: number
     store: store.value,
     cashier: { fullName: auth.user?.fullName },
     customer: cart.customer,
-    items: cart.lines.map((l, i) => ({ name: l.name, quantity: l.quantity, unitPrice: l.price, discount: t.lines[i].discount, lineTotal: t.lines[i].total, promotion: promos.value[i]?.name ? { name: promos.value[i].name } : null, modifiers: l.modifiers, note: l.note })),
+    items: cart.lines.map((l, i) => ({ name: l.name, nameKm: l.nameKm, quantity: l.quantity, unitPrice: l.price, discount: t.lines[i].discount, lineTotal: t.lines[i].total, promotion: promos.value[i]?.name ? { name: promos.value[i].name } : null, modifiers: l.modifiers, note: l.note })),
     orderType: store.value?.hasKitchen ? cart.orderType : undefined, tableNo: cart.tableNo,
     subtotal: t.subtotal, discountTotal: t.discountTotal, taxTotal: t.taxTotal, total: t.total,
     pointsRedeemed: 0, pointsDiscount: 0, payments,
@@ -602,7 +604,7 @@ const displayState = computed<DisplayState>(() => {
     cashier: auth.user?.fullName,
     customer: cart.customer ? { name: cart.customer.name, points: cart.customer.points } : null,
     lines: cart.lines.map((l, i) => ({
-      name: l.modifiers?.length ? `${l.name} (${optionsText(l.modifiers)})` : l.name, quantity: l.quantity, unit: l.unit, price: Number(l.price),
+      name: l.modifiers?.length ? `${localName(l)} (${optionsText(l.modifiers)})` : localName(l), quantity: l.quantity, unit: l.unit, price: Number(l.price),
       total: t?.lines[i]?.total ?? 0, promo: promos.value[i]?.discount ? `${promos.value[i].name} −${m(promos.value[i].discount)}` : null,
     })),
     totals: { subtotal: t?.subtotal ?? 0, discount: t?.discountTotal ?? 0, tax: t?.taxTotal ?? 0, points: pointsDiscount.value, total: amountDue.value, items: itemCount.value },
@@ -725,6 +727,7 @@ async function logout() {
       <Tag v-else severity="success" value="Online" />
       <Button v-if="(store as any)?.onlineOrdering" :label="`Online${waitingOnline ? ' (' + waitingOnline + ')' : ''}`" icon="pi pi-globe" size="small" :severity="waitingOnline ? 'warn' : 'secondary'" :outlined="!!waitingOnline" :text="!waitingOnline" @click="loadOnline(); onlineDlg = true" />
       <Button icon="pi pi-wallet" label="Top up" size="small" text :disabled="!online" v-tooltip.bottom="'Top up a wallet card'" @click="openTopup()" />
+      <LangSwitch />
       <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
       <Button v-if="shift" :label="'Shift since ' + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" text @click="router.push(`/shifts?open=${shift.id}`)" />
@@ -743,12 +746,12 @@ async function logout() {
         </div>
         <div class="cats">
           <button class="chip" :class="{ on: !category }" @click="category = null">All</button>
-          <button v-for="c in categories.filter((x) => catalog.items.value.some((p) => p.categoryId === x.id))" :key="c.id" class="chip" :class="{ on: category === c.id }" @click="category = category === c.id ? null : c.id">{{ c.name }}</button>
+          <button v-for="c in categories.filter((x) => catalog.items.value.some((p) => p.categoryId === x.id))" :key="c.id" class="chip" :class="{ on: category === c.id }" @click="category = category === c.id ? null : c.id">{{ localName(c) }}</button>
         </div>
         <div class="tiles">
           <button v-for="p in results" :key="p.id" class="tile" @click="addProduct(p); focusSearch()">
             <img v-if="p.imageUrl" :src="p.imageUrl" alt="" class="tile-img" loading="lazy" />
-            <span class="name">{{ p.name }}<i v-if="p.modifierGroupIds?.length" class="pi pi-sliders-h opt-mark" /></span>
+            <span class="name">{{ localName(p as any) }}<i v-if="p.modifierGroupIds?.length" class="pi pi-sliders-h opt-mark" /></span>
             <span class="price">{{ m(p.price) }}</span>
             <span class="meta">
               <span class="mono">{{ p.sku }}</span>
@@ -783,7 +786,7 @@ async function logout() {
         <div class="lines">
           <div v-for="(l, i) in cart.lines" :key="i" class="line" :class="{ sel: selected === i }" @click="selected = i">
             <div class="ln-main" @dblclick="editLine(i)">
-              <div class="ln-name">{{ l.name }}</div>
+              <div class="ln-name">{{ localName(l) }}</div>
               <div v-if="l.modifiers?.length" class="small ln-opts">{{ optionsText(l.modifiers) }}</div>
               <div v-if="l.note" class="small ln-note"><i class="pi pi-comment" /> {{ l.note }}</div>
               <div class="small muted">{{ m(l.price) }} / {{ l.unit }}<span v-if="l.discount" class="neg"> · −{{ m(l.discount) }}</span></div>

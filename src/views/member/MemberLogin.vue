@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Member login with phone number + one-time code. New numbers become members. */
+import LangSwitch from '@/components/LangSwitch.vue';
 import { nextTick, onBeforeUnmount, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { mem, setMemberSession } from '@/online/memberApi';
@@ -59,6 +60,7 @@ function onCode() {
 
 <template>
   <div class="login">
+    <div style="display: flex; justify-content: flex-end"><LangSwitch /></div>
     <div class="hero">
       <i class="pi pi-star-fill" />
       <h1>Member</h1>

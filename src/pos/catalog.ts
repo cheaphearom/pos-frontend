@@ -7,6 +7,7 @@ export interface CatalogItem {
   sku: string;
   barcode: string | null;
   name: string;
+  nameKm?: string | null;
   unit: string;
   price: string;
   taxable: boolean;

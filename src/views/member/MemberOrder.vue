@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** One receipt from the history, with "order again". */
+import { localName } from '@/i18n';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { mem, money } from '@/online/memberApi';
@@ -19,7 +20,7 @@ function reorder() {
   const lines = s.value.items
     .filter((i: any) => Number(i.quantity) - Number(i.refundedQty) > 0)
     .map((i: any) => ({
-      productId: i.productId, name: i.name, quantity: Math.max(1, Math.round(Number(i.quantity))),
+      productId: i.productId, name: i.name, nameKm: i.nameKm, quantity: Math.max(1, Math.round(Number(i.quantity))),
       modifiers: (i.modifiers ?? []).map((m: any) => ({ id: m.id, group: m.group, option: m.option, price: m.price })),
       note: i.note ?? '', unitPrice: Number(i.unitPrice),
     }));
@@ -48,7 +49,7 @@ onMounted(async () => {
       </div>
       <div v-for="(i, n) in s.items" :key="n" class="line">
         <div>
-          <b>{{ Number(i.quantity) }}×</b> {{ i.name }}
+          <b>{{ Number(i.quantity) }}×</b> {{ localName(i) }}
           <div v-if="i.modifiers?.length" class="small muted">{{ optionsText(i.modifiers) }}</div>
           <div v-if="i.note" class="small note">“{{ i.note }}”</div>
           <div v-if="Number(i.refundedQty)" class="small bad">{{ Number(i.refundedQty) }} refunded</div>

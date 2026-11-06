@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LangSwitch from '@/components/LangSwitch.vue';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { Role } from '@/api/types';
@@ -113,6 +114,7 @@ async function logout() {
         </div>
         <div class="spacer" />
         <RouterLink to="/pos"><Button label="Open POS" icon="pi pi-shopping-cart" size="small" /></RouterLink>
+        <LangSwitch />
         <Button :icon="dark ? 'pi pi-sun' : 'pi pi-moon'" text rounded aria-label="Toggle dark mode" @click="dark = !dark" />
         <div class="user">
           <div class="name">{{ auth.user?.fullName }}</div>

@@ -65,7 +65,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await pos.locator('.method', { hasText: 'Wallet card' }).click(); await pos.waitForTimeout(300);
   await pos.getByRole('button', { name: 'Pay from card' }).click(); await pos.waitForTimeout(300);
   ok(await pos.getByText('Still to pay').count() > 0, 'card covers $5.00, rest still to pay');
-  await pos.locator('.method', { hasText: 'Cash' }).click(); await pos.waitForTimeout(200);
+  await pos.locator('.method', { hasText: 'Cash $' }).click(); await pos.waitForTimeout(200);
   await pos.locator('.quick button').first().click();
   await shot(pos, '53b-pos-split');
   await pos.getByRole('button', { name: 'Complete sale' }).click();

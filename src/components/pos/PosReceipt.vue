@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Receipt layout for screen and 80mm thermal printers. Works for server receipts and offline ones. */
+import { localName } from '@/i18n';
 import { dateTime, humanize, money, qty } from '@/utils/format';
 import { optionsText } from '@/utils/modifiers';
 import { formatKhr, usdToKhrUp } from '@shared/cash';
@@ -29,7 +30,7 @@ const changeText = (sale: any) => (Number(sale.changeKhr) ? [Number(sale.changeU
     <div v-if="sale.customer" class="row2"><span>Member</span><span>{{ sale.customer.name }}</span></div>
     <div class="sep" />
     <div v-for="(i, n) in sale.items" :key="n" class="item">
-      <div class="row2"><span>{{ i.name }}</span><span>{{ m(i.lineTotal) }}</span></div>
+      <div class="row2"><span>{{ localName(i) }}</span><span>{{ m(i.lineTotal) }}</span></div>
       <div class="sub">{{ qty(i.quantity) }} × {{ m(i.unitPrice) }}<template v-if="Number(i.discount)"> &nbsp;disc −{{ m(i.discount) }}</template></div>
       <div v-if="i.modifiers?.length" class="sub">{{ optionsText(i.modifiers, true) }}</div>
       <div v-if="i.note" class="sub">“{{ i.note }}”</div>

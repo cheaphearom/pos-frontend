@@ -1,5 +1,7 @@
 <script setup lang="ts">
 /** Customer's order status: KHQR to pay, then queue number and live progress until "Ready". */
+import { localName } from '@/i18n';
+import LangSwitch from '@/components/LangSwitch.vue';
 import QRCode from 'qrcode';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
@@ -55,6 +57,7 @@ onBeforeUnmount(() => { clearInterval(poll); clearInterval(tick); });
 
 <template>
   <div class="status">
+    <div style="display: flex; justify-content: flex-end"><LangSwitch /></div>
     <div v-if="error && !order" class="card center"><h2>Order not found</h2><p class="muted">{{ error }}</p></div>
     <template v-else-if="order">
       <!-- Waiting for KHQR -->
@@ -95,7 +98,7 @@ onBeforeUnmount(() => { clearInterval(poll); clearInterval(tick); });
       <section class="card">
         <div class="row" style="justify-content: space-between"><b>{{ order.customerName }}</b><span class="muted small">{{ order.orderType === 'DINE_IN' ? `Table ${order.tableNo}` : 'Pickup' }}</span></div>
         <div v-for="(l, i) in order.lines" :key="i" class="line">
-          <div><b>{{ Number(l.quantity) }}×</b> {{ l.name }}<div v-if="l.modifiers?.length" class="small muted">{{ optionsText(l.modifiers) }}</div><div v-if="l.note" class="small note">“{{ l.note }}”</div></div>
+          <div><b>{{ Number(l.quantity) }}×</b> {{ localName(l) }}<div v-if="l.modifiers?.length" class="small muted">{{ optionsText(l.modifiers) }}</div><div v-if="l.note" class="small note">“{{ l.note }}”</div></div>
           <span>{{ money(l.total) }}</span>
         </div>
         <div v-if="Number(order.totals?.pointsDiscount)" class="line"><span>Points used ({{ order.redeemPoints }})</span><span>−{{ money(order.totals.pointsDiscount) }}</span></div>

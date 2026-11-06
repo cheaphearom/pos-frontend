@@ -1,5 +1,7 @@
 <script setup lang="ts">
 /** Online ordering for customers' phones: /order/PP01 (pickup) or /order/PP01?table=5 (table QR). */
+import { localName } from '@/i18n';
+import LangSwitch from '@/components/LangSwitch.vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PosOptions, { type ChosenOption, type OptionGroup } from '@/components/pos/PosOptions.vue';
@@ -17,7 +19,7 @@ const loadError = ref('');
 const category = ref<string | null>(null);
 const money = (v: number | string) => new Intl.NumberFormat('en-US', { style: 'currency', currency: menu.value?.store.currency ?? 'USD' }).format(Number(v));
 
-interface CartLine { productId: string; name: string; quantity: number; modifiers: ChosenOption[]; note: string; unitPrice: number }
+interface CartLine { productId: string; name: string; nameKm?: string | null; quantity: number; modifiers: ChosenOption[]; note: string; unitPrice: number }
 const CART = `order.cart:${code}`;
 const cart = ref<CartLine[]>(read(CART, []));
 const form = reactive(read(`order.form`, { customerName: '', phone: '', note: '', couponCode: '', payMethod: 'KHQR' as 'KHQR' | 'COUNTER' | 'WALLET' }));
@@ -60,8 +62,8 @@ function tap(p: any) {
 function addLine(p: any, quantity: number, modifiers: ChosenOption[], note: string) {
   const same = cart.value.find((l) => l.productId === p.id && l.note === note && l.modifiers.map((m) => m.id).join() === modifiers.map((m) => m.id).join());
   if (same) same.quantity += quantity;
-  else cart.value.push({ productId: p.id, name: p.name, quantity, modifiers, note, unitPrice: Number(p.price) + modifiers.reduce((s, m) => s + Number(m.price), 0) });
-  added.value = p.name;
+  else cart.value.push({ productId: p.id, name: p.name, nameKm: p.nameKm ?? null, quantity, modifiers, note, unitPrice: Number(p.price) + modifiers.reduce((s, m) => s + Number(m.price), 0) });
+  added.value = localName(p);
   setTimeout(() => (added.value = ''), 1500);
 }
 const added = ref('');
@@ -152,6 +154,7 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
           <div class="small">{{ table ? `Table ${table} · we bring it to you` : 'Order ahead · pick up at the counter' }}</div>
         </div>
         <div class="links">
+          <LangSwitch />
           <RouterLink v-if="recent.length" :to="`/order/status/${recent[0].token}`" class="mine"><i class="pi pi-receipt" /> My order</RouterLink>
           <RouterLink v-if="member" to="/m" class="mine"><i class="pi pi-user" /> {{ member.points }} pts</RouterLink>
           <RouterLink v-else :to="loginLink" class="mine"><i class="pi pi-star" /> Member</RouterLink>
@@ -159,14 +162,14 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
       </header>
       <nav class="cats">
         <button :class="{ on: !category }" @click="category = null">All</button>
-        <button v-for="c in menu.categories" :key="c.id" :class="{ on: category === c.id }" @click="category = c.id">{{ c.name }}</button>
+        <button v-for="c in menu.categories" :key="c.id" :class="{ on: category === c.id }" @click="category = c.id">{{ localName(c) }}</button>
       </nav>
       <main class="items">
         <button v-for="p in products" :key="p.id" class="item" :class="{ out: p.soldOut }" @click="tap(p)">
           <img v-if="p.imageUrl" :src="p.imageUrl" alt="" loading="lazy" />
           <div v-else class="ph"><i class="pi pi-shopping-bag" /></div>
           <div class="info">
-            <b>{{ p.name }}</b>
+            <b>{{ localName(p) }}</b>
             <span v-if="p.description" class="desc">{{ p.description }}</span>
             <span class="price">{{ p.soldOut ? 'Sold out' : money(p.price) }}<span v-if="p.modifierGroupIds.length && !p.soldOut" class="opts"> · options</span></span>
           </div>
@@ -184,7 +187,7 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
         <div class="sheet">
           <div v-for="(l, i) in cart" :key="i" class="line">
             <div class="lmain">
-              <b>{{ l.name }}</b>
+              <b>{{ localName(l) }}</b>
               <div v-if="l.modifiers.length" class="small muted">{{ optionsText(l.modifiers) }}</div>
               <div v-if="l.note" class="small note">“{{ l.note }}”</div>
             </div>

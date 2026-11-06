@@ -69,7 +69,7 @@ const fmt = (n) => '$' + Number(n).toFixed(2);
   await pos.keyboard.press('F9'); await pos.waitForSelector('.pay');
   await pos.locator('.method', { hasText: 'Voucher' }).first().click(); await pos.waitForTimeout(300);
   await pos.getByRole('button', { name: 'Use voucher' }).click(); await pos.waitForTimeout(300);
-  await pos.locator('.method', { hasText: 'Cash' }).click(); await pos.locator('.quick button').first().click();
+  await pos.locator('.method', { hasText: 'Cash $' }).click(); await pos.locator('.quick button').first().click();
   await pos.getByRole('button', { name: 'Complete sale' }).click();
   await pos.waitForSelector('text=Sale complete', { timeout: 10000 });
   sale = await lastSale();
