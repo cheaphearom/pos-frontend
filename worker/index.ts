@@ -15,7 +15,8 @@ const json = (status: number, message: string) =>
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const toApi = url.pathname.startsWith('/api/') || url.pathname === '/docs' || url.pathname.startsWith('/docs/') || url.pathname === '/health';
+    if (url.pathname === '/api' || url.pathname === '/api/') return Response.redirect(new URL('/api/v1', url).toString(), 302);
+    const toApi = url.pathname === '/api/v1' || url.pathname.startsWith('/api/') || url.pathname === '/docs' || url.pathname.startsWith('/docs/') || url.pathname === '/health';
     if (!toApi) return env.ASSETS.fetch(request);
 
     const origin = (env.API_ORIGIN ?? '').trim().replace(/\/+$/, '');
