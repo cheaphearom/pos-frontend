@@ -202,8 +202,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .cd {
-  --bg: #0d1b33; --panel: #13254a; --text: #f3f6fb; --muted: #a9b6cc; --accent: #4f9bf0; --save: #4ade80;
-  height: 100vh; overflow: hidden; background: radial-gradient(circle at 15% 0%, #1d3b70 0, var(--bg) 60%); color: var(--text);
+  --bg: #1c130d; --panel: #2e2018; --text: #fbf4ec; --muted: #cbb7a3; --accent: #e0a96d; --save: #7bd389;
+  height: 100vh; overflow: hidden; background: radial-gradient(circle at 15% 0%, #6b4426 0, var(--bg) 60%); color: var(--text);
   font-size: clamp(16px, 1.6vw, 26px); position: relative; user-select: none;
 }
 .fs { position: absolute; top: 14px; right: 14px; z-index: 5; background: rgba(255,255,255,.1); color: var(--text); border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; opacity: .35; }
@@ -257,7 +257,7 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; }
 
 /* done */
 .done { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 1.5vh; }
-.check { width: 14vh; height: 14vh; border-radius: 50%; background: var(--save); color: #0d1b33; display: grid; place-items: center; font-size: 7vh; animation: pop .4s ease-out; }
+.check { width: 14vh; height: 14vh; border-radius: 50%; background: var(--save); color: #1c130d; display: grid; place-items: center; font-size: 7vh; animation: pop .4s ease-out; }
 .check i { font-size: 7vh; font-weight: 900; }
 .order-no { text-align: center; }
 .order-no div { color: var(--muted); }
