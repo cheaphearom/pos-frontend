@@ -79,6 +79,10 @@ a { color: var(--p-primary-color); }
   body.printing-receipt .receipt, body.printing-receipt .receipt * { visibility: visible; color: #000 !important; }
   body.printing-receipt .receipt { position: absolute; left: 0; top: 0; width: 80mm; font-size: 12px; }
   body.printing-receipt .no-print { display: none !important; }
+  body.printing-report * { visibility: hidden; }
+  body.printing-report .reg-report, body.printing-report .reg-report * { visibility: visible; color: #000 !important; }
+  body.printing-report .reg-report { position: absolute; left: 0; top: 0; width: 80mm; font-size: 12px; background: #fff; }
+  body.printing-report .no-print { display: none !important; }
 }
 .p-overlay-mask.p-dialog-mask, .p-overlay-mask.p-drawer-mask { background: rgba(10, 15, 25, 0.45); }
 

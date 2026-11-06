@@ -9,6 +9,7 @@ import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
 import { dateTime, humanize, money } from '@/utils/format';
 import { formatKhr } from '@shared/cash';
+import RegisterReport from '@/components/RegisterReport.vue';
 
 const app = useApp();
 const auth = useAuth();
@@ -45,6 +46,17 @@ async function show(id: string) {
     detail.value = await api.get(`/shifts/${id}`);
     showDetail.value = true;
   } catch (e) { notify.error(e); }
+}
+
+const xDlg = ref(false);
+const xReport = ref<any>(null);
+async function openX() {
+  try { xReport.value = await api.get(`/shifts/${detail.value.id}/x-report`); xDlg.value = true; } catch (e) { notify.error(e); }
+}
+function printX() {
+  document.body.classList.add('printing-report');
+  window.print();
+  setTimeout(() => document.body.classList.remove('printing-report'), 500);
 }
 
 const closeDlg = ref(false);
@@ -130,6 +142,8 @@ onMounted(() => {
         <dl class="kv">
           <template v-for="(v, k) in detail.summary.payments" :key="k"><dt>{{ humanize(String(k)) }}</dt><dd class="num">{{ m(v) }}</dd></template>
           <dt>Cash refunds</dt><dd class="num">−{{ m(detail.summary.cashRefunds) }}</dd>
+          <template v-if="Number(detail.summary.cashIn?.usd)"><dt>Cash in</dt><dd class="num">+{{ m(detail.summary.cashIn.usd) }}</dd></template>
+          <template v-if="Number(detail.summary.cashOut?.usd)"><dt>Cash out</dt><dd class="num">−{{ m(detail.summary.cashOut.usd) }}</dd></template>
           <template v-for="(v, k) in detail.summary.voucherSales ?? {}" :key="'v' + k"><dt>Vouchers sold · {{ humanize(String(k)) }}</dt><dd class="num">+{{ m(v) }}</dd></template>
           <template v-for="(v, k) in detail.summary.walletTopups ?? {}" :key="'t' + k"><dt>Wallet top-ups · {{ humanize(String(k)) }}</dt><dd class="num">+{{ m(v) }}</dd></template>
         </dl>
@@ -158,10 +172,16 @@ onMounted(() => {
         </div>
         <div class="row mt" style="justify-content: flex-end">
           <RouterLink :to="`/sales`"><Button label="Sales" text size="small" /></RouterLink>
+          <Button label="X report" icon="pi pi-file" severity="secondary" outlined @click="openX" />
           <Button v-if="canClose" label="Close shift" icon="pi pi-stop" severity="danger" @click="startClose" />
         </div>
       </template>
     </Drawer>
+
+    <Dialog v-model:visible="xDlg" :header="xReport?.shift?.closedAt ? 'Shift report' : 'X report'" modal :style="{ width: '440px' }" :breakpoints="{ '480px': '96vw' }">
+      <RegisterReport v-if="xReport" :report="xReport" />
+      <div class="row mt no-print" style="justify-content: flex-end"><Button label="Print" icon="pi pi-print" @click="printX" /></div>
+    </Dialog>
 
     <Dialog v-model:visible="closeDlg" header="Close shift" modal :style="{ width: '400px' }">
       <form v-if="!closed" class="form" @submit.prevent="doClose">

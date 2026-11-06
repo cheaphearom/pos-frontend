@@ -51,6 +51,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', component: () => import('./views/DashboardView.vue'), meta: { title: 'Dashboard' } },
       { path: 'sales', component: () => import('./views/SalesView.vue'), meta: { title: 'Sales' } },
+      { path: 'z-reports', component: () => import('./views/ZReportsView.vue'), meta: { title: 'End of day', roles: M } },
       { path: 'shifts', component: () => import('./views/ShiftsView.vue'), meta: { title: 'Shifts' } },
       { path: 'products', component: () => import('./views/ProductsView.vue'), meta: { title: 'Products' } },
       { path: 'production', component: () => import('./views/ProductionView.vue'), meta: { title: 'Bakery production' } },

@@ -6,7 +6,7 @@
 import { ref, watch } from 'vue';
 import { api } from '@/api/client';
 
-const props = defineProps<{ storeId: string | null; action: 'DISCOUNT' | 'REFUND' | 'VOID'; percent?: number; saleId?: string; reason?: string; message: string }>();
+const props = defineProps<{ storeId: string | null; action: 'DISCOUNT' | 'REFUND' | 'VOID' | 'CASH_OUT'; percent?: number; amount?: number; saleId?: string; reason?: string; message: string }>();
 const visible = defineModel<boolean>('visible', { required: true });
 const emit = defineEmits<{ approved: [{ approvalId: string; manager: string; percent?: number }] }>();
 
@@ -30,7 +30,7 @@ async function submit() {
   if (pin.value.length < 4 || busy.value) return;
   busy.value = true;
   try {
-    const r = await api.post('/approvals', { storeId: props.storeId, action: props.action, pin: pin.value, percent: props.percent, saleId: props.saleId, reason: props.reason || undefined });
+    const r = await api.post('/approvals', { storeId: props.storeId, action: props.action, pin: pin.value, percent: props.percent, amount: props.amount, saleId: props.saleId, reason: props.reason || undefined });
     visible.value = false;
     emit('approved', { approvalId: r.approvalId, manager: r.manager, percent: props.percent });
   } catch (e: any) {

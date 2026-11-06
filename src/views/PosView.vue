@@ -16,6 +16,7 @@ import PosOptions, { type ChosenOption, type OptionGroup } from '@/components/po
 import { optionsText } from '@/utils/modifiers';
 import PosReceipt from '@/components/pos/PosReceipt.vue';
 import ManagerApproval from '@/components/ManagerApproval.vue';
+import RegisterReport from '@/components/RegisterReport.vue';
 import { useNotify } from '@/composables/useNotify';
 import { useCatalog, type CatalogItem } from '@/pos/catalog';
 import { isNetworkError, online } from '@/pos/network';
@@ -597,6 +598,42 @@ function showDone(sale: any) {
 /** Riel per dollar for this store (null = no riel cash) */
 const khrRate = computed<number | null>(() => (store.value as any)?.khrRate ?? null);
 
+// ───────────── Cash in / out and X report ─────────────
+const cashDlg = ref(false);
+const cashForm = reactive({ type: 'PAY_OUT' as 'PAY_IN' | 'PAY_OUT', currency: 'USD' as 'USD' | 'KHR', amount: 0, reason: '', busy: false });
+const cashApprDlg = ref(false);
+const cashUsdValue = computed(() => (cashForm.currency === 'KHR' && khrRate.value ? Math.round((cashForm.amount / khrRate.value) * 100) / 100 : cashForm.amount));
+function openCash(type: 'PAY_IN' | 'PAY_OUT') {
+  if (!shift.value) { shiftDlg.value = true; return; }
+  Object.assign(cashForm, { type, currency: 'USD', amount: 0, reason: '', busy: false });
+  cashDlg.value = true;
+}
+function saveCash() {
+  if (!cashForm.amount || cashForm.reason.trim().length < 3) return notify.error('Enter the amount and the reason');
+  const needPin = cashForm.type === 'PAY_OUT' && auth.role === 'CASHIER' && (store.value as any)?.cashOutNeedsApproval !== false;
+  if (needPin) { cashApprDlg.value = true; return; }
+  doSaveCash();
+}
+async function doSaveCash(approvalId?: string) {
+  cashForm.busy = true;
+  try {
+    await api.post(`/shifts/${shift.value.id}/cash`, { type: cashForm.type, currency: cashForm.currency, amount: cashForm.amount, reason: cashForm.reason.trim(), approvalId });
+    notify.success(cashForm.type === 'PAY_IN' ? 'Cash in recorded' : 'Cash out recorded', `${cashForm.currency === 'KHR' ? formatKhr(cashForm.amount) : m(cashForm.amount)} · ${cashForm.reason}`);
+    cashDlg.value = false;
+  } catch (e) { notify.error(e); } finally { cashForm.busy = false; }
+}
+const xDlg = ref(false);
+const xReport = ref<any>(null);
+async function openX() {
+  if (!shift.value) return notify.error('No open shift');
+  try { xReport.value = await api.get(`/shifts/${shift.value.id}/x-report`); xDlg.value = true; } catch (e) { notify.error(e); }
+}
+function printX() {
+  document.body.classList.add('printing-report');
+  window.print();
+  setTimeout(() => document.body.classList.remove('printing-report'), 500);
+}
+
 const displayState = computed<DisplayState>(() => {
   const t = totals.value;
   const base = {
@@ -669,7 +706,7 @@ async function loadPromos() {
 }
 
 function onKey(e: KeyboardEvent) {
-  const dialogOpen = onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value;
+  const dialogOpen = onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value || cashDlg.value || xDlg.value || cashApprDlg.value || approvalDlg.value;
   if (e.key === 'F9' || (e.key === 'Enter' && e.ctrlKey)) { e.preventDefault(); if (!dialogOpen) openPay(); }
   else if (e.key === 'F2') { e.preventDefault(); focusSearch(); }
   else if (e.key === 'F4' && !dialogOpen) { e.preventDefault(); custDlg.value = true; }
@@ -727,6 +764,8 @@ async function logout() {
       <Tag v-else severity="success" value="Online" />
       <Button v-if="(store as any)?.onlineOrdering" :label="`Online${waitingOnline ? ' (' + waitingOnline + ')' : ''}`" icon="pi pi-globe" size="small" :severity="waitingOnline ? 'warn' : 'secondary'" :outlined="!!waitingOnline" :text="!waitingOnline" @click="loadOnline(); onlineDlg = true" />
       <Button icon="pi pi-wallet" label="Top up" size="small" text :disabled="!online" v-tooltip.bottom="'Top up a wallet card'" @click="openTopup()" />
+      <Button v-if="shift" icon="pi pi-arrow-right-arrow-left" label="Cash in/out" size="small" text :disabled="!online" v-tooltip.bottom="'Money put in or taken out of the drawer'" @click="openCash('PAY_OUT')" />
+      <Button v-if="shift" icon="pi pi-file" label="X report" size="small" text :disabled="!online" v-tooltip.bottom="'Print the shift so far'" @click="openX" />
       <LangSwitch />
       <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
@@ -877,6 +916,28 @@ async function logout() {
     </Dialog>
 
     <!-- Sale discount -->
+    <Dialog v-model:visible="cashDlg" header="Cash in / out of the drawer" modal :style="{ width: '420px' }">
+      <form class="form" @submit.prevent="saveCash">
+        <SelectButton v-model="cashForm.type" :options="[{ l: 'Cash out', v: 'PAY_OUT' }, { l: 'Cash in', v: 'PAY_IN' }]" option-label="l" option-value="v" :allow-empty="false" />
+        <SelectButton v-if="khrRate" v-model="cashForm.currency" :options="[{ l: 'Dollars', v: 'USD' }, { l: 'Riel', v: 'KHR' }]" option-label="l" option-value="v" :allow-empty="false" />
+        <div class="field"><label>Amount</label>
+          <InputNumber v-if="cashForm.currency === 'KHR'" v-model="cashForm.amount" :min="0" :step="100" prefix="៛" fluid autofocus />
+          <InputNumber v-else v-model="cashForm.amount" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" fluid autofocus />
+        </div>
+        <div class="field"><label>Reason *</label><InputText v-model="cashForm.reason" maxlength="200" :placeholder="cashForm.type === 'PAY_OUT' ? 'Ice delivery, bank drop…' : 'Extra float, change from the bank…'" /></div>
+        <small v-if="cashForm.type === 'PAY_OUT' && auth.role === 'CASHIER' && (store as any)?.cashOutNeedsApproval !== false" class="muted">Cash out needs a manager PIN.</small>
+        <div class="row" style="justify-content: flex-end">
+          <Button label="Cancel" text severity="secondary" @click="cashDlg = false" />
+          <Button type="submit" :label="cashForm.type === 'PAY_OUT' ? 'Take out' : 'Put in'" icon="pi pi-check" :loading="cashForm.busy" />
+        </div>
+      </form>
+    </Dialog>
+    <ManagerApproval v-model:visible="cashApprDlg" :store-id="app.currentStoreId" action="CASH_OUT" :amount="cashUsdValue" :reason="cashForm.reason"
+      :message="`Cash out ${cashForm.currency === 'KHR' ? formatKhr(cashForm.amount) : m(cashForm.amount)}: ${cashForm.reason}`" @approved="(a) => doSaveCash(a.approvalId)" />
+    <Dialog v-model:visible="xDlg" header="X report" modal :style="{ width: '440px' }" :breakpoints="{ '480px': '96vw' }">
+      <RegisterReport v-if="xReport" :report="xReport" />
+      <div class="row mt no-print" style="justify-content: flex-end"><Button label="Print" icon="pi pi-print" @click="printX" /></div>
+    </Dialog>
     <ManagerApproval v-model:visible="approvalDlg" :store-id="app.currentStoreId" action="DISCOUNT" :percent="manualPercent"
       :message="`Discount of ${manualPercent}% (${m(manualAmount)}) is above the cashier limit of ${discountLimit}%.`" @approved="onApproved" />
     <Dialog v-model:visible="discDlg" header="Discount on whole sale" modal :style="{ width: '380px' }">

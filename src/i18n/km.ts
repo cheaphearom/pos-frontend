@@ -161,6 +161,14 @@ export const KM_EXACT: Record<string, string> = {
   Role: 'តួនាទី', 'New user': 'អ្នកប្រើថ្មី', Cashiers: 'អ្នកគិតលុយ', Options: 'ជម្រើស', 'Add option': 'បន្ថែមជម្រើស', 'Option name': 'ឈ្មោះជម្រើស', 'New option group': 'ក្រុមជម្រើសថ្មី',
   'Customer must choose': 'អតិថិជនត្រូវតែជ្រើស', 'Can choose several': 'អាចជ្រើសបានច្រើន', 'No limit': 'គ្មានដែនកំណត់', 'Discount given': 'បញ្ចុះតម្លៃដែលបានផ្តល់', Deal: 'ការផ្តល់ជូន',
   'Name, SKU or barcode': 'ឈ្មោះ លេខកូដ ឬបាកូដ', 'Scan or type': 'ស្កេន ឬវាយ', 'Search above to add products': 'ស្វែងរកខាងលើដើម្បីបន្ថែមទំនិញ', 'No end': 'គ្មានថ្ងៃបញ្ចប់',
+  // ── Drawer, X / Z
+  'Cash in/out': 'ដាក់/ដកសាច់ប្រាក់', 'Cash in / out of the drawer': 'ដាក់ ឬដកសាច់ប្រាក់ពីថត', 'Cash in': 'ដាក់សាច់ប្រាក់', 'Cash out': 'ដកសាច់ប្រាក់',
+  'Take out': 'ដកចេញ', 'Put in': 'ដាក់ចូល', Dollars: 'ដុល្លារ', 'X report': 'របាយការណ៍ X', 'End of day (Z)': 'ចុងថ្ងៃ (Z)', 'End of day (Z report)': 'ចុងថ្ងៃ (របាយការណ៍ Z)',
+  'Run Z report': 'ដំណើរការរបាយការណ៍ Z', Preview: 'មើលជាមុន', 'Business day': 'ថ្ងៃធ្វើការ', 'Z reports': 'របាយការណ៍ Z', 'Net after refunds': 'សុទ្ធក្រោយសងប្រាក់',
+  'Over / short': 'លើស / ខ្វះ', 'Gross sales': 'ការលក់សរុប', 'Net sales': 'ការលក់សុទ្ធ', 'Manual discounts': 'បញ្ចុះតម្លៃដោយដៃ', 'NET AFTER REFUNDS': 'សុទ្ធក្រោយសងប្រាក់',
+  'Dollar drawer': 'ថតដុល្លារ', 'Cash sales': 'ការលក់ជាសាច់ប្រាក់', 'Change given': 'ប្រាក់អាប់បានឲ្យ', 'Top items': 'ទំនិញលក់ដាច់', 'By hour': 'តាមម៉ោង', 'By cashier': 'តាមអ្នកគិតលុយ',
+  'Cash out needs a manager PIN.': 'ការដកសាច់ប្រាក់ត្រូវការ PIN អ្នកគ្រប់គ្រង។', 'Cash out recorded': 'បានកត់ត្រាការដកសាច់ប្រាក់', 'Cash in recorded': 'បានកត់ត្រាការដាក់សាច់ប្រាក់',
+  'Paid with points': 'បង់ដោយពិន្ទុ',
   // ── Bakery / audit / misc admin basics
   "Today's baking": 'ការដុតនំថ្ងៃនេះ', 'End of day': 'ចុងថ្ងៃ', 'Record waste': 'កត់ត្រាការខាតបង់', Bake: 'ដុត', 'Write off': 'កាត់ចេញ',
   Expired: 'ផុតកំណត់', Leftovers: 'នៅសល់', 'Save waste': 'រក្សាទុកការខាតបង់', Batch: 'បាច់', Batches: 'បាច់',

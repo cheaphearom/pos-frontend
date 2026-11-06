@@ -24,6 +24,7 @@ const sections: { title: string; items: NavItem[] }[] = [
   { title: 'Selling', items: [
     { to: '/sales', label: 'Sales', icon: 'pi pi-receipt' },
     { to: '/shifts', label: 'Shifts', icon: 'pi pi-clock' },
+    { to: '/z-reports', label: 'End of day (Z)', icon: 'pi pi-lock', roles: ['STORE_MANAGER'] },
     { to: '/kitchen', label: 'Barista screen', icon: 'pi pi-th-large' },
     { to: '/customers', label: 'Customers', icon: 'pi pi-heart' },
     { to: '/wallet-cards', label: 'Wallet cards', icon: 'pi pi-credit-card', roles: ['STORE_MANAGER'] },
