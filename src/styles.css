@@ -39,7 +39,7 @@ body { font-size: 14px; }
 a { color: var(--p-primary-color); }
 
 /* page building blocks */
-.page { padding: 24px; max-width: 1400px; }
+.page { padding: 24px 28px; max-width: none; } /* use the whole screen width on large monitors */
 .page-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
 .page-head h1 { font-size: 22px; margin: 0; font-weight: 650; }
 .page-head .sub { color: var(--text-2); margin-top: 2px; }
