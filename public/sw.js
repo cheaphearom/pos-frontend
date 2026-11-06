@@ -20,7 +20,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   const url = new URL(req.url);
-  if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api') || url.pathname.startsWith('/docs')) return;
+  if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api') || url.pathname.startsWith('/docs') || url.pathname === '/health') return; // API addresses: never through the offline cache
 
   if (req.mode === 'navigate') {
     // Always try the network so updates arrive; offline → cached app shell.
