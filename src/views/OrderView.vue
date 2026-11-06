@@ -141,6 +141,10 @@ onMounted(async () => {
     if (route.query.cart && cart.value.length) sheet.value = true; // "order again" from the member app
   } catch (e) { loadError.value = (e as Error).message; }
 });
+/** Same category colours as the POS tiles */
+const TILE_COLORS = ['#8b5a33', '#2f7d6b', '#c8893f', '#7a4f9a', '#2c6e9b', '#b2493b', '#5f7d2f', '#9a6a00'];
+const catColor = (id?: string | null) => { const i = (menu.value?.categories ?? []).findIndex((c: any) => c.id === id); return i < 0 ? '#9a8b7f' : TILE_COLORS[i % TILE_COLORS.length]; };
+const initials = (name: string) => name.split(/\s+/).filter((w) => /^[\p{L}]/u.test(w)).slice(0, 2).map((w) => [...w][0]).join('').toUpperCase() || '•';
 const recent = myOrders.list().filter((o) => o.store === code && Date.now() - new Date(o.at).getTime() < 6 * 3600_000);
 </script>
 
@@ -149,16 +153,17 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
     <div v-if="loadError" class="center"><h2>Sorry</h2><p>{{ loadError }}</p></div>
     <template v-else-if="menu">
       <header class="top">
-        <div>
-          <div class="sname">{{ menu.store.name }}</div>
-          <div class="small">{{ table ? `Table ${table} · we bring it to you` : 'Order ahead · pick up at the counter' }}</div>
-        </div>
-        <div class="links">
+        <div class="hero-row">
+          <span class="hlogo" aria-hidden="true"><i class="pi pi-shopping-bag" /></span>
+          <div class="links">
           <LangSwitch />
           <RouterLink v-if="recent.length" :to="`/order/status/${recent[0].token}`" class="mine"><i class="pi pi-receipt" /> My order</RouterLink>
           <RouterLink v-if="member" to="/m" class="mine"><i class="pi pi-user" /> {{ member.points }} pts</RouterLink>
           <RouterLink v-else :to="loginLink" class="mine"><i class="pi pi-star" /> Member</RouterLink>
+          </div>
         </div>
+        <div class="sname">{{ menu.store.name }}</div>
+        <div class="small where"><i :class="table ? 'pi pi-map-marker' : 'pi pi-clock'" /> {{ table ? `Table ${table} · we bring it to you` : 'Order ahead · pick up at the counter' }}</div>
       </header>
       <nav class="cats">
         <button :class="{ on: !category }" @click="category = null">All</button>
@@ -167,7 +172,7 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
       <main class="items">
         <button v-for="p in products" :key="p.id" class="item" :class="{ out: p.soldOut }" @click="tap(p)">
           <img v-if="p.imageUrl" :src="p.imageUrl" alt="" loading="lazy" />
-          <div v-else class="ph"><i class="pi pi-shopping-bag" /></div>
+          <div v-else class="ph" :style="{ '--cat': catColor(p.categoryId) }">{{ initials(localName(p)) }}</div>
           <div class="info">
             <b>{{ localName(p) }}</b>
             <span v-if="p.description" class="desc">{{ p.description }}</span>
@@ -245,21 +250,28 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
 
 <style scoped>
 .shop { min-height: 100vh; background: var(--bg); padding-bottom: 90px; max-width: 720px; margin: 0 auto; }
-.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 16px 10px; background: var(--surface); }
-.sname { font-size: 20px; font-weight: 800; }
+.top { padding: 16px 16px 18px; color: #fff; background: linear-gradient(140deg, #3d2616, #8b5a33 70%, #c8893f); border-radius: 0 0 22px 22px; }
+.hero-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+.hlogo { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(255, 255, 255, .16); font-size: 17px; }
+.sname { font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
 .small { font-size: 13px; color: var(--text-2); }
-.links { display: flex; gap: 12px; }
+.top .small { color: rgba(255, 255, 255, .85); }
+.where { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.links { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.top .mine { color: #fff; background: rgba(255, 255, 255, .16); padding: 6px 11px; border-radius: 999px; }
+.top :deep(.lang) { background: rgba(255, 255, 255, .16); border-color: transparent; color: #fff; }
 .memberbox { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--p-primary-color) 8%, var(--surface)); }
 .usepts { display: flex; gap: 8px; align-items: center; font-weight: 600; }
 .pay button:disabled { opacity: .5; }
 .mine { font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
-.cats { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; position: sticky; top: 0; background: var(--surface); z-index: 2; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+.cats { display: flex; gap: 8px; overflow-x: auto; padding: 12px 16px; position: sticky; top: 0; background: var(--bg); z-index: 2; scrollbar-width: none; }
 .cats button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 600; white-space: nowrap; }
 .cats button.on { background: var(--p-primary-color); border-color: var(--p-primary-color); color: #fff; }
 .items { display: grid; gap: 10px; padding: 12px 16px; }
-.item { display: grid; grid-template-columns: 76px 1fr 36px; gap: 12px; align-items: center; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px; font: inherit; color: var(--text); }
-.item img, .ph { width: 76px; height: 76px; border-radius: 10px; object-fit: cover; }
-.ph { display: grid; place-items: center; background: var(--bg); color: var(--text-3); font-size: 22px; }
+.item { display: grid; grid-template-columns: 72px 1fr 38px; gap: 12px; align-items: center; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px; font: inherit; color: var(--text); box-shadow: var(--shadow); cursor: pointer; }
+.item:active { transform: scale(.985); }
+.item img, .ph { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; }
+.ph { --cat: #9a8b7f; display: grid; place-items: center; background: color-mix(in srgb, var(--cat) 15%, var(--surface)); color: var(--cat); font-size: 22px; font-weight: 800; }
 .item.out { opacity: .5; }
 .info { display: grid; gap: 4px; }
 .desc { font-size: 13px; color: var(--text-2); }

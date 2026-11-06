@@ -12,7 +12,7 @@ const change = computed(() => {
 
 <template>
   <div class="card stat">
-    <div class="label"><i v-if="icon" :class="icon" /> {{ label }}</div>
+    <div class="label"><span v-if="icon" class="ic"><i :class="icon" /></span> {{ label }}</div>
     <div class="value num">{{ value }}</div>
     <div v-if="change !== null" class="delta small" :class="change >= 0 ? 'pos' : 'neg'">
       <i :class="change >= 0 ? 'pi pi-arrow-up' : 'pi pi-arrow-down'" style="font-size: 10px" />
@@ -23,7 +23,9 @@ const change = computed(() => {
 </template>
 
 <style scoped>
-.stat { display: grid; gap: 6px; }
-.label { color: var(--text-2); font-weight: 550; display: flex; gap: 8px; align-items: center; }
-.value { font-size: 26px; font-weight: 650; }
+.stat { display: grid; gap: 8px; align-content: start; height: 100%; }
+.label { color: var(--text-2); font-weight: 600; display: flex; gap: 10px; align-items: center; }
+.ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--p-primary-color) 13%, transparent); color: var(--p-primary-color); flex-shrink: 0; }
+.value { font-size: 28px; font-weight: 800; letter-spacing: -.01em; }
+.delta { font-weight: 700; }
 </style>

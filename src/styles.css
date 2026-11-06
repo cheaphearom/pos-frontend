@@ -94,3 +94,15 @@ a { color: var(--p-primary-color); }
 
 /* Khmer: the script needs a little more line height to stay readable */
 .lang-km body { line-height: 1.55; }
+
+/* ── Admin polish: tables, headings, tags ── */
+.page-head h1 { font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
+.card h3 { font-weight: 700; }
+.p-datatable .p-datatable-thead > tr > th { background: var(--bg); color: var(--text-2); font-size: 12px; font-weight: 700; letter-spacing: .02em; border-color: var(--border); }
+.p-datatable .p-datatable-tbody > tr > td { border-color: var(--border); }
+.p-datatable .p-datatable-tbody > tr.clickable { cursor: pointer; }
+.p-datatable .p-datatable-tbody > tr:hover > td { background: color-mix(in srgb, var(--p-primary-color) 5%, transparent); }
+.p-datatable { border-radius: 10px; overflow: hidden; }
+.p-tag { border-radius: 999px; }
+.p-dialog { border-radius: 16px; }
+.p-dialog .p-dialog-header { padding-bottom: 8px; }

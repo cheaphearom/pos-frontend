@@ -84,7 +84,7 @@ async function logout() {
 <template>
   <div class="shell" :class="{ open }">
     <aside class="sidebar">
-      <div class="brand"><span class="logo"><i class="pi pi-shopping-cart" /></span> POS Admin</div>
+      <div class="brand"><span class="logo"><i class="pi pi-shopping-bag" /></span><span>POS Admin<small>{{ app.currentStore?.name }}</small></span></div>
       <nav>
         <div v-for="s in visible" :key="s.title" class="nav-section">
           <div class="nav-title">{{ s.title }}</div>
@@ -121,6 +121,7 @@ async function logout() {
           <div class="name">{{ auth.user?.fullName }}</div>
           <div class="role">{{ auth.role ? ROLE_LABEL[auth.role] : '' }}</div>
         </div>
+        <span class="avatar" aria-hidden="true">{{ (auth.user?.fullName ?? '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() }}</span>
         <Button v-if="auth.isManager" icon="pi pi-key" text rounded aria-label="My approval PIN" v-tooltip.bottom="'My approval PIN'" @click="pinDlg = true" />
         <ApprovalPinDialog v-model:visible="pinDlg" />
         <Button icon="pi pi-sign-out" text rounded aria-label="Log out" v-tooltip.bottom="'Log out'" @click="logout" />
@@ -143,16 +144,22 @@ async function logout() {
   scrollbar-width: none; /* still scrolls, but no visible bar (Firefox, Chrome, Edge) */
 }
 .sidebar::-webkit-scrollbar { display: none; } /* older Chrome / Edge / Safari */
-.brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; font-size: 17px; padding: 4px 8px 18px; }
-.logo { width: 32px; height: 32px; border-radius: 8px; background: var(--sidebar-active); display: grid; place-items: center; }
+.brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; font-size: 17px; padding: 4px 8px 18px; border-bottom: 1px solid rgba(255, 255, 255, .08); margin-bottom: 12px; }
+.brand > span:last-child { display: grid; line-height: 1.2; }
+.brand small { font-size: 11.5px; font-weight: 500; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.logo { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--sidebar-active), var(--accent-2)); display: grid; place-items: center; flex-shrink: 0; }
 .nav-section { margin-bottom: 14px; }
-.nav-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .55; padding: 6px 10px; }
+.nav-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .5; padding: 6px 10px; }
 .nav-item {
-  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px;
-  color: var(--sidebar-text); text-decoration: none; font-weight: 500;
+  position: relative; display: flex; align-items: center; gap: 11px; padding: 9px 10px; border-radius: 9px;
+  color: var(--sidebar-text); text-decoration: none; font-weight: 500; transition: background .12s;
 }
-.nav-item:hover { background: rgba(255, 255, 255, .07); color: #fff; }
-.nav-item.active { background: var(--sidebar-active); color: #fff; }
+.nav-item i { width: 18px; text-align: center; opacity: .8; }
+.nav-item:hover { background: rgba(255, 255, 255, .06); color: #fff; }
+.nav-item.active { background: rgba(200, 137, 63, .18); color: #fff; font-weight: 650; }
+.nav-item.active i { opacity: 1; color: var(--accent-2); }
+.nav-item.active::before { content: ''; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 4px; border-radius: 0 4px 4px 0; background: var(--accent-2); }
+.avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--p-primary-color); color: #fff; font-weight: 800; font-size: 13px; flex-shrink: 0; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {
   height: 60px; display: flex; align-items: center; gap: 8px; padding: 0 16px;

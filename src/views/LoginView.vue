@@ -32,8 +32,7 @@ async function submit() {
 <template>
   <div class="login">
     <form class="box card" @submit.prevent="submit">
-      <div class="logo"><i class="pi pi-shopping-cart" /></div>
-      <div style="display: flex; justify-content: flex-end"><LangSwitch /></div>
+      <div class="top"><div class="logo"><i class="pi pi-shopping-bag" /></div><LangSwitch /></div>
       <h1>POS Admin</h1>
       <p class="muted">Sign in to manage your stores</p>
       <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
@@ -45,16 +44,18 @@ async function submit() {
         <label for="password">Password</label>
         <Password v-model="password" input-id="password" :feedback="false" toggle-mask fluid autocomplete="current-password" required />
       </div>
-      <Button type="submit" label="Sign in" :loading="loading" class="w-full" />
+      <Button type="submit" label="Sign in" :loading="loading" class="w-full signin" />
     </form>
   </div>
 </template>
 
 <style scoped>
 .login { min-height: 100vh; display: grid; place-items: center; padding: 16px;
-  background: radial-gradient(circle at 20% 10%, #1c3b6e 0, var(--sidebar) 55%); }
-.box { width: 100%; max-width: 380px; display: grid; gap: 14px; padding: 32px; }
-.logo { width: 48px; height: 48px; border-radius: 12px; background: var(--p-primary-color); color: #fff; display: grid; place-items: center; font-size: 22px; }
+  background: radial-gradient(circle at 15% 10%, #6b4426 0, var(--sidebar) 55%), var(--sidebar); }
+.box { width: 100%; max-width: 390px; display: grid; gap: 14px; padding: 32px; border-radius: 20px; box-shadow: 0 20px 50px rgba(0, 0, 0, .35); }
+.top { display: flex; justify-content: space-between; align-items: center; }
+.logo { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, var(--p-primary-color), var(--accent-2)); color: #fff; display: grid; place-items: center; font-size: 22px; }
+.signin { padding: 12px; font-size: 16px; font-weight: 700; }
 h1 { margin: 6px 0 0; font-size: 24px; }
 p { margin: 0 0 6px; }
 </style>
