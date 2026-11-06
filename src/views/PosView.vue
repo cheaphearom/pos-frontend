@@ -800,7 +800,7 @@ async function logout() {
         <div class="tiles">
           <button v-for="p in results" :key="p.id" class="tile" :class="{ out: p.trackStock && Number(p.stock) <= 0 }" :style="{ '--cat': catColor(p.categoryId) }" @click="addProduct(p); focusSearch()">
             <img v-if="p.imageUrl" :src="p.imageUrl" alt="" class="tile-img" loading="lazy" />
-            <span v-else class="tile-ini" aria-hidden="true">{{ initials(localName(p as any)) }}</span>
+            <span v-else class="tile-ini" aria-hidden="true" :data-ini="initials(localName(p as any))" />
             <span class="name">{{ localName(p as any) }}<i v-if="p.modifierGroupIds?.length" class="pi pi-sliders-h opt-mark" v-tooltip="'Has options'" /></span>
             <span class="price">{{ m(p.price) }}</span>
             <span class="meta">
@@ -1129,6 +1129,7 @@ async function logout() {
 .tile:active { transform: scale(.97); }
 .tile:focus-visible { outline: 3px solid color-mix(in srgb, var(--p-primary-color) 45%, transparent); outline-offset: 2px; }
 .tile.out { opacity: .6; }
+.tile-ini::before { content: attr(data-ini); }
 .tile-ini { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 14px; color: var(--cat); background: color-mix(in srgb, var(--cat) 14%, transparent); }
 .tile .name { font-weight: 650; line-height: 1.25; flex: 1; }
 .tile .price { font-size: 18px; font-weight: 800; color: var(--text); }

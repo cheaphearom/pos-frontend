@@ -106,3 +106,6 @@ a { color: var(--p-primary-color); }
 .p-tag { border-radius: 999px; }
 .p-dialog { border-radius: 16px; }
 .p-dialog .p-dialog-header { padding-bottom: 8px; }
+/* Info tags in the brand colour instead of PrimeVue blue */
+.p-tag.p-tag-info { background: color-mix(in srgb, var(--p-primary-color) 14%, transparent); color: var(--p-primary-color); }
+.app-dark .p-tag.p-tag-info { color: #e3c3a3; }

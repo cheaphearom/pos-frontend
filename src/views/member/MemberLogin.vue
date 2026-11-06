@@ -62,7 +62,7 @@ function onCode() {
   <div class="login">
     <div style="display: flex; justify-content: flex-end"><LangSwitch /></div>
     <div class="hero">
-      <i class="pi pi-star-fill" />
+      <span class="mlogo"><i class="pi pi-star-fill" /></span>
       <h1>Member</h1>
       <p>Earn points on every drink, pay with your wallet and order ahead.</p>
     </div>
@@ -98,9 +98,10 @@ function onCode() {
 </template>
 
 <style scoped>
-.login { display: grid; gap: 16px; padding-top: 24px; }
+.login { display: grid; gap: 16px; padding: 20px 16px 32px; max-width: 480px; margin: 0 auto; min-height: 100vh; align-content: start; background: var(--bg); }
 .hero { text-align: center; }
-.hero i { font-size: 34px; color: #d4a017; }
+.mlogo { width: 64px; height: 64px; border-radius: 20px; display: inline-grid; place-items: center; background: linear-gradient(135deg, #3d2616, #8b5a33 70%, #c8893f); box-shadow: 0 8px 20px rgba(60, 35, 15, .25); }
+.mlogo i { font-size: 28px; color: #ffd27a; }
 .hero h1 { margin: 8px 0 4px; }
 .hero p { color: var(--text-2); margin: 0; }
 .card { display: grid; gap: 10px; }

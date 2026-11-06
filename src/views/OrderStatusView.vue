@@ -57,7 +57,11 @@ onBeforeUnmount(() => { clearInterval(poll); clearInterval(tick); });
 
 <template>
   <div class="status">
-    <div style="display: flex; justify-content: flex-end"><LangSwitch /></div>
+    <header class="sbar">
+      <span class="slogo" aria-hidden="true"><i class="pi pi-shopping-bag" /></span>
+      <b>Your order</b>
+      <LangSwitch />
+    </header>
     <div v-if="error && !order" class="card center"><h2>Order not found</h2><p class="muted">{{ error }}</p></div>
     <template v-else-if="order">
       <!-- Waiting for KHQR -->
@@ -112,6 +116,9 @@ onBeforeUnmount(() => { clearInterval(poll); clearInterval(tick); });
 </template>
 
 <style scoped>
+.sbar { display: flex; align-items: center; gap: 10px; }
+.sbar b { flex: 1; font-size: 17px; }
+.slogo { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #3d2616, #8b5a33 70%, #c8893f); }
 .status { max-width: 520px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; min-height: 100vh; background: var(--bg); align-content: start; }
 .center { text-align: center; }
 h2 { margin: 6px 0; }

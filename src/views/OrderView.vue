@@ -172,7 +172,7 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
       <main class="items">
         <button v-for="p in products" :key="p.id" class="item" :class="{ out: p.soldOut }" @click="tap(p)">
           <img v-if="p.imageUrl" :src="p.imageUrl" alt="" loading="lazy" />
-          <div v-else class="ph" :style="{ '--cat': catColor(p.categoryId) }">{{ initials(localName(p)) }}</div>
+          <div v-else class="ph" aria-hidden="true" :style="{ '--cat': catColor(p.categoryId) }" :data-ini="initials(localName(p))" />
           <div class="info">
             <b>{{ localName(p) }}</b>
             <span v-if="p.description" class="desc">{{ p.description }}</span>
@@ -271,6 +271,7 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
 .item { display: grid; grid-template-columns: 72px 1fr 38px; gap: 12px; align-items: center; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px; font: inherit; color: var(--text); box-shadow: var(--shadow); cursor: pointer; }
 .item:active { transform: scale(.985); }
 .item img, .ph { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; }
+.ph::before { content: attr(data-ini); }
 .ph { --cat: #9a8b7f; display: grid; place-items: center; background: color-mix(in srgb, var(--cat) 15%, var(--surface)); color: var(--cat); font-size: 22px; font-weight: 800; }
 .item.out { opacity: .5; }
 .info { display: grid; gap: 4px; }
