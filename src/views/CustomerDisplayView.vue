@@ -21,7 +21,7 @@ const readJson = <T,>(k: string, d: T): T => {
   try { return JSON.parse(localStorage.getItem(k) ?? '') ?? d; } catch { return d; }
 };
 const savedStore = readJson<any[]>('pos.stores', []).find((s) => s.id === storeId);
-const storeName = computed(() => state.value?.store.name || savedStore?.name || 'Welcome');
+const storeName = computed(() => state.value?.store.name || savedStore?.name || '');
 const currency = computed(() => state.value?.store.currency || savedStore?.currency || 'USD');
 const money = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.value }).format(v || 0);
 
@@ -111,7 +111,7 @@ onBeforeUnmount(() => {
     <section v-if="mode === 'idle'" class="idle">
       <div class="welcome">
         <div class="kh">សូមស្វាគមន៍</div>
-        <h1>Welcome to {{ storeName }}</h1>
+        <h1>{{ storeName ? `Welcome to ${storeName}` : 'Welcome' }}</h1>
         <div class="clock">{{ clockText }}</div>
         <div class="date">{{ dateText }}</div>
       </div>
@@ -148,7 +148,7 @@ onBeforeUnmount(() => {
     <section v-else class="sale">
       <div class="items">
         <div class="items-head">
-          <b>{{ storeName }}</b>
+          <b>{{ storeName || 'Welcome' }}</b>
           <span v-if="state?.customer" class="member"><i class="pi pi-star-fill" /> {{ state.customer.name }} · {{ state.customer.points }} points</span>
         </div>
         <div ref="listEl" class="list">
