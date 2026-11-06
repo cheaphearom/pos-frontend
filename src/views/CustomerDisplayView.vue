@@ -216,7 +216,7 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; }
 .idle { height: 100%; display: grid; grid-template-rows: 1fr auto auto auto; justify-items: center; align-items: center; text-align: center; padding: 4vh 4vw; gap: 3vh; }
 .clock { font-size: 4.5em; font-weight: 300; font-variant-numeric: tabular-nums; margin-top: .3em; }
 .date { color: var(--muted); }
-.promo-card { background: linear-gradient(135deg, #2a78d6, #6250d6); border-radius: 24px; padding: 3vh 4vw; min-width: min(80vw, 900px); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.promo-card { background: linear-gradient(135deg, #8b5a33, #c8893f); border-radius: 24px; padding: 3vh 4vw; min-width: min(80vw, 900px); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
 .promo-tag { text-transform: uppercase; letter-spacing: .12em; font-size: .7em; opacity: .85; }
 .promo-name { font-size: 2em; font-weight: 800; margin: .2em 0; }
 .promo-deal { font-size: 1.3em; }

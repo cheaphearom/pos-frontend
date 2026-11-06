@@ -13,15 +13,29 @@ import { router } from './router';
 import './styles.css';
 import { startTranslator } from './i18n';
 
-// Blue brand colour, matching the charts.
+// Warm coffee brand: roasted-bean brown on cream, warm greys (stone) for borders and inputs.
+const stone = {
+  0: '#ffffff', 50: '#faf8f5', 100: '#f4f0eb', 200: '#e8e1d8', 300: '#d5cbbf', 400: '#a99c8f',
+  500: '#7d7064', 600: '#5c5148', 700: '#463d36', 800: '#2e2722', 900: '#1f1a16', 950: '#120f0c',
+};
 const Theme = definePreset(Aura, {
   semantic: {
     primary: {
-      50: '#eef5fd', 100: '#cde2fb', 200: '#9ec5f4', 300: '#6da7ec', 400: '#3987e5',
-      500: '#2a78d6', 600: '#256abf', 700: '#1c5cab', 800: '#184f95', 900: '#104281', 950: '#0d366b',
+      50: '#f8f2ec', 100: '#efe1d3', 200: '#dfc3a8', 300: '#c9a07c', 400: '#ab7a50',
+      500: '#8b5a33', 600: '#774b2a', 700: '#623d23', 800: '#4e301c', 900: '#3d2616', 950: '#2a1a0f',
+    },
+    colorScheme: {
+      light: { surface: stone },
+      // Same roasted brown in dark mode, so white text on buttons stays readable
+      dark: { surface: stone, primary: { color: '{primary.500}', contrastColor: '#ffffff', hoverColor: '{primary.400}', activeColor: '{primary.300}' } },
     },
   },
 });
+
+// Dark mode chosen on this device applies to every screen (POS, display…), not only the admin pages.
+try {
+  if (localStorage.getItem('pos.dark') === '1') document.documentElement.classList.add('app-dark');
+} catch { /* private mode */ }
 
 const app = createApp(App);
 app.use(createPinia());

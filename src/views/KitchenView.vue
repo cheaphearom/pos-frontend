@@ -153,12 +153,12 @@ onBeforeUnmount(() => {
 .cols { flex: 1; min-height: 0; display: grid; gap: 12px; padding: 12px; overflow-x: auto; }
 .col { display: flex; flex-direction: column; min-height: 0; background: color-mix(in srgb, var(--surface) 60%, var(--bg)); border-radius: 12px; border: 1px solid var(--border); }
 .col h2 { margin: 0; padding: 12px 14px; font-size: 17px; display: flex; justify-content: space-between; border-bottom: 3px solid var(--border); }
-.col.new h2 { border-color: #2a78d6; }
+.col.new h2 { border-color: #8b5a33; }
 .col.preparing h2 { border-color: #eda100; }
 .col.ready h2 { border-color: #1a7f37; }
 .count { background: var(--bg); border-radius: 999px; padding: 0 10px; font-size: 14px; line-height: 24px; }
 .list { flex: 1; overflow-y: auto; padding: 10px; display: grid; gap: 10px; align-content: start; }
-.ticket { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); border-left: 6px solid #2a78d6; padding: 10px 12px; cursor: pointer; display: grid; gap: 6px; }
+.ticket { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); border-left: 6px solid #8b5a33; padding: 10px 12px; cursor: pointer; display: grid; gap: 6px; }
 .preparing .ticket { border-left-color: #eda100; }
 .ready .ticket { border-left-color: #1a7f37; }
 .completed .ticket { opacity: .6; }

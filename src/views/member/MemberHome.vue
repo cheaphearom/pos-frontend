@@ -155,7 +155,7 @@ header h2 { margin: 2px 0 0; font-size: 24px; }
 .ainfo { display: grid; }
 .cta { display: flex; align-items: center; gap: 10px; justify-content: center; padding: 16px; border-radius: 14px; background: var(--p-primary-color); color: #fff; font-weight: 800; font-size: 17px; text-decoration: none; }
 .cta .small { font-weight: 500; opacity: .85; }
-.wcard { border-radius: 14px; padding: 14px; color: #fff; background: linear-gradient(135deg, #1d2b44, #33507e); margin-top: 10px; }
+.wcard { border-radius: 14px; padding: 14px; color: #fff; background: linear-gradient(135deg, #2b1d14, #5c3b22); margin-top: 10px; }
 .wcard.blocked { filter: grayscale(.8); }
 .wtop { display: flex; justify-content: space-between; font-size: 14px; letter-spacing: .08em; opacity: .9; }
 .tag { background: rgba(255, 255, 255, .2); border-radius: 6px; padding: 0 6px; font-size: 11px; }

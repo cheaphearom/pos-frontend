@@ -595,6 +595,14 @@ function showDone(sale: any) {
   doneTimer = setTimeout(() => (doneInfo.value = null), 20_000); // back to the welcome screen
 }
 
+/** Each category gets its own colour on the product tiles, so cashiers find items by colour. */
+const TILE_COLORS = ['#8b5a33', '#2f7d6b', '#c8893f', '#7a4f9a', '#2c6e9b', '#b2493b', '#5f7d2f', '#9a6a00', '#4f6b7a', '#a14d7a'];
+function catColor(categoryId?: string | null) {
+  const i = categories.value.findIndex((c) => c.id === categoryId);
+  return i < 0 ? '#9a8b7f' : TILE_COLORS[i % TILE_COLORS.length];
+}
+const initials = (name: string) => name.split(/\s+/).filter((w) => /^[\p{L}]/u.test(w)).slice(0, 2).map((w) => [...w][0]).join('').toUpperCase() || '•';
+
 /** Riel per dollar for this store (null = no riel cash) */
 const khrRate = computed<number | null>(() => (store.value as any)?.khrRate ?? null);
 
@@ -753,25 +761,27 @@ async function logout() {
   <div class="pos-screen">
     <!-- Top bar -->
     <header class="bar">
-      <RouterLink v-if="auth.isManager" to="/" class="back" v-tooltip.bottom="'Back to admin'"><i class="pi pi-arrow-left" /></RouterLink>
+      <RouterLink v-if="auth.isManager" to="/" class="back" v-tooltip.bottom="'Back to admin'" aria-label="Back to admin"><i class="pi pi-arrow-left" /></RouterLink>
+      <span class="logo" aria-hidden="true"><i class="pi pi-shopping-bag" /></span>
       <div class="title">
         <b>{{ store?.name }}</b>
-        <span class="muted small">{{ auth.user?.fullName }}</span>
+        <span class="who"><i class="pi pi-user" /> {{ auth.user?.fullName }}</span>
       </div>
       <Select v-if="app.stores.length > 1" v-model="app.currentStoreId" :options="app.stores" option-label="code" option-value="id" size="small" :disabled="cart.lines.length > 0" />
+      <span class="net" :class="online ? 'on' : 'off'" role="status"><i class="dot" />{{ online ? 'Online' : 'OFFLINE' }}</span>
       <div class="spacer" />
-      <Tag v-if="!online" severity="danger" icon="pi pi-wifi" value="OFFLINE" />
-      <Tag v-else severity="success" value="Online" />
+      <div class="tools">
       <Button v-if="(store as any)?.onlineOrdering" :label="`Online${waitingOnline ? ' (' + waitingOnline + ')' : ''}`" icon="pi pi-globe" size="small" :severity="waitingOnline ? 'warn' : 'secondary'" :outlined="!!waitingOnline" :text="!waitingOnline" @click="loadOnline(); onlineDlg = true" />
       <Button icon="pi pi-wallet" label="Top up" size="small" text :disabled="!online" v-tooltip.bottom="'Top up a wallet card'" @click="openTopup()" />
       <Button v-if="shift" icon="pi pi-arrow-right-arrow-left" label="Cash in/out" size="small" text :disabled="!online" v-tooltip.bottom="'Money put in or taken out of the drawer'" @click="openCash('PAY_OUT')" />
       <Button v-if="shift" icon="pi pi-file" label="X report" size="small" text :disabled="!online" v-tooltip.bottom="'Print the shift so far'" @click="openX" />
-      <LangSwitch />
       <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
+      </div>
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
-      <Button v-if="shift" :label="'Shift since ' + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" text @click="router.push(`/shifts?open=${shift.id}`)" />
+      <Button v-if="shift" class="shift-chip" :label="'Shift since ' + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" severity="secondary" outlined @click="router.push(`/shifts?open=${shift.id}`)" />
       <Button v-else label="Open shift" icon="pi pi-play" size="small" @click="shiftDlg = true" :disabled="!online" />
-      <Button icon="pi pi-sign-out" text rounded aria-label="Log out" v-tooltip.bottom="'Log out'" @click="logout" />
+      <LangSwitch />
+      <Button icon="pi pi-sign-out" text rounded severity="secondary" aria-label="Log out" v-tooltip.bottom="'Log out'" @click="logout" />
     </header>
 
     <div class="body">
@@ -788,13 +798,14 @@ async function logout() {
           <button v-for="c in categories.filter((x) => catalog.items.value.some((p) => p.categoryId === x.id))" :key="c.id" class="chip" :class="{ on: category === c.id }" @click="category = category === c.id ? null : c.id">{{ localName(c) }}</button>
         </div>
         <div class="tiles">
-          <button v-for="p in results" :key="p.id" class="tile" @click="addProduct(p); focusSearch()">
+          <button v-for="p in results" :key="p.id" class="tile" :class="{ out: p.trackStock && Number(p.stock) <= 0 }" :style="{ '--cat': catColor(p.categoryId) }" @click="addProduct(p); focusSearch()">
             <img v-if="p.imageUrl" :src="p.imageUrl" alt="" class="tile-img" loading="lazy" />
-            <span class="name">{{ localName(p as any) }}<i v-if="p.modifierGroupIds?.length" class="pi pi-sliders-h opt-mark" /></span>
+            <span v-else class="tile-ini" aria-hidden="true">{{ initials(localName(p as any)) }}</span>
+            <span class="name">{{ localName(p as any) }}<i v-if="p.modifierGroupIds?.length" class="pi pi-sliders-h opt-mark" v-tooltip="'Has options'" /></span>
             <span class="price">{{ m(p.price) }}</span>
             <span class="meta">
               <span class="mono">{{ p.sku }}</span>
-              <span v-if="p.trackStock" :class="{ neg: Number(p.stock) <= 0 }">{{ qty(p.stock) }} {{ p.unit }}</span>
+              <span v-if="p.trackStock" class="stock" :class="{ neg: Number(p.stock) <= 0, low: Number(p.stock) > 0 && Number(p.stock) <= 5 }">{{ qty(p.stock) }} {{ p.unit }}</span>
             </span>
           </button>
           <div v-if="!results.length" class="empty muted">
@@ -839,7 +850,7 @@ async function logout() {
             <div class="ln-total num">{{ totals ? m(totals.lines[i]?.total ?? 0) : '' }}</div>
             <button class="ln-edit" aria-label="Edit line" @click.stop="editLine(i)"><i class="pi pi-ellipsis-v" /></button>
           </div>
-          <div v-if="!cart.lines.length" class="empty muted"><i class="pi pi-shopping-cart" style="font-size: 32px" /><div>Scan or tap a product to start</div></div>
+          <div v-if="!cart.lines.length" class="empty muted cart-empty"><span class="empty-ic"><i class="pi pi-shopping-cart" /></span><div>Scan or tap a product to start</div></div>
         </div>
 
         <div class="sum">
@@ -874,7 +885,7 @@ async function logout() {
           </div>
           <Button class="pay-btn" :label="`Pay ${m(amountDue)}`" icon="pi pi-wallet" size="large" :disabled="!cart.lines.length || !!priced.error" @click="openPay">
           </Button>
-          <div class="small muted c">F9 pay · F2 search · F4 member</div>
+          <div class="keys small muted c" aria-label="F9 pay · F2 search · F4 member"><span><kbd>F9</kbd> pay</span><span><kbd>F2</kbd> search</span><span><kbd>F4</kbd> member</span></div>
         </div>
       </section>
     </div>
@@ -1079,64 +1090,108 @@ async function logout() {
 <style scoped>
 .khr-total { font-weight: 700; color: var(--text-2); }
 .pos-screen { height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
-.bar { height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border); }
-.back { color: var(--text-2); padding: 6px; }
-.title { display: flex; flex-direction: column; line-height: 1.15; }
+
+/* Top bar */
+.bar { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); position: relative; z-index: 2; }
+.back { color: var(--text-2); padding: 6px; border-radius: 8px; }
+.back:hover { background: var(--bg); }
+.logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--p-primary-color); color: #fff; font-size: 17px; flex-shrink: 0; }
+.title { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.title b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who { font-size: 12px; color: var(--text-2); white-space: nowrap; }
+.who .pi { font-size: 10px; }
+.net { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.net .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.net.on { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.net.off { color: #fff; background: var(--bad); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .75; } }
 .spacer { flex: 1; }
-.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 420px; }
-.catalog-panel { display: flex; flex-direction: column; min-height: 0; padding: 14px; gap: 10px; }
-.search { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 2px solid var(--p-primary-color); border-radius: 12px; padding: 0 14px; }
-.search-input { flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 17px; padding: 13px 0; min-width: 0; }
-.cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; flex-shrink: 0; }
-.chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 7px 14px; font: inherit; font-weight: 550; cursor: pointer; white-space: nowrap; }
+.tools { display: flex; align-items: center; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 3px; }
+.tools :deep(.p-button) { border-radius: 9px; }
+.shift-chip :deep(.p-button-label) { white-space: nowrap; }
+
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 430px; }
+
+/* Products */
+.catalog-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 14px; gap: 10px; }
+.search { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 2px solid var(--border); border-radius: 14px; padding: 0 16px; box-shadow: var(--shadow); transition: border-color .15s; }
+.search:focus-within { border-color: var(--p-primary-color); }
+.search > .pi-search { color: var(--p-primary-color); font-size: 17px; }
+.search-input { flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 17px; padding: 14px 0; min-width: 0; }
+.search-input::placeholder { color: var(--text-3); }
+.cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; flex-shrink: 0; scrollbar-width: none; }
+.chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .1s; }
+.chip:hover { border-color: var(--p-primary-color); }
 .chip.on { background: var(--p-primary-color); border-color: var(--p-primary-color); color: #fff; }
-.tiles { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-content: start; }
-.tile { text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; min-height: 108px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; font: inherit; color: var(--text); transition: border-color .1s, transform .05s; }
-.tile:hover { border-color: var(--p-primary-color); }
-.tile:active { transform: scale(.98); }
-.tile .name { font-weight: 600; line-height: 1.25; flex: 1; }
-.tile .price { font-size: 17px; font-weight: 700; color: var(--p-primary-color); }
-.tile .meta { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-3); }
-.empty { grid-column: 1 / -1; text-align: center; padding: 40px 10px; display: grid; gap: 8px; justify-items: center; }
-.cart-panel { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-left: 1px solid var(--border); }
-.cust { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); min-height: 56px; }
+.tiles { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 10px; align-content: start; padding: 2px; }
+.tile { --cat: #9a8b7f; position: relative; text-align: left; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--cat); border-radius: 14px; padding: 12px; min-height: 128px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; font: inherit; color: var(--text); box-shadow: var(--shadow); transition: border-color .1s, transform .05s, box-shadow .15s; }
+.tile:hover { border-color: var(--cat); box-shadow: 0 4px 14px rgba(60, 35, 15, .12); }
+.tile:active { transform: scale(.97); }
+.tile:focus-visible { outline: 3px solid color-mix(in srgb, var(--p-primary-color) 45%, transparent); outline-offset: 2px; }
+.tile.out { opacity: .6; }
+.tile-ini { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 14px; color: var(--cat); background: color-mix(in srgb, var(--cat) 14%, transparent); }
+.tile .name { font-weight: 650; line-height: 1.25; flex: 1; }
+.tile .price { font-size: 18px; font-weight: 800; color: var(--text); }
+.tile .meta { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--text-3); }
+.tile .stock.low { color: var(--warn); font-weight: 700; }
+.tile .stock.neg { color: var(--bad); font-weight: 700; }
+.empty { grid-column: 1 / -1; text-align: center; padding: 40px 10px; display: grid; gap: 10px; justify-items: center; }
+.empty-ic { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--bg); color: var(--text-3); font-size: 30px; }
+
+/* Cart */
+.cart-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); border-left: 1px solid var(--border); }
+.otype { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.cust { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); min-height: 58px; }
+.cust > .pi-user { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--p-primary-color) 14%, transparent); color: var(--p-primary-color); }
 .lines { flex: 1; overflow-y: auto; }
-.line { display: grid; grid-template-columns: 1fr auto 76px 24px; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: default; }
-.line.sel { background: color-mix(in srgb, var(--p-primary-color) 7%, transparent); }
-.ln-name { font-weight: 600; line-height: 1.25; }
-.promo { color: var(--p-primary-color); font-weight: 600; margin-top: 2px; }
+.line { display: grid; grid-template-columns: 1fr auto 78px 28px; gap: 8px; align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--border); border-left: 4px solid transparent; cursor: default; }
+.line.sel { background: color-mix(in srgb, var(--p-primary-color) 7%, transparent); border-left-color: var(--p-primary-color); }
+.ln-name { font-weight: 650; line-height: 1.25; }
+.promo { color: var(--good); font-weight: 600; margin-top: 2px; }
 .ln-opts { color: var(--text-2); }
-.ln-note { color: #b45309; }
-.otype { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--border); }
-.tile-img { width: 100%; height: 72px; object-fit: cover; border-radius: 8px; }
+.ln-note { color: var(--warn); }
+.tile-img { width: 100%; height: 76px; object-fit: cover; border-radius: 10px; }
 .opt-mark { font-size: 11px; color: var(--text-3); margin-left: 6px; }
 .wallet-line { color: var(--p-primary-color); font-weight: 600; }
 .coupon-row { color: var(--p-primary-color); font-weight: 600; }
 .qty { display: flex; align-items: center; gap: 4px; }
-.qty button, .ln-edit { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; display: grid; place-items: center; }
-.ln-edit { border: 0; background: transparent; width: 24px; }
-.qty span { min-width: 34px; text-align: center; font-weight: 600; cursor: pointer; }
-.ln-total { text-align: right; font-weight: 600; }
-.sum { border-top: 1px solid var(--border); padding: 12px 14px; display: grid; gap: 6px; }
+.qty button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; display: grid; place-items: center; }
+.qty button:hover { border-color: var(--p-primary-color); color: var(--p-primary-color); }
+.qty button:active { transform: scale(.94); }
+.ln-edit { width: 28px; height: 36px; border-radius: 8px; border: 0; background: transparent; color: var(--text-2); cursor: pointer; display: grid; place-items: center; }
+.ln-edit:hover { background: var(--bg); }
+.qty span { min-width: 32px; text-align: center; font-weight: 700; cursor: pointer; font-size: 15px; }
+.ln-total { text-align: right; font-weight: 700; }
+.sum { border-top: 1px solid var(--border); padding: 12px 14px 10px; display: grid; gap: 6px; background: var(--surface); box-shadow: 0 -4px 12px rgba(60, 35, 15, .04); }
 .r { display: flex; justify-content: space-between; align-items: center; }
-.r.total { font-size: 24px; font-weight: 800; margin-top: 4px; }
-.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
-.actions :deep(.p-button) { padding: 8px; font-size: 13px; }
-.pay-btn { width: 100%; font-size: 20px; padding: 16px; margin-top: 4px; }
+.r.total { font-size: 26px; font-weight: 800; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 6px; }
+.actions :deep(.p-button) { padding: 8px 4px; font-size: 12.5px; flex-direction: column; gap: 3px; }
+.actions :deep(.p-button-icon) { margin: 0; font-size: 15px; }
+.pay-btn { width: 100%; font-size: 21px; font-weight: 800; padding: 18px; margin-top: 4px; border-radius: 14px; box-shadow: 0 6px 16px color-mix(in srgb, var(--p-primary-color) 35%, transparent); }
+.keys { display: flex; justify-content: center; gap: 14px; }
+kbd { font: inherit; font-size: 11px; font-weight: 700; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; background: var(--bg); color: var(--text-2); }
 .c { text-align: center; }
-.receipt-box { background: var(--bg); border-radius: 10px; padding: 16px; max-height: 50vh; overflow-y: auto; margin-top: 10px; }
-.change-big { text-align: center; font-size: 20px; padding: 10px; border-radius: 10px; background: color-mix(in srgb, var(--good) 14%, var(--surface)); margin-bottom: 6px; }
-.change-big b { font-size: 28px; display: block; }
-.wallet-box { background: color-mix(in srgb, var(--p-primary-color) 10%, var(--surface)); border-radius: 10px; padding: 12px 14px; }
+.receipt-box { background: var(--bg); border-radius: 12px; padding: 16px; max-height: 50vh; overflow-y: auto; margin-top: 10px; }
+.change-big { text-align: center; font-size: 20px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--good) 14%, var(--surface)); margin-bottom: 6px; }
+.change-big b { font-size: 30px; display: block; }
+.wallet-box { background: color-mix(in srgb, var(--p-primary-color) 10%, var(--surface)); border-radius: 12px; padding: 12px 14px; }
 .held { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 #print-receipt { display: none; }
+/* Smaller laptops: tool buttons show icons only (the name is in the tooltip) */
+@media (max-width: 1280px) {
+  .tools :deep(.p-button-label) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .tools :deep(.p-button) { padding-inline: 9px; }
+  .who { display: none; }
+  .body { grid-template-columns: 1fr 390px; }
+}
 @media (max-width: 900px) {
   .pos-screen { height: auto; min-height: 100vh; }
+  .bar { height: auto; flex-wrap: wrap; padding: 8px 12px; }
   .body { grid-template-columns: 1fr; }
-  .tiles { max-height: 46vh; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .tiles { max-height: 46vh; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
   .cart-panel { border-left: 0; border-top: 1px solid var(--border); }
   .lines { max-height: 40vh; }
-  .title .small { display: none; }
 }
 </style>
 
