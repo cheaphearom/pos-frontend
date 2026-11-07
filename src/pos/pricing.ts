@@ -1,5 +1,5 @@
 /**
- * Same rules as the API (apps/api/src/sales/pricing.ts) so the POS shows exact totals
+ * Same rules as the API (pos-backend src/sales/pricing.ts) so the POS shows exact totals
  * and can sell offline. Works in integer cents to avoid floating-point errors.
  *  - line discounts first
  *  - sale discount (amount and/or percent) shared across lines by value; last line takes the remainder

@@ -12,10 +12,10 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': '/src',
-        // Promotion rules are shared with the API so online and offline prices are identical.
-        '@shared/promotions': fileURLToPath(new URL('../api/src/promotions/engine.ts', import.meta.url)),
-        '@shared/coupons': fileURLToPath(new URL('../api/src/coupons/calc.ts', import.meta.url)),
-        '@shared/cash': fileURLToPath(new URL('../api/src/sales/cash.ts', import.meta.url)),
+        // Same rules as the API (copies of pos-backend files, see src/shared) so online and offline prices are identical.
+        '@shared/promotions': fileURLToPath(new URL('./src/shared/promotions.ts', import.meta.url)),
+        '@shared/coupons': fileURLToPath(new URL('./src/shared/coupons.ts', import.meta.url)),
+        '@shared/cash': fileURLToPath(new URL('./src/shared/cash.ts', import.meta.url)),
       },
     },
     build: {

@@ -12,8 +12,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"], "@shared/promotions": ["../api/src/promotions/engine.ts"], "@shared/coupons": ["../api/src/coupons/calc.ts"], "@shared/cash": ["../api/src/sales/cash.ts"] },
+    "paths": { "@/*": ["src/*"], "@shared/promotions": ["src/shared/promotions.ts"], "@shared/coupons": ["src/shared/coupons.ts"], "@shared/cash": ["src/shared/cash.ts"] },
     "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "../api/src/promotions/engine.ts", "../api/src/coupons/calc.ts", "../api/src/sales/cash.ts"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "worker/**/*.ts"]
 }

@@ -1,0 +1,24 @@
+// Cloudflare Workers: hosts the web app (POS, admin, online ordering, member app) and forwards
+// /api and /docs to the API server set in the API_ORIGIN variable (Cloudflare dashboard → this Worker →
+// Settings → Variables and Secrets), e.g. https://api.yourcafe.com or a cloudflared tunnel address.
+// The API itself (NestJS + PostgreSQL + Redis) is the separate pos-backend project, running on a server.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Must be the same name as the Worker in your Cloudflare dashboard.
+  "name": "pos-system",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-09-01",
+  // Keep API_ORIGIN (set in the dashboard) when a new version is deployed from GitHub.
+  "keep_vars": true,
+  // `npx wrangler deploy` builds the web app first.
+  "build": { "command": "npm run build" },
+  "assets": {
+    "directory": "dist",
+    "binding": "ASSETS",
+    // Unknown paths (/pos, /order/PP01, /m …) load the app, which shows the right page.
+    "not_found_handling": "single-page-application",
+    // Only these paths go through the Worker code; everything else is served straight from the files.
+    "run_worker_first": ["/api", "/api/*", "/docs", "/docs/*", "/health"]
+  },
+  "observability": { "enabled": true }
+}

@@ -1,5 +1,5 @@
 {
-  "name": "@pos/web",
+  "name": "pos-frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test:e2e": "node test/pos.e2e.cjs && node test/phase4.e2e.cjs && node test/display.e2e.cjs && node test/wallet.e2e.cjs && node test/coupons.e2e.cjs && node test/cafe.e2e.cjs && node test/recipes.e2e.cjs && node test/online.e2e.cjs && node test/member.e2e.cjs && node test/bakery.e2e.cjs && node test/controls.e2e.cjs && node test/currency.e2e.cjs && node test/khmer.e2e.cjs && node test/xz.e2e.cjs"
+    "test:e2e": "node test/pos.e2e.cjs && node test/phase4.e2e.cjs && node test/display.e2e.cjs && node test/wallet.e2e.cjs && node test/coupons.e2e.cjs && node test/cafe.e2e.cjs && node test/recipes.e2e.cjs && node test/online.e2e.cjs && node test/member.e2e.cjs && node test/bakery.e2e.cjs && node test/controls.e2e.cjs && node test/currency.e2e.cjs && node test/khmer.e2e.cjs && node test/xz.e2e.cjs",
+    "check:shared": "node scripts/check-shared.mjs",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@primeuix/themes": "^1.2.1",
@@ -24,6 +26,10 @@
     "@vitejs/plugin-vue": "^5.2.4",
     "typescript": "~5.9.2",
     "vite": "^6.3.5",
-    "vue-tsc": "^2.2.10"
+    "vue-tsc": "^2.2.10",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
