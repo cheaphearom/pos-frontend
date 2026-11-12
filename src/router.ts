@@ -72,6 +72,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'stores', component: () => import('./views/StoresView.vue'), meta: { title: 'Stores', roles: A } },
       { path: 'audit', component: () => import('./views/AuditView.vue'), meta: { title: 'Audit log', roles: M } },
       { path: 'integrations', component: () => import('./views/IntegrationsView.vue'), meta: { title: 'Integrations', roles: A } },
+      { path: 'monitor', component: () => import('./views/MonitorView.vue'), meta: { title: 'System monitor', roles: A } },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },

@@ -52,6 +52,7 @@ const sections: { title: string; items: NavItem[] }[] = [
     { to: '/stores', label: 'Stores', icon: 'pi pi-building', roles: ['SUPER_ADMIN'] },
     { to: '/audit', label: 'Audit log', icon: 'pi pi-shield', roles: ['STORE_MANAGER'] },
     { to: '/integrations', label: 'Integrations', icon: 'pi pi-link', roles: ['SUPER_ADMIN'] },
+    { to: '/monitor', label: 'System monitor', icon: 'pi pi-chart-line', roles: ['SUPER_ADMIN'] },
   ] },
 ];
 const visible = computed(() =>
