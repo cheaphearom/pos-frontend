@@ -8,6 +8,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "test:e2e": "node test/pos.e2e.cjs && node test/phase4.e2e.cjs && node test/display.e2e.cjs && node test/wallet.e2e.cjs && node test/coupons.e2e.cjs && node test/cafe.e2e.cjs && node test/recipes.e2e.cjs && node test/online.e2e.cjs && node test/member.e2e.cjs && node test/bakery.e2e.cjs && node test/controls.e2e.cjs && node test/currency.e2e.cjs && node test/khmer.e2e.cjs && node test/xz.e2e.cjs",
+    "test:monitor": "node test/monitor.e2e.cjs",
     "check:shared": "node scripts/check-shared.mjs",
     "deploy": "npm run build && wrangler deploy"
   },

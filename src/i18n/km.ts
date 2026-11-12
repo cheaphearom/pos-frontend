@@ -174,6 +174,23 @@ export const KM_EXACT: Record<string, string> = {
   Expired: 'ផុតកំណត់', Leftovers: 'នៅសល់', 'Save waste': 'រក្សាទុកការខាតបង់', Batch: 'បាច់', Batches: 'បាច់',
   Discounts: 'បញ្ចុះតម្លៃ', Voids: 'ការលុបចោល', 'Wrong PINs': 'PIN ខុស', 'Failed logins': 'ការចូលបរាជ័យ', 'By': 'ដោយ', 'Approved by': 'អនុម័តដោយ',
   'This store': 'ហាងនេះ', 'All my stores': 'ហាងរបស់ខ្ញុំទាំងអស់', 'All stores': 'ហាងទាំងអស់', 'All statuses': 'គ្រប់ស្ថានភាព',
+
+  // ── System monitor (super admin)
+  'System monitor': 'តាមដានប្រព័ន្ធ',
+  'Health of the POS servers and the anomaly detector. Refreshes every 15 seconds.': 'សុខភាពម៉ាស៊ីនមេ POS និងប្រព័ន្ធរកភាពមិនប្រក្រតី។ ធ្វើបច្ចុប្បន្នភាពរៀងរាល់ ១៥ វិនាទី។',
+  Refresh: 'ធ្វើឲ្យថ្មី', 'Send test Telegram message': 'ផ្ញើសារសាកល្បងទៅ Telegram', 'Test message sent': 'បានផ្ញើសារសាកល្បង',
+  'Check your Telegram chat': 'សូមពិនិត្យការជជែក Telegram របស់អ្នក', API: 'API', Database: 'មូលដ្ឋានទិន្នន័យ', Redis: 'Redis',
+  'Webhook queue': 'ជួរ Webhook', 'Anomaly detector': 'ប្រព័ន្ធរកភាពមិនប្រក្រតី', OK: 'ធម្មតា', Warning: 'ប្រុងប្រយ័ត្ន', Down: 'ដាច់',
+  'Last 60 minutes': '៦០ នាទីចុងក្រោយ', 'Requests per minute': 'សំណើក្នុងមួយនាទី', 'Error rate (5xx)': 'អត្រាកំហុស (5xx)',
+  'p95 response time': 'ពេលឆ្លើយតប p95', 'Sales per minute': 'ការលក់ក្នុងមួយនាទី', 'Anomaly scores (30 minutes)': 'ពិន្ទុភាពមិនប្រក្រតី (៣០ នាទី)',
+  'Recent alerts': 'ការជូនដំណឹងថ្មីៗ', 'Detected by': 'រកឃើញដោយ', 'Suspected problem': 'បញ្ហាដែលសង្ស័យ', 'Example log lines': 'ឧទាហរណ៍កំណត់ហេតុ',
+  'No alerts': 'គ្មានការជូនដំណឹង', Alert: 'ជូនដំណឹង', Normal: 'ធម្មតា', Threshold: 'កម្រិតកំណត់',
+  'Above the dashed line = anomaly': 'លើសបន្ទាត់ដាច់ៗ = មិនប្រក្រតី', 'Not trained yet: rules only': 'មិនទាន់បានបង្វឹក៖ មានតែច្បាប់',
+  'No window scored yet': 'មិនទាន់មានការវាយតម្លៃ', 'not trained yet: only the rules run': 'មិនទាន់បានបង្វឹក៖ មានតែច្បាប់ដំណើរការ',
+  'no log window scored yet': 'មិនទាន់មានការវាយតម្លៃ', 'Telegram alerts on': 'ការជូនដំណឹង Telegram បើក', 'Telegram alerts off': 'ការជូនដំណឹង Telegram បិទ',
+  'The detector is not reachable': 'មិនអាចភ្ជាប់ទៅប្រព័ន្ធរកភាពមិនប្រក្រតី', 'The anomaly detector is not reachable': 'មិនអាចភ្ជាប់ទៅប្រព័ន្ធរកភាពមិនប្រក្រតី',
+  'No scores yet: the detector scores a new window every 10 seconds once logs arrive.': 'មិនទាន់មានពិន្ទុ៖ ប្រព័ន្ធវាយតម្លៃរៀងរាល់ ១០ វិនាទី នៅពេលមានកំណត់ហេតុ។',
+  'Rules': 'ច្បាប់', 'Isolation Forest': 'Isolation Forest', PCA: 'PCA', 'Random Forest': 'Random Forest', 'Loading…': 'កំពុងផ្ទុក…',
 };
 
 /** For text with numbers or names inside. The first matching pattern wins. */
@@ -214,5 +231,17 @@ export const KM_PATTERNS: [RegExp, string | ((...m: string[]) => string)][] = [
   [/^Left (.+)$/, 'នៅសល់ $1'],
   [/^Balance (.+)$/, 'សមតុល្យ $1'],
   [/^Riel received \((\d+)\)$/, 'រៀលបានទទួល ($1)'],
+  [/^Updated (.+)$/, 'ធ្វើបច្ចុប្បន្នភាព $1'],
+  [/^Up (.+)$/, 'ដំណើរការ $1'],
+  [/^(\d+) MB memory$/, 'អង្គចងចាំ $1 MB'],
+  [/^Query ([\d.]+) ms$/, 'សំណួរ $1 ms'],
+  [/^Ping ([\d.]+) ms$/, 'Ping $1 ms'],
+  [/^(\d+) waiting · (\d+) running$/, 'រង់ចាំ $1 · កំពុងដំណើរការ $2'],
+  [/^(\d+) retrying · (\d+) failed in the last hour$/, 'កំពុងព្យាយាមម្តងទៀត $1 · បរាជ័យ $2 ក្នុងមួយម៉ោងចុងក្រោយ'],
+  [/^Trained (.+)$/, 'បានបង្វឹក $1'],
+  [/^only ([\d.]+) hours of logs: train again after at least (\d+) hours of normal traffic$/, 'មានកំណត់ហេតុតែ $1 ម៉ោង៖ សូមបង្វឹកម្តងទៀតក្រោយមានចរាចរណ៍ធម្មតាយ៉ាងតិច $2 ម៉ោង'],
+  [/^last window scored (\d+) min ago \(no new logs\?\)$/, 'ការវាយតម្លៃចុងក្រោយ $1 នាទីមុន (គ្មានកំណត់ហេតុថ្មី?)'],
+  [/^Last window (.+)$/, 'ការវាយតម្លៃចុងក្រោយ $1'],
+  [/^Failed payments in the last hour:$/, 'ការបង់ប្រាក់បរាជ័យក្នុងមួយម៉ោងចុងក្រោយ៖'],
   [/^(.+) · POS Admin$/, (_m, a) => `${KM_EXACT[a] ?? a} · ផ្ទាំងគ្រប់គ្រង POS`],
 ];
