@@ -10,8 +10,11 @@ import { describePromotion, isPromoActive, type PromoRule } from '@shared/promot
 import { displayChannel, type DisplayState } from '@/pos/display';
 import { qty } from '@/utils/format';
 import { formatKhr, usdToKhrUp } from '@shared/cash';
+import { useDark } from '@/composables/useDark';
 
 const route = useRoute();
+/** Follows the POS's dark mode switch (same computer), even while open */
+const dark = useDark();
 const storeId = String(route.query.store ?? '');
 const channel = displayChannel(storeId);
 const state = ref<DisplayState | null>(null);
@@ -103,7 +106,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="cd" :class="'m-' + mode">
+  <div class="cd" :class="['m-' + mode, { night: dark }]">
     <button v-if="!isFullscreen" class="fs" @click="fullscreen"><i class="pi pi-window-maximize" /> Full screen</button>
     <div v-if="!channel.supported" class="warn">This browser cannot connect to the POS. Use Chrome or Edge.</div>
 
@@ -188,7 +191,7 @@ onBeforeUnmount(() => {
             <b>{{ money(t?.total ?? 0) }}</b>
             <span v-if="state?.store.khrRate && t?.total" class="khr">{{ formatKhr(usdToKhrUp(t.total, state.store.khrRate)) }}</span>
           </div>
-          <div v-if="saved > 0" class="saved">You save {{ money(saved) }} today 🎉</div>
+          <div v-if="saved > 0" class="saved"><i class="pi pi-tag" /><span>You save <b>{{ money(saved) }}</b> today</span></div>
           <div v-if="mode === 'pay' && state?.payment" class="paying">
             <div class="r"><span>Paid</span><span>{{ money(state.payment.paid) }}</span></div>
             <div v-if="state.payment.remaining > 0" class="r big"><span>Still to pay</span><span>{{ money(state.payment.remaining) }}</span></div>
@@ -205,11 +208,20 @@ onBeforeUnmount(() => {
   /* Light café: cream background, white cards, espresso text, coffee and caramel accents */
   --bg: #f6f1ea; --panel: #fffdf9; --text: #2b211b; --muted: #7d6d60; --accent: #8b5a33; --caramel: #c8893f;
   --save: #2f7d32; --line: #e8dfd4; --shadow: 0 2px 6px rgba(60, 35, 15, .06), 0 12px 32px rgba(60, 35, 15, .08);
-  height: 100vh; overflow: hidden; background: linear-gradient(180deg, #fbf7f1 0%, var(--bg) 100%); color: var(--text);
+  --top: #fbf7f1; --hl: #fbf0dd; --badge: #9a6416; --side-shadow: -8px 0 30px rgba(60, 35, 15, .05);
+  height: 100vh; overflow: hidden; background: linear-gradient(180deg, var(--top) 0%, var(--bg) 100%); color: var(--text);
   font-size: clamp(16px, 1.6vw, 26px); position: relative; user-select: none;
 }
 .fs { position: absolute; top: 14px; right: 14px; z-index: 5; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; opacity: .35; }
 .fs:hover { opacity: 1; }
+/* Night: deep espresso, warm caramel accents (when the POS is in dark mode) */
+.cd.night {
+  --bg: #15100c; --panel: #201813; --text: #f5ede4; --muted: #b9a999; --accent: #e3ad72; --caramel: #e3ad72;
+  --save: #6cc070; --line: #352a22; --shadow: 0 14px 40px rgba(0, 0, 0, .45);
+  --top: #1d1611; --hl: rgba(227, 173, 114, .14); --badge: #f2c58a; --side-shadow: none;
+}
+.cd.night .khqr-card { border-color: transparent; }
+.cd.night .check { color: #15100c; }
 .warn { position: absolute; top: 0; inset-inline: 0; background: #c0392b; color: #fff; padding: 10px; text-align: center; font-size: 16px; }
 .kh { font-size: 1.6em; color: var(--accent); font-weight: 700; font-family: 'Khmer UI', 'Noto Sans Khmer', 'Leelawadee UI', 'Khmer OS', 'Kantumruy Pro', sans-serif; }
 h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; color: var(--text); }
@@ -233,23 +245,27 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; color: var(--text); }
 .items { display: flex; flex-direction: column; min-height: 0; padding: 3vh 2.5vw; }
 .items-head { display: flex; justify-content: space-between; align-items: center; gap: 1em; padding-bottom: 1.5vh; border-bottom: 2px solid var(--line); }
 .items-head b { color: var(--accent); }
-.member { color: #9a6416; background: #fbf0dd; border-radius: 999px; padding: .25em .8em; font-size: .8em; font-weight: 600; }
+.member { color: var(--badge); background: var(--hl); border-radius: 999px; padding: .25em .8em; font-size: .8em; font-weight: 600; }
 .member i { color: var(--caramel); }
 .list { flex: 1; overflow-y: auto; scrollbar-width: none; }
 .line { display: flex; justify-content: space-between; gap: 1em; padding: 1.6vh .7em; border-bottom: 1px solid var(--line); }
-.line.last { background: #fbf0dd; border-radius: 12px; border-bottom-color: transparent; box-shadow: inset 4px 0 0 var(--caramel); }
+.line.last { background: var(--hl); border-radius: 12px; border-bottom-color: transparent; box-shadow: inset 4px 0 0 var(--caramel); }
 .ln-name { font-weight: 600; }
 .ln-sub { color: var(--muted); font-weight: 400; font-size: .8em; }
 .ln-promo { color: var(--save); font-size: .8em; font-weight: 600; }
 .ln-total { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.side { background: var(--panel); border-left: 1px solid var(--line); box-shadow: -8px 0 30px rgba(60, 35, 15, .05); display: flex; flex-direction: column; justify-content: center; gap: 3vh; padding: 4vh 3vw; }
+.side { background: var(--panel); border-left: 1px solid var(--line); box-shadow: var(--side-shadow); display: flex; flex-direction: column; justify-content: center; gap: 3vh; padding: 4vh 3vw; }
 .rows { display: grid; gap: 1.2vh; }
 .r { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
 .r.save, .saved { color: var(--save); }
 .total { border-top: 2px solid var(--line); padding-top: 2vh; }
 .total div { color: var(--muted); }
 .total b { display: block; font-size: 3.4em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--accent); }
-.saved { font-weight: 700; font-size: 1.1em; }
+.saved { display: inline-flex; align-items: center; gap: .5em; align-self: flex-start; font-weight: 600; font-size: 1em;
+  background: color-mix(in srgb, var(--save) 12%, transparent); border: 1px solid color-mix(in srgb, var(--save) 30%, transparent);
+  border-radius: 999px; padding: .45em 1em; }
+.saved i { font-size: .9em; }
+.saved b { font-weight: 800; }
 .paying { display: grid; gap: 1vh; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 2vh 1.5vw; }
 .paying .big { font-size: 1.4em; font-weight: 800; }
 .scan { text-align: center; font-size: 1.6em; font-weight: 800; }
