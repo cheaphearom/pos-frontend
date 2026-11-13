@@ -8,6 +8,7 @@
 import { localName } from '@/i18n';
 import LangSwitch from '@/components/LangSwitch.vue';
 import TouchKeyboard from '@/components/TouchKeyboard.vue';
+import NumPad from '@/components/NumPad.vue';
 import { useTouchKeyboard } from '@/composables/useTouchKeyboard';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -409,6 +410,13 @@ const shift = ref<any>(readJson(`pos.shift:${app.currentStoreId}`, null));
 const shiftDlg = ref(false);
 const openingCash = ref(0);
 const openingKhr = ref(0);
+/** Touch: which opening amount the number pad types into */
+const shiftField = ref<'usd' | 'khr'>('usd');
+const shiftPadValue = computed<number | null>({
+  get: () => (shiftField.value === 'usd' ? openingCash.value : openingKhr.value),
+  set: (v) => (shiftField.value === 'usd' ? (openingCash.value = v ?? 0) : (openingKhr.value = v ?? 0)),
+});
+const noOsKeyboard = computed(() => (touch.value ? { pcInputText: { root: { inputmode: 'none' } } } : undefined));
 async function loadShift() {
   try {
     shift.value = await api.get('/shifts/current', { storeId: app.currentStoreId });
@@ -1002,9 +1010,12 @@ async function logout() {
     <Dialog v-model:visible="shiftDlg" header="Open your shift" modal :style="{ width: '380px' }">
       <form class="form" @submit.prevent="openShift">
         <p class="muted" style="margin: 0">Count the cash in the drawer before you start selling.</p>
-        <div class="field"><label>{{ khrRate ? 'Opening cash (dollars)' : 'Opening cash' }}</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus /></div>
-        <div v-if="khrRate" class="field"><label>Opening riel</label><InputNumber v-model="openingKhr" :min="0" :step="100" prefix="៛" fluid /></div>
-        <Button type="submit" label="Open shift" icon="pi pi-play" />
+        <div class="field"><label>{{ khrRate ? 'Opening cash (dollars)' : 'Opening cash' }}</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus
+          :pt="noOsKeyboard" :class="{ 'pad-target': touch && shiftField === 'usd' }" @focus="shiftField = 'usd'" @click="shiftField = 'usd'" /></div>
+        <div v-if="khrRate" class="field"><label>Opening riel</label><InputNumber v-model="openingKhr" :min="0" :step="100" prefix="៛" fluid
+          :pt="noOsKeyboard" :class="{ 'pad-target': touch && shiftField === 'khr' }" @focus="shiftField = 'khr'" @click="shiftField = 'khr'" /></div>
+        <NumPad v-if="touch" v-model="shiftPadValue" :decimals="shiftField === 'usd' ? 2 : 0" enter-label="Open" @enter="openShift" />
+        <Button v-if="!touch" type="submit" label="Open shift" icon="pi pi-play" />
       </form>
     </Dialog>
 
@@ -1132,6 +1143,7 @@ async function logout() {
 .search-btn:hover { background: var(--bg); color: var(--text); }
 .search-btn.on { background: color-mix(in srgb, var(--p-primary-color) 16%, transparent); color: var(--p-primary-color); }
 .pos-kb { flex: none; }
+.pad-target :deep(input) { border-color: var(--p-primary-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-primary-color) 22%, transparent); }
 .cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; flex-shrink: 0; scrollbar-width: none; }
 .chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .1s; }
 .chip:hover { border-color: var(--p-primary-color); }
