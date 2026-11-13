@@ -10,6 +10,7 @@ import LangSwitch from '@/components/LangSwitch.vue';
 import TouchKeyboard from '@/components/TouchKeyboard.vue';
 import NumPad from '@/components/NumPad.vue';
 import KeyboardToggle from '@/components/KeyboardToggle.vue';
+import { BIG_ZOOM, useBigMode } from '@/composables/useBigMode';
 import { useTouchKeyboard } from '@/composables/useTouchKeyboard';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -208,6 +209,15 @@ const focusSearch = () => nextTick(() => searchEl.value?.focus());
 // On-screen keyboard for tills without a keyboard: types into the search box
 const touch = useTouchKeyboard();
 const kbOpen = ref(true);
+// Big mode: the whole POS (and its pop-up windows) larger, still fitting the screen
+const big = useBigMode();
+function applyBig(on: boolean) {
+  const el = document.documentElement;
+  el.classList.toggle('pos-big', on);
+  el.style.setProperty('--pos-zoom', on ? String(BIG_ZOOM) : '1');
+}
+watch(big, applyBig, { immediate: true });
+onBeforeUnmount(() => applyBig(false));
 
 function onSearchEnter() {
   const raw = search.value.trim();
@@ -792,8 +802,10 @@ async function logout() {
       <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
       </div>
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
-      <Button v-if="shift" class="shift-chip" :label="'Shift since ' + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" severity="secondary" outlined @click="router.push(`/shifts?open=${shift.id}`)" />
+      <Button v-if="shift" class="shift-chip" :label="(big ? '' : 'Shift since ') + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" severity="secondary" outlined @click="router.push(`/shifts?open=${shift.id}`)" />
       <Button v-else label="Open shift" icon="pi pi-play" size="small" @click="shiftDlg = true" :disabled="!online" />
+      <Button :icon="big ? 'pi pi-search-minus' : 'pi pi-search-plus'" :label="big ? 'Normal' : 'Big'" size="small" :severity="big ? undefined : 'secondary'" :outlined="!big"
+        :aria-pressed="big" v-tooltip.bottom="big ? 'Back to the normal size' : 'Make everything bigger'" @click="big = !big" />
       <LangSwitch />
       <Button icon="pi pi-sign-out" text rounded severity="secondary" aria-label="Log out" v-tooltip.bottom="'Log out'" @click="logout" />
     </header>
@@ -1112,7 +1124,7 @@ async function logout() {
 
 <style scoped>
 .khr-total { font-weight: 700; color: var(--text-2); }
-.pos-screen { height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
+.pos-screen { height: calc(100vh / var(--pos-zoom, 1)); display: flex; flex-direction: column; background: var(--bg); }
 
 /* Top bar */
 .bar { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); position: relative; z-index: 2; }
