@@ -12,7 +12,38 @@ const auth = useAuth();
 const app = useApp();
 const notify = useNotify();
 const categories = ref<Category[]>([]);
-const list = usePagedList<Product>('/products', { search: '', categoryId: null, storeId: app.currentStoreId, includeInactive: false, kind: null as string | null });
+const list = usePagedList<Product>('/products', { search: '', categoryId: null, storeId: app.currentStoreId, includeInactive: false, kind: null as string | null, listing: 'listed' as 'listed' | 'unlisted' | 'all' });
+const listingOptions = computed(() => [
+  { l: `Sold in ${app.currentStore?.code ?? 'this store'}`, v: 'listed' },
+  { l: 'Not sold here', v: 'unlisted' },
+  { l: 'All', v: 'all' },
+]);
+
+// ── Which stores sell the product, and their own price (empty = the normal selling price)
+type StoreRow = { storeId: string; code: string; name: string; sells: boolean; price: number | null; was?: { sells: boolean; price: number | null } };
+const storeRows = ref<StoreRow[]>([]);
+const loadingStores = ref(false);
+function initStores(inventory: any[], isNew: boolean) {
+  storeRows.value = app.stores.map((s) => {
+    const inv = inventory.find((i) => i.storeId === s.id);
+    const sells = isNew ? s.id === app.currentStoreId : !!inv?.isListed;
+    const price = inv?.priceOverride != null ? Number(inv.priceOverride) : null;
+    return { storeId: s.id, code: s.code, name: s.name, sells, price, was: isNew ? undefined : { sells, price } };
+  });
+}
+const storesChanged = (r: StoreRow) => !r.was || r.was.sells !== r.sells || r.was.price !== r.price;
+
+/** Turn "sold in this store" on or off from the list (super admin, or this store's manager). */
+async function toggleListed(p: Product, on: boolean) {
+  try {
+    await api.put(`/inventory/${app.currentStoreId}/${p.id}`, { isListed: on });
+    p.listed = on;
+    notify.success(on ? `Now sold in ${app.currentStore?.code}` : `No longer sold in ${app.currentStore?.code}`, p.name);
+    if (list.filters.listing !== 'all') list.load();
+  } catch (e) {
+    notify.error(e);
+  }
+}
 
 const cur = computed(() => app.currentStore?.currency ?? 'USD');
 const empty = () => ({ id: '', sku: '', barcode: '', name: '', nameKm: '', description: '', categoryId: null as string | null, unit: 'pcs', costPrice: 0, sellPrice: 0, taxable: true, trackStock: true, isActive: true, imageUrl: '', modifierGroupIds: [] as string[], isIngredient: false, onlineAvailable: false, madeInHouse: false, batchYield: 1, shelfLifeHours: null as number | null });
@@ -29,9 +60,16 @@ const form = reactive(empty());
 function openNew(ingredient = false) {
   Object.assign(form, empty(), ingredient ? { isIngredient: true, unit: 'g', taxable: false } : {});
   Object.assign(pack, { size: null, price: null });
+  initStores([], true);
   dialog.value = true;
 }
-function edit(p: Product) {
+async function edit(p: Product) {
+  storeRows.value = [];
+  loadingStores.value = true;
+  api.get<any>(`/products/${p.id}`)
+    .then((d) => initStores(d.inventory ?? [], false))
+    .catch((e) => notify.error(e))
+    .finally(() => (loadingStores.value = false));
   Object.assign(form, {
     ...empty(), ...p, barcode: p.barcode ?? '', nameKm: (p as any).nameKm ?? '', description: p.description ?? '', costPrice: Number(p.costPrice), sellPrice: Number(p.sellPrice),
     imageUrl: (p as any).imageUrl ?? '', modifierGroupIds: ((p as any).modifierGroups ?? []).map((m: any) => m.groupId),
@@ -44,12 +82,21 @@ function edit(p: Product) {
 }
 
 async function save() {
+  if (!form.id && !storeRows.value.some((r) => r.sells)) return notify.error('Choose at least one store that sells this product');
+  if (form.id && loadingStores.value) return;
   saving.value = true;
   try {
-    const { id, ...body } = form;
+    // Only the form's own fields: the edited product also carries createdAt, category, price, stock...
+    const { id, ...body } = Object.fromEntries(Object.keys(empty()).map((k) => [k, (form as any)[k]])) as ReturnType<typeof empty>;
     const payload = { ...body, barcode: body.barcode || undefined, description: body.description || undefined, nameKm: body.nameKm.trim() || null, categoryId: body.categoryId || undefined, imageUrl: body.imageUrl || null };
-    if (id) await api.patch(`/products/${id}`, payload);
-    else await api.post('/products', { ...payload, isActive: undefined });
+    if (id) {
+      await api.patch(`/products/${id}`, payload);
+      for (const r of storeRows.value.filter(storesChanged)) {
+        await api.put(`/inventory/${r.storeId}/${id}`, { isListed: r.sells, priceOverride: r.price });
+      }
+    } else {
+      await api.post('/products', { ...payload, isActive: undefined, stores: storeRows.value.filter((r) => r.sells).map((r) => ({ storeId: r.storeId, price: r.price })) });
+    }
     notify.success(id ? 'Product updated' : 'Product created', form.name);
     dialog.value = false;
     list.load();
@@ -77,7 +124,7 @@ onMounted(async () => {
     <div class="page-head">
       <div>
         <h1>Products</h1>
-        <div class="sub">Shared catalogue for all stores · price and stock shown for {{ app.currentStore?.code }}</div>
+        <div class="sub">One product list · each store sells its own products at its own price · showing {{ app.currentStore?.code }}</div>
       </div>
       <div class="actions">
         <Button v-if="auth.isAdmin" label="New ingredient" icon="pi pi-plus" severity="secondary" @click="openNew(true)" />
@@ -92,6 +139,7 @@ onMounted(async () => {
           <InputText v-model="list.filters.search" placeholder="Name, SKU or barcode" />
         </IconField>
         <Select v-model="list.filters.categoryId" :options="categories" option-label="name" option-value="id" placeholder="All categories" show-clear />
+        <SelectButton v-model="list.filters.listing" :options="listingOptions" option-label="l" option-value="v" :allow-empty="false" />
         <SelectButton v-model="list.filters.kind" :options="[{ l: 'For sale', v: 'sellable' }, { l: 'Ingredients', v: 'ingredient' }]" option-label="l" option-value="v" />
         <label class="row small"><ToggleSwitch v-model="list.filters.includeInactive" /> Show inactive</label>
       </div>
@@ -126,6 +174,14 @@ onMounted(async () => {
           </template>
         </Column>
         <Column header="Tax" class="right"><template #body="{ data }"><i :class="data.taxable ? 'pi pi-check' : 'pi pi-minus muted'" /></template></Column>
+        <Column :header="`Sold in ${app.currentStore?.code ?? ''}`" class="right">
+          <template #body="{ data }">
+            <span @click.stop>
+              <ToggleSwitch v-if="auth.isManager" :model-value="!!data.listed" @update:model-value="toggleListed(data, $event)" v-tooltip.left="data.listed ? 'Stop selling in this store' : 'Sell in this store'" />
+              <i v-else :class="data.listed ? 'pi pi-check' : 'pi pi-minus muted'" />
+            </span>
+          </template>
+        </Column>
       </DataTable>
     </div>
 
@@ -163,6 +219,16 @@ onMounted(async () => {
           <label v-if="!form.isIngredient" class="row"><ToggleSwitch v-model="form.madeInHouse" /> Made here (bakery)</label>
           <label v-if="form.id" class="row"><ToggleSwitch v-model="form.isActive" /> Active (for sale)</label>
         </div>
+        <div class="field">
+          <label>Stores <span class="hint">({{ form.isIngredient ? 'stores that keep it in stock' : 'stores that sell it; own price empty = ' + money(form.sellPrice, cur) }})</span></label>
+          <div v-if="loadingStores" class="muted small">Loading stores…</div>
+          <div v-else class="stores">
+            <div v-for="r in storeRows" :key="r.storeId" class="store-row">
+              <label class="row"><Checkbox v-model="r.sells" binary /> <b>{{ r.code }}</b> <span class="muted small">{{ r.name }}</span></label>
+              <InputNumber v-if="!form.isIngredient" v-model="r.price" :disabled="!r.sells" placeholder="Normal price" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" input-class="price-in" />
+            </div>
+          </div>
+        </div>
         <div v-if="form.madeInHouse && !form.isIngredient" class="grid2 bake">
           <div class="field"><label>Pieces per batch <span class="hint">(the recipe is for one batch)</span></label><InputNumber v-model="form.batchYield" :min="0.001" :max-fraction-digits="3" fluid /></div>
           <div class="field"><label>Fresh for (hours) <span class="hint">(empty = keeps)</span></label><InputNumber v-model="form.shelfLifeHours" :min="1" :max="8760" fluid /></div>
@@ -179,4 +245,7 @@ onMounted(async () => {
 
 <style scoped>
 .bake { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; border-radius: 10px; background: var(--bg); }
+.stores { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: var(--bg); }
+.store-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.store-row :deep(.price-in) { width: 130px; text-align: right; }
 </style>
