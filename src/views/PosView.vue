@@ -9,6 +9,7 @@ import { localName } from '@/i18n';
 import LangSwitch from '@/components/LangSwitch.vue';
 import TouchKeyboard from '@/components/TouchKeyboard.vue';
 import NumPad from '@/components/NumPad.vue';
+import KeyboardToggle from '@/components/KeyboardToggle.vue';
 import { useTouchKeyboard } from '@/composables/useTouchKeyboard';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -805,8 +806,7 @@ async function logout() {
           <input ref="searchEl" v-model="search" class="search-input" placeholder="Scan barcode or search… (F2)   e.g. 3*8850000001 for 3 pcs"
             autocomplete="off" :inputmode="touch ? 'none' : undefined" @keydown.enter.prevent="onSearchEnter" @keydown.esc="search = ''" @focus="kbOpen = true" @click="kbOpen = true" />
           <button v-if="search" type="button" class="search-btn" aria-label="Clear search" @mousedown.prevent @click="search = ''"><i class="pi pi-times" /></button>
-          <button type="button" class="search-btn" :class="{ on: touch }" :aria-label="touch ? 'Turn off the on-screen keyboard' : 'Turn on the on-screen keyboard'"
-            v-tooltip.bottom="'On-screen keyboard'" @mousedown.prevent @click="touch = !touch; kbOpen = true; focusSearch()"><i class="pi pi-th-large" /></button>
+          <KeyboardToggle @changed="kbOpen = true; focusSearch()" />
           <span v-if="catalog.syncing.value" class="pi pi-spin pi-sync muted" v-tooltip="'Updating products'" />
         </div>
         <div class="cats">
@@ -1009,7 +1009,10 @@ async function logout() {
     <!-- Shift -->
     <Dialog v-model:visible="shiftDlg" header="Open your shift" modal :style="{ width: '380px' }">
       <form class="form" @submit.prevent="openShift">
-        <p class="muted" style="margin: 0">Count the cash in the drawer before you start selling.</p>
+        <div class="row" style="justify-content: space-between; gap: 10px">
+          <p class="muted" style="margin: 0">Count the cash in the drawer before you start selling.</p>
+          <KeyboardToggle label="Keypad" />
+        </div>
         <div class="field"><label>{{ khrRate ? 'Opening cash (dollars)' : 'Opening cash' }}</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus
           :pt="noOsKeyboard" :class="{ 'pad-target': touch && shiftField === 'usd' }" @focus="shiftField = 'usd'" @click="shiftField = 'usd'" /></div>
         <div v-if="khrRate" class="field"><label>Opening riel</label><InputNumber v-model="openingKhr" :min="0" :step="100" prefix="៛" fluid
