@@ -31,7 +31,11 @@ const sending = ref(false);
 const updatedAt = ref<Date | null>(null);
 let timer: ReturnType<typeof setInterval> | undefined;
 
-const METHOD = { rules: 'Rules', isolation_forest: 'Isolation Forest', pca: 'PCA', random_forest: 'Random Forest' } as Record<string, string>;
+const METHOD = {
+  rules: 'Rules', isolation_forest: 'Isolation Forest', pca: 'PCA', random_forest: 'Random Forest',
+  // the detector's system checks: the API's /health, and the heartbeat lines in its logs
+  pos_api_check: 'API check', heartbeat_check: 'Heartbeat check',
+} as Record<string, string>;
 const methodLabel = (m: string) => METHOD[m] ?? m;
 const LEVEL = { ok: 'OK', warn: 'Warning', fail: 'Down' } as Record<Level, string>;
 const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

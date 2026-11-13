@@ -191,6 +191,7 @@ export const KM_EXACT: Record<string, string> = {
   'The detector is not reachable': 'មិនអាចភ្ជាប់ទៅប្រព័ន្ធរកភាពមិនប្រក្រតី', 'The anomaly detector is not reachable': 'មិនអាចភ្ជាប់ទៅប្រព័ន្ធរកភាពមិនប្រក្រតី',
   'No scores yet: the detector scores a new window every 10 seconds once logs arrive.': 'មិនទាន់មានពិន្ទុ៖ ប្រព័ន្ធវាយតម្លៃរៀងរាល់ ១០ វិនាទី នៅពេលមានកំណត់ហេតុ។',
   'Rules': 'ច្បាប់', 'Isolation Forest': 'Isolation Forest', PCA: 'PCA', 'Random Forest': 'Random Forest', 'Loading…': 'កំពុងផ្ទុក…',
+  'API check': 'ពិនិត្យ API', 'Heartbeat check': 'ពិនិត្យសញ្ញាជីវិត',
 };
 
 /** For text with numbers or names inside. The first matching pattern wins. */
@@ -239,6 +240,7 @@ export const KM_PATTERNS: [RegExp, string | ((...m: string[]) => string)][] = [
   [/^(\d+) waiting · (\d+) running$/, 'រង់ចាំ $1 · កំពុងដំណើរការ $2'],
   [/^(\d+) retrying · (\d+) failed in the last hour$/, 'កំពុងព្យាយាមម្តងទៀត $1 · បរាជ័យ $2 ក្នុងមួយម៉ោងចុងក្រោយ'],
   [/^Trained (.+)$/, 'បានបង្វឹក $1'],
+  [/^no logs reach the detector: (.+)$/, 'កំណត់ហេតុមិនមកដល់ប្រព័ន្ធរកភាពមិនប្រក្រតី៖ $1'],
   [/^only ([\d.]+) hours of logs: train again after at least (\d+) hours of normal traffic$/, 'មានកំណត់ហេតុតែ $1 ម៉ោង៖ សូមបង្វឹកម្តងទៀតក្រោយមានចរាចរណ៍ធម្មតាយ៉ាងតិច $2 ម៉ោង'],
   [/^last window scored (\d+) min ago \(no new logs\?\)$/, 'ការវាយតម្លៃចុងក្រោយ $1 នាទីមុន (គ្មានកំណត់ហេតុថ្មី?)'],
   [/^Last window (.+)$/, 'ការវាយតម្លៃចុងក្រោយ $1'],
