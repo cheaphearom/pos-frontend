@@ -11,7 +11,12 @@ export const config = { matcher: ['/api', '/api/:path*', '/docs', '/docs/:path*'
 const json = (status: number, message: string) =>
   new Response(JSON.stringify({ statusCode: status, message }), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 
-export default async function middleware(request: Request, apiOrigin = process.env.API_ORIGIN): Promise<Response> {
+/** Vercel calls this with (request, context): the API address always comes from the environment. */
+export default function middleware(request: Request): Promise<Response> {
+  return forward(request, process.env.API_ORIGIN);
+}
+
+export async function forward(request: Request, apiOrigin: string | undefined): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === '/api' || url.pathname === '/api/') return Response.redirect(new URL('/api/v1', url).toString(), 302);
 
@@ -22,6 +27,8 @@ export default async function middleware(request: Request, apiOrigin = process.e
   const target = new URL(url.pathname + url.search, origin);
   const headers = new Headers(request.headers);
   headers.delete('host');
+  // fetch() unpacks compressed bodies itself: ask for plain ones, and do not pass on a stale Content-Encoding
+  headers.delete('accept-encoding');
   headers.set('X-Forwarded-Host', url.host);
   headers.set('X-Forwarded-Proto', 'https');
   try {
@@ -32,6 +39,8 @@ export default async function middleware(request: Request, apiOrigin = process.e
       redirect: 'manual',
     });
     const out = new Response(res.body, res);
+    out.headers.delete('content-encoding');
+    out.headers.delete('content-length');
     if (url.pathname.startsWith('/api/')) out.headers.set('Cache-Control', 'no-store');
     return out;
   } catch {
