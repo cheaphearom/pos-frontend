@@ -15,5 +15,5 @@
     "paths": { "@/*": ["src/*"], "@shared/promotions": ["src/shared/promotions.ts"], "@shared/coupons": ["src/shared/coupons.ts"], "@shared/cash": ["src/shared/cash.ts"] },
     "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "worker/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "worker/**/*.ts", "middleware.ts"]
 }

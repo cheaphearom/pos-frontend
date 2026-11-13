@@ -12,7 +12,7 @@ The web app of a multi-store point of sale for shops and cafés, in one Vue app:
 | Part | Technology |
 |---|---|
 | App | **Vue 3**, Vite, Pinia, Vue Router, PrimeVue 4, Chart.js |
-| Hosting | **Cloudflare Workers** (`wrangler.jsonc`, `worker/index.ts`) |
+| Hosting | **Vercel** (`vercel.json`, `middleware.ts`) or **Cloudflare Workers** (`wrangler.jsonc`, `worker/index.ts`) |
 | API | the separate **pos-backend** project (NestJS + PostgreSQL + Redis) |
 
 ```
@@ -27,6 +27,7 @@ pos-frontend/
 │   ├── i18n/         English / Khmer
 │   └── components/   charts, product search, date range, stat cards
 ├── worker/index.ts   Cloudflare Worker: serves the app, forwards /api, /docs, /health to API_ORIGIN
+├── middleware.ts     the same forwarding on Vercel (vercel.json: build settings, page refreshes)
 ├── public/           service worker (offline POS), manifest, _headers
 ├── test/             browser tests (Playwright)
 └── docs/FEATURES.md  how every part works
@@ -49,6 +50,25 @@ another API, set `VITE_API_PROXY` in `.env` (see `.env.example`).
 
 Demo logins (password `Password@123`, from the pos-backend demo data): `admin@pos.local`, `manager.pp@pos.local`,
 `cashier1@pos.local`. Cashiers go straight to the POS.
+
+## Deploy to Vercel
+
+1. Vercel → **Add New → Project** → import `cheaphearom/pos-frontend`. Vercel reads `vercel.json`: framework Vite,
+   build `npm run build`, output `dist`. Root directory `/`.
+2. **Settings → Environment Variables → Add** `API_ORIGIN` = the address of pos-backend, without a trailing slash,
+   e.g. `https://api.yourcafe.com`, for Production (and Preview if you use it). Then **Deployments → Redeploy**: a
+   variable takes effect on the next deployment.
+3. Every push to `main` deploys again.
+4. In pos-backend `deploy/.env`, add the app's address (e.g. `https://pos-frontend.vercel.app`) to `CORS_ORIGINS`.
+
+`middleware.ts` forwards `/api`, `/docs` and `/health` to `API_ORIGIN`, so the app and the API share one address
+(login cookies and no CORS problems). The API itself does **not** run on Vercel: it needs an always-on server for its
+workers, PostgreSQL and Redis (a VPS with pos-backend's `deploy/`, or Railway / Render).
+
+Check: `https://<your app>.vercel.app/health` should answer `ok` from the API. "API address is not set" means
+`API_ORIGIN` is missing or the project was not redeployed; "The API server did not answer" means the API or its tunnel
+is down. The address must be reachable from the internet: `http://192.168...` or `localhost` will not work (use a
+Cloudflare Tunnel address while testing on your own computer).
 
 ## Deploy to Cloudflare Workers
 
