@@ -1,4 +1,4 @@
-# POS System — Frontend (web app)
+# POS System — Frontend (web app) 
 
 The web app of a multi-store point of sale for shops and cafés, in one Vue app:
 
