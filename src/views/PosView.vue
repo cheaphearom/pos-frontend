@@ -7,6 +7,8 @@
  */
 import { localName } from '@/i18n';
 import LangSwitch from '@/components/LangSwitch.vue';
+import TouchKeyboard from '@/components/TouchKeyboard.vue';
+import { useTouchKeyboard } from '@/composables/useTouchKeyboard';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { api, ApiError } from '@/api/client';
@@ -201,6 +203,9 @@ const searchEl = ref<HTMLInputElement | null>(null);
 const results = computed(() => catalog.search(search.value, category.value, 60));
 const selected = ref(-1);
 const focusSearch = () => nextTick(() => searchEl.value?.focus());
+// On-screen keyboard for tills without a keyboard: types into the search box
+const touch = useTouchKeyboard();
+const kbOpen = ref(true);
 
 function onSearchEnter() {
   const raw = search.value.trim();
@@ -790,7 +795,10 @@ async function logout() {
         <div class="search">
           <i class="pi pi-search" />
           <input ref="searchEl" v-model="search" class="search-input" placeholder="Scan barcode or search… (F2)   e.g. 3*8850000001 for 3 pcs"
-            autocomplete="off" @keydown.enter.prevent="onSearchEnter" @keydown.esc="search = ''" />
+            autocomplete="off" :inputmode="touch ? 'none' : undefined" @keydown.enter.prevent="onSearchEnter" @keydown.esc="search = ''" @focus="kbOpen = true" @click="kbOpen = true" />
+          <button v-if="search" type="button" class="search-btn" aria-label="Clear search" @mousedown.prevent @click="search = ''"><i class="pi pi-times" /></button>
+          <button type="button" class="search-btn" :class="{ on: touch }" :aria-label="touch ? 'Turn off the on-screen keyboard' : 'Turn on the on-screen keyboard'"
+            v-tooltip.bottom="'On-screen keyboard'" @mousedown.prevent @click="touch = !touch; kbOpen = true; focusSearch()"><i class="pi pi-th-large" /></button>
           <span v-if="catalog.syncing.value" class="pi pi-spin pi-sync muted" v-tooltip="'Updating products'" />
         </div>
         <div class="cats">
@@ -812,6 +820,7 @@ async function logout() {
             {{ catalog.items.value.length ? 'No matching products' : online ? 'Loading products…' : 'No products saved on this device yet. Connect to the internet once to download them.' }}
           </div>
         </div>
+        <TouchKeyboard v-if="touch && kbOpen" v-model="search" enter-label="Add" class="pos-kb" @enter="search.trim() && onSearchEnter()" @close="kbOpen = false" />
       </section>
 
       <!-- Cart -->
@@ -1119,6 +1128,10 @@ async function logout() {
 .search > .pi-search { color: var(--p-primary-color); font-size: 17px; }
 .search-input { flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 17px; padding: 14px 0; min-width: 0; }
 .search-input::placeholder { color: var(--text-3); }
+.search-btn { border: 0; background: transparent; color: var(--text-3); width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; cursor: pointer; flex: none; }
+.search-btn:hover { background: var(--bg); color: var(--text); }
+.search-btn.on { background: color-mix(in srgb, var(--p-primary-color) 16%, transparent); color: var(--p-primary-color); }
+.pos-kb { flex: none; }
 .cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; flex-shrink: 0; scrollbar-width: none; }
 .chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .1s; }
 .chip:hover { border-color: var(--p-primary-color); }

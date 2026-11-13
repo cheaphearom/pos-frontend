@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useDark } from '@/composables/useDark';
 import LangSwitch from '@/components/LangSwitch.vue';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -62,17 +63,7 @@ const visible = computed(() =>
 );
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to));
 
-const dark = ref(readDark());
-watch(dark, (v) => {
-  document.documentElement.classList.toggle('app-dark', v);
-  try { localStorage.setItem('pos.dark', v ? '1' : '0'); } catch { /* ignore */ }
-}, { immediate: true });
-function readDark() {
-  try {
-    const v = localStorage.getItem('pos.dark');
-    return v ? v === '1' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-  } catch { return false; }
-}
+const dark = useDark();
 
 watch(() => route.path, () => (open.value = false));
 
