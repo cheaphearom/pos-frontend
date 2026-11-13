@@ -41,6 +41,8 @@ export interface Product {
   isActive: boolean;
   price?: string;
   stock?: string;
+  /** with a store: this store sells the product */
+  listed?: boolean;
   isIngredient?: boolean;
 }
 

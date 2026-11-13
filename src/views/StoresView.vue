@@ -12,7 +12,7 @@ const rows = ref<Store[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
 const saving = ref(false);
-const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true, khrOn: true, khrRate: 4100 as number | null, cashOutNeedsApproval: true });
+const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true, khrOn: true, khrRate: 4100 as number | null, cashOutNeedsApproval: true, copyProductsFrom: null as string | null });
 const form = reactive(empty());
 
 async function load() {
@@ -35,7 +35,7 @@ async function save() {
       khrRate: form.khrOn && form.khrRate ? Math.round(form.khrRate) : null, cashOutNeedsApproval: !!form.cashOutNeedsApproval,
     };
     if (form.id) await api.patch(`/stores/${form.id}`, { ...body, isActive: form.isActive });
-    else await api.post('/stores', body);
+    else await api.post('/stores', { ...body, copyProductsFrom: form.copyProductsFrom || undefined });
     notify.success('Store saved', form.name);
     dialog.value = false;
     await Promise.all([load(), app.loadStores()]);
@@ -100,6 +100,10 @@ onMounted(load);
         <div class="form-2">
           <div class="field"><label>Tax rate (%)</label><InputNumber v-model="form.taxPercent" :min="0" :max="100" :max-fraction-digits="2" suffix="%" fluid /></div>
           <div v-if="form.id" class="field"><label>Status</label><label class="row"><ToggleSwitch v-model="form.isActive" /> Active</label></div>
+        </div>
+        <div v-if="!form.id" class="field">
+          <label>Products <span class="hint">(you can change them later on the Products page)</span></label>
+          <Select v-model="form.copyProductsFrom" :options="rows.filter((s) => s.isActive)" :option-label="(s: Store) => `Same products and prices as ${s.code} · ${s.name}`" option-value="id" show-clear placeholder="Every active product, at the normal price" fluid />
         </div>
         <label class="row"><ToggleSwitch v-model="form.hasKitchen" /> Café mode: queue numbers, dine-in / takeaway, barista screen</label>
         <label class="row"><ToggleSwitch v-model="form.onlineOrdering" /> Online ordering (order ahead and table QR codes)</label>
