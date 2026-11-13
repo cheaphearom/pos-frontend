@@ -8,6 +8,9 @@ import type { PaymentProgress } from '@/pos/display';
 import { online } from '@/pos/network';
 import { cardShort, humanize, money } from '@/utils/format';
 import { formatKhr, khrToUsd, splitChange, usdToKhrUp, type ChangeMode } from '@shared/cash';
+import NumPad from '@/components/NumPad.vue';
+import KeyboardToggle from '@/components/KeyboardToggle.vue';
+import { useTouchKeyboard } from '@/composables/useTouchKeyboard';
 
 export interface WalletCardInfo { cardNumber: string; balance: string | number; hasPin: boolean; status: string; customer?: { name: string } | null }
 const props = defineProps<{ amountDue: number; currency: string; busy: boolean; storeId: string; khqrEnabled: boolean; walletCard?: WalletCardInfo | null; voucher?: { code: string; balance: string } | null; khrRate?: number | null }>();
@@ -34,6 +37,9 @@ const amount = ref<number | null>(0);
 const reference = ref('');
 const payments = ref<PayLine[]>([]);
 const input = ref<any>(null);
+/** Touchscreen tills: number pad for the amount, and Windows' own keyboard kept away */
+const touch = useTouchKeyboard();
+const noOsKeyboard = computed(() => (touch.value ? { pcInputText: { root: { inputmode: 'none' } } } : undefined));
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const paid = computed(() => r2(payments.value.reduce((s, p) => s + p.amount, 0)));
@@ -351,12 +357,15 @@ watch(
       <template v-if="!done && !useKhqr && method !== 'WALLET' && method !== 'VOUCHER'">
         <div class="row" style="gap: 10px; align-items: flex-end">
           <div class="field" style="flex: 1">
-            <label>{{ method === 'CASH_KHR' ? 'Riel received' : method === 'CASH' && rate ? 'Dollars received' : `${humanize(method)} amount` }}</label>
-            <InputNumber v-if="method === 'CASH_KHR'" ref="input" v-model="amount" :min="0" :step="100" :max-fraction-digits="0" prefix="៛" fluid input-class="amount-input" @keydown.enter.prevent="add()" />
-            <InputNumber v-else ref="input" v-model="amount" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" fluid input-class="amount-input" @keydown.enter.prevent="add()" />
+            <label class="amount-label">{{ method === 'CASH_KHR' ? 'Riel received' : method === 'CASH' && rate ? 'Dollars received' : `${humanize(method)} amount` }}
+              <KeyboardToggle label="Keypad" /></label>
+            <InputNumber v-if="method === 'CASH_KHR'" ref="input" v-model="amount" :min="0" :step="100" :max-fraction-digits="0" prefix="៛" fluid input-class="amount-input" :pt="noOsKeyboard" @keydown.enter.prevent="add()" />
+            <InputNumber v-else ref="input" v-model="amount" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" fluid input-class="amount-input" :pt="noOsKeyboard" @keydown.enter.prevent="add()" />
           </div>
           <Button :label="payments.length ? 'Add' : 'Pay'" icon="pi pi-check" size="large" :disabled="!!nonCashError || !amount" @click="add()" />
         </div>
+        <NumPad v-if="touch" v-model="amount" :decimals="method === 'CASH_KHR' ? 0 : 2" :enter-label="payments.length ? 'Add' : 'Pay'" class="numpad"
+          @enter="!nonCashError && amount && add()" />
         <div v-if="method === 'CASH'" class="quick">
           <Button v-for="q in quick" :key="q" :label="money(q, currency)" severity="secondary" outlined @click="add(q)" />
         </div>
@@ -412,6 +421,8 @@ watch(
 .method:hover { border-color: var(--p-primary-color); }
 .method i { font-size: 20px; }
 .method.on { border-color: var(--p-primary-color); background: color-mix(in srgb, var(--p-primary-color) 12%, var(--surface)); color: var(--p-primary-color); box-shadow: inset 0 0 0 1px var(--p-primary-color); }
+.numpad { margin-top: 2px; }
+.amount-label { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .quick { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
 .quick :deep(.p-button) { padding: 12px 6px; font-size: 16px; font-weight: 700; }
 .khr-due { font-size: 18px; font-weight: 700; }

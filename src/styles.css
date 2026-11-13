@@ -109,3 +109,14 @@ a { color: var(--p-primary-color); }
 /* Info tags in the brand colour instead of PrimeVue blue */
 .p-tag.p-tag-info { background: color-mix(in srgb, var(--p-primary-color) 14%, transparent); color: var(--p-primary-color); }
 .app-dark .p-tag.p-tag-info { color: #e3c3a3; }
+
+/* POS big mode (cashier's choice): the POS screen and its pop-up windows are zoomed; the screen keeps fitting
+   the window because its size is divided by the zoom. */
+html.pos-big .pos-screen { zoom: var(--pos-zoom, 1); width: calc(100vw / var(--pos-zoom, 1)); }
+html.pos-big .p-dialog { zoom: var(--pos-zoom, 1); max-height: calc(90vh / var(--pos-zoom, 1)); }
+/* Big mode top bar: buttons keep their full label on one line; only the store name shortens; "Online" is a dot */
+html.pos-big .pos-screen .bar .p-button-label { white-space: nowrap; }
+html.pos-big .pos-screen .bar .p-button, html.pos-big .pos-screen .bar .net, html.pos-big .pos-screen .bar .tools { flex-shrink: 0; }
+html.pos-big .pos-screen .bar .title { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+html.pos-big .pos-screen .bar .title b, html.pos-big .pos-screen .bar .who { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.pos-big .pos-screen .bar .net.on { font-size: 0; gap: 0; padding: 6px; }

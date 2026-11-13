@@ -8,6 +8,9 @@
 import { localName } from '@/i18n';
 import LangSwitch from '@/components/LangSwitch.vue';
 import TouchKeyboard from '@/components/TouchKeyboard.vue';
+import NumPad from '@/components/NumPad.vue';
+import KeyboardToggle from '@/components/KeyboardToggle.vue';
+import { BIG_ZOOM, useBigMode } from '@/composables/useBigMode';
 import { useTouchKeyboard } from '@/composables/useTouchKeyboard';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -206,6 +209,15 @@ const focusSearch = () => nextTick(() => searchEl.value?.focus());
 // On-screen keyboard for tills without a keyboard: types into the search box
 const touch = useTouchKeyboard();
 const kbOpen = ref(true);
+// Big mode: the whole POS (and its pop-up windows) larger, still fitting the screen
+const big = useBigMode();
+function applyBig(on: boolean) {
+  const el = document.documentElement;
+  el.classList.toggle('pos-big', on);
+  el.style.setProperty('--pos-zoom', on ? String(BIG_ZOOM) : '1');
+}
+watch(big, applyBig, { immediate: true });
+onBeforeUnmount(() => applyBig(false));
 
 function onSearchEnter() {
   const raw = search.value.trim();
@@ -409,6 +421,13 @@ const shift = ref<any>(readJson(`pos.shift:${app.currentStoreId}`, null));
 const shiftDlg = ref(false);
 const openingCash = ref(0);
 const openingKhr = ref(0);
+/** Touch: which opening amount the number pad types into */
+const shiftField = ref<'usd' | 'khr'>('usd');
+const shiftPadValue = computed<number | null>({
+  get: () => (shiftField.value === 'usd' ? openingCash.value : openingKhr.value),
+  set: (v) => (shiftField.value === 'usd' ? (openingCash.value = v ?? 0) : (openingKhr.value = v ?? 0)),
+});
+const noOsKeyboard = computed(() => (touch.value ? { pcInputText: { root: { inputmode: 'none' } } } : undefined));
 async function loadShift() {
   try {
     shift.value = await api.get('/shifts/current', { storeId: app.currentStoreId });
@@ -783,8 +802,10 @@ async function logout() {
       <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
       </div>
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
-      <Button v-if="shift" class="shift-chip" :label="'Shift since ' + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" severity="secondary" outlined @click="router.push(`/shifts?open=${shift.id}`)" />
+      <Button v-if="shift" class="shift-chip" :label="(big ? '' : 'Shift since ') + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" severity="secondary" outlined @click="router.push(`/shifts?open=${shift.id}`)" />
       <Button v-else label="Open shift" icon="pi pi-play" size="small" @click="shiftDlg = true" :disabled="!online" />
+      <Button :icon="big ? 'pi pi-search-minus' : 'pi pi-search-plus'" :label="big ? 'Normal' : 'Big'" size="small" :severity="big ? undefined : 'secondary'" :outlined="!big"
+        :aria-pressed="big" v-tooltip.bottom="big ? 'Back to the normal size' : 'Make everything bigger'" @click="big = !big" />
       <LangSwitch />
       <Button icon="pi pi-sign-out" text rounded severity="secondary" aria-label="Log out" v-tooltip.bottom="'Log out'" @click="logout" />
     </header>
@@ -797,8 +818,7 @@ async function logout() {
           <input ref="searchEl" v-model="search" class="search-input" placeholder="Scan barcode or search… (F2)   e.g. 3*8850000001 for 3 pcs"
             autocomplete="off" :inputmode="touch ? 'none' : undefined" @keydown.enter.prevent="onSearchEnter" @keydown.esc="search = ''" @focus="kbOpen = true" @click="kbOpen = true" />
           <button v-if="search" type="button" class="search-btn" aria-label="Clear search" @mousedown.prevent @click="search = ''"><i class="pi pi-times" /></button>
-          <button type="button" class="search-btn" :class="{ on: touch }" :aria-label="touch ? 'Turn off the on-screen keyboard' : 'Turn on the on-screen keyboard'"
-            v-tooltip.bottom="'On-screen keyboard'" @mousedown.prevent @click="touch = !touch; kbOpen = true; focusSearch()"><i class="pi pi-th-large" /></button>
+          <KeyboardToggle @changed="kbOpen = true; focusSearch()" />
           <span v-if="catalog.syncing.value" class="pi pi-spin pi-sync muted" v-tooltip="'Updating products'" />
         </div>
         <div class="cats">
@@ -1001,10 +1021,16 @@ async function logout() {
     <!-- Shift -->
     <Dialog v-model:visible="shiftDlg" header="Open your shift" modal :style="{ width: '380px' }">
       <form class="form" @submit.prevent="openShift">
-        <p class="muted" style="margin: 0">Count the cash in the drawer before you start selling.</p>
-        <div class="field"><label>{{ khrRate ? 'Opening cash (dollars)' : 'Opening cash' }}</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus /></div>
-        <div v-if="khrRate" class="field"><label>Opening riel</label><InputNumber v-model="openingKhr" :min="0" :step="100" prefix="៛" fluid /></div>
-        <Button type="submit" label="Open shift" icon="pi pi-play" />
+        <div class="row" style="justify-content: space-between; gap: 10px">
+          <p class="muted" style="margin: 0">Count the cash in the drawer before you start selling.</p>
+          <KeyboardToggle label="Keypad" />
+        </div>
+        <div class="field"><label>{{ khrRate ? 'Opening cash (dollars)' : 'Opening cash' }}</label><InputNumber v-model="openingCash" :min="0" :min-fraction-digits="2" fluid autofocus
+          :pt="noOsKeyboard" :class="{ 'pad-target': touch && shiftField === 'usd' }" @focus="shiftField = 'usd'" @click="shiftField = 'usd'" /></div>
+        <div v-if="khrRate" class="field"><label>Opening riel</label><InputNumber v-model="openingKhr" :min="0" :step="100" prefix="៛" fluid
+          :pt="noOsKeyboard" :class="{ 'pad-target': touch && shiftField === 'khr' }" @focus="shiftField = 'khr'" @click="shiftField = 'khr'" /></div>
+        <NumPad v-if="touch" v-model="shiftPadValue" :decimals="shiftField === 'usd' ? 2 : 0" enter-label="Open" @enter="openShift" />
+        <Button v-if="!touch" type="submit" label="Open shift" icon="pi pi-play" />
       </form>
     </Dialog>
 
@@ -1098,7 +1124,7 @@ async function logout() {
 
 <style scoped>
 .khr-total { font-weight: 700; color: var(--text-2); }
-.pos-screen { height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
+.pos-screen { height: calc(100vh / var(--pos-zoom, 1)); display: flex; flex-direction: column; background: var(--bg); }
 
 /* Top bar */
 .bar { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); position: relative; z-index: 2; }
@@ -1132,6 +1158,7 @@ async function logout() {
 .search-btn:hover { background: var(--bg); color: var(--text); }
 .search-btn.on { background: color-mix(in srgb, var(--p-primary-color) 16%, transparent); color: var(--p-primary-color); }
 .pos-kb { flex: none; }
+.pad-target :deep(input) { border-color: var(--p-primary-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-primary-color) 22%, transparent); }
 .cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; flex-shrink: 0; scrollbar-width: none; }
 .chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .1s; }
 .chip:hover { border-color: var(--p-primary-color); }

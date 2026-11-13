@@ -1,14 +1,12 @@
 import { ref, watch } from 'vue';
 
 /**
- * On-screen keyboard for tills without a keyboard (touchscreen PCs). Turned on or off per device; on by default
- * when the device has only a touchscreen (no mouse).
+ * On-screen keyboard and number pad for tills without a keyboard (touchscreen PCs). The cashier chooses: off
+ * until they tap a "Keyboard" button, then remembered on this till until they turn it off again.
  */
 function read() {
   try {
-    const v = localStorage.getItem('pos.touchKeyboard');
-    if (v) return v === '1';
-    return window.matchMedia('(any-pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine)').matches;
+    return localStorage.getItem('pos.touchKeyboard') === '1';
   } catch {
     return false;
   }

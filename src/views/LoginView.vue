@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import LangSwitch from '@/components/LangSwitch.vue';
 import TouchKeyboard from '@/components/TouchKeyboard.vue';
+import KeyboardToggle from '@/components/KeyboardToggle.vue';
 import { useDark } from '@/composables/useDark';
 import { useTouchKeyboard } from '@/composables/useTouchKeyboard';
 import { computed, nextTick, ref } from 'vue';
@@ -73,8 +74,7 @@ async function submit() {
         <div class="top">
           <div class="logo small"><i class="pi pi-shopping-bag" /></div>
           <div class="tools">
-            <Button :icon="'pi pi-th-large'" :severity="touch ? undefined : 'secondary'" :text="!touch" rounded size="small"
-              :aria-label="touch ? 'Turn off the on-screen keyboard' : 'Turn on the on-screen keyboard'" v-tooltip.bottom="'On-screen keyboard'" @click="touch = !touch; kbOpen = true" />
+            <KeyboardToggle @changed="kbOpen = true" />
             <Button :icon="dark ? 'pi pi-sun' : 'pi pi-moon'" severity="secondary" text rounded size="small" :aria-label="dark ? 'Light mode' : 'Dark mode'" @click="dark = !dark" />
             <LangSwitch />
           </div>
