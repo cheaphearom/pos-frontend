@@ -201,6 +201,8 @@ const itemCount = computed(() => cart.lines.reduce((s, l) => s + (l.unit === 'pc
 // ───────────── Product search / scanning ─────────────
 const search = ref('');
 const category = ref<string | null>(null);
+/** Pictures that did not load (offline, broken link): those tiles show initials instead. */
+const badImg = reactive(new Set<string>());
 const categories = ref<{ id: string; name: string; nameKm?: string | null }[]>(readJson('pos.categories', []));
 const searchEl = ref<HTMLInputElement | null>(null);
 const results = computed(() => catalog.search(search.value, category.value, 60));
@@ -827,7 +829,7 @@ async function logout() {
         </div>
         <div class="tiles">
           <button v-for="p in results" :key="p.id" class="tile" :class="{ out: p.trackStock && Number(p.stock) <= 0 }" :style="{ '--cat': catColor(p.categoryId) }" @click="addProduct(p); focusSearch()">
-            <img v-if="p.imageUrl" :src="p.imageUrl" alt="" class="tile-img" loading="lazy" />
+            <img v-if="p.imageUrl && !badImg.has(p.imageUrl)" :src="p.imageUrl" alt="" class="tile-img" loading="lazy" @error="badImg.add(p.imageUrl!)" />
             <span v-else class="tile-ini" aria-hidden="true" :data-ini="initials(localName(p as any))" />
             <span class="name">{{ localName(p as any) }}<i v-if="p.modifierGroupIds?.length" class="pi pi-sliders-h opt-mark" v-tooltip="'Has options'" /></span>
             <span class="price">{{ m(p.price) }}</span>
@@ -1163,7 +1165,7 @@ async function logout() {
 .chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .1s; }
 .chip:hover { border-color: var(--p-primary-color); }
 .chip.on { background: var(--p-primary-color); border-color: var(--p-primary-color); color: #fff; }
-.tiles { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 10px; align-content: start; padding: 2px; }
+.tiles { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 10px; grid-auto-rows: max-content; align-content: start; padding: 2px; }
 .tile { --cat: #9a8b7f; position: relative; text-align: left; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--cat); border-radius: 14px; padding: 12px; min-height: 128px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; font: inherit; color: var(--text); box-shadow: var(--shadow); transition: border-color .1s, transform .05s, box-shadow .15s; }
 .tile:hover { border-color: var(--cat); box-shadow: 0 4px 14px rgba(60, 35, 15, .12); }
 .tile:active { transform: scale(.97); }
