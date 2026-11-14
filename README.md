@@ -12,7 +12,7 @@ The web app of a multi-store point of sale for shops and cafés, in one Vue app:
 | Part | Technology |
 |---|---|
 | App | **Vue 3**, Vite, Pinia, Vue Router, PrimeVue 4, Chart.js |
-| Hosting | **Vercel** (`vercel.json`, `middleware.ts`) or **Cloudflare Workers** (`wrangler.jsonc`, `worker/index.ts`) |
+| Hosting | your own server with pos-backend (`Dockerfile`, `nginx.conf`), **Vercel** (`vercel.json`, `middleware.ts`) or **Cloudflare Workers** (`wrangler.jsonc`, `worker/index.ts`) |
 | API | the separate **pos-backend** project (NestJS + PostgreSQL + Redis) |
 
 ```
@@ -50,6 +50,13 @@ another API, set `VITE_API_PROXY` in `.env` (see `.env.example`).
 
 Demo logins (password `Password@123`, from the pos-backend demo data): `admin@pos.local`, `manager.pp@pos.local`,
 `cashier1@pos.local`. Cashiers go straight to the POS.
+
+## Deploy on your own server (with pos-backend)
+
+The app can run on the same server as the API, in Docker: `Dockerfile` builds it and serves it with **nginx**, and
+`nginx.conf` forwards `/api`, `/docs` and `/health` to the `api` container (the same job as the Vercel middleware and
+the Cloudflare Worker). Clone this repository next to pos-backend and turn on `docker-compose.web.yml` there: see
+**"Web app on the same server"** in pos-backend's `deploy/README.md`.
 
 ## Deploy to Vercel
 
