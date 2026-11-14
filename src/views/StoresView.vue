@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import QRCode from 'qrcode';
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { api } from '@/api/client';
 import type { Store } from '@/api/types';
 import { useNotify } from '@/composables/useNotify';
@@ -49,7 +49,9 @@ const syncing = ref(false);
 const syncStore = ref<Store | null>(null);
 const syncResult = ref<SyncResult | null>(null);
 const syncError = ref('');
-const sync = reactive({ mode: 'api' as 'api' | 'paste', brownStoreId: '', devKid: remembered('pos.brown.devKid'), accessToken: '', dataEncryption: '', pasted: '' });
+const sync = reactive({ mode: 'api' as 'api' | 'paste', brownStoreId: '', apiUrl: remembered('pos.brown.apiUrl'), username: remembered('pos.brown.username'), devKid: remembered('pos.brown.devKid'), accessToken: '', dataEncryption: '', pasted: '' });
+const defaultUrl = ref('');
+const isAppApi = computed(() => /brown_app_menu_listing/i.test(sync.apiUrl));
 const syncModes = [{ label: 'From the BROWN API', value: 'api' }, { label: 'Paste a response', value: 'paste' }];
 function openSync(s: Store) {
   syncStore.value = s;
@@ -57,6 +59,7 @@ function openSync(s: Store) {
   syncResult.value = null;
   syncError.value = '';
   syncDlg.value = true;
+  if (!defaultUrl.value) api.get<{ menuUrl: string }>('/stores/brown-sync/settings').then((r) => (defaultUrl.value = r.menuUrl)).catch(() => {});
 }
 async function runSync() {
   if (!syncStore.value) return;
@@ -66,8 +69,12 @@ async function runSync() {
   if (sync.mode === 'paste') {
     try { body.response = JSON.parse(sync.pasted); } catch { syncError.value = 'That is not the whole response: it must start with { and end with } (copy it again from Postman).'; return; }
   } else {
-    body = { ...body, devKid: sync.devKid.trim(), accessToken: sync.accessToken.trim(), dataEncryption: sync.dataEncryption.trim() || undefined };
-    try { localStorage.setItem('pos.brown.devKid', sync.devKid.trim()); } catch { /* private window */ }
+    body = { ...body, apiUrl: sync.apiUrl.trim() || undefined, username: isAppApi.value ? sync.username.trim() : undefined, devKid: sync.devKid.trim(), accessToken: sync.accessToken.trim(), dataEncryption: sync.dataEncryption.trim() || undefined };
+    try {
+      localStorage.setItem('pos.brown.devKid', sync.devKid.trim());
+      localStorage.setItem('pos.brown.apiUrl', sync.apiUrl.trim());
+      if (isAppApi.value) localStorage.setItem('pos.brown.username', sync.username.trim());
+    } catch { /* private window */ }
   }
   syncing.value = true;
   try {
@@ -185,6 +192,12 @@ onMounted(load);
         <SelectButton v-model="sync.mode" :options="syncModes" option-label="label" option-value="value" :allow-empty="false" />
         <div class="field"><label>BROWN store id {{ sync.mode === 'api' ? '*' : '' }}</label><InputText v-model="sync.brownStoreId" :required="sync.mode === 'api'" maxlength="50" placeholder="e.g. 820161780837506397" /><span class="hint">Saved on the store for next time</span></div>
         <template v-if="sync.mode === 'api'">
+          <div class="field">
+            <label>API URL <span class="hint">(optional)</span></label>
+            <InputText v-model="sync.apiUrl" type="url" autocomplete="off" class="mono small" :placeholder="defaultUrl ? `Default: ${defaultUrl}` : 'Leave empty for the default address'" />
+            <span class="hint">Leave empty for the default. The POS server calls this address, so the server must be able to reach it. Remembered in this browser.</span>
+          </div>
+          <div v-if="isAppApi" class="field"><label>Username</label><InputText v-model="sync.username" autocomplete="off" /><span class="hint">The BROWN app username used for the access token</span></div>
           <div class="field"><label>dev_kid *</label><InputText v-model="sync.devKid" required inputmode="numeric" autocomplete="off" /></div>
           <div class="field"><label>Access token *</label><Textarea v-model="sync.accessToken" required rows="3" auto-resize spellcheck="false" autocomplete="off" class="mono small" /><span class="hint">user_access_token from the BROWN guest login. It is not saved.</span></div>
           <div class="field"><label>data_encryption <span class="hint">(optional)</span></label><InputText v-model="sync.dataEncryption" autocomplete="off" class="mono small" placeholder="Leave empty: calculated for you every month" /></div>
