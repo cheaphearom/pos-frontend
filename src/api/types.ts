@@ -13,6 +13,8 @@ export interface Me {
 }
 
 export interface Store extends StoreRef {
+  /** This store's id in the BROWN system (used by the menu sync) */
+  externalId?: string | null;
   address?: string | null;
   phone?: string | null;
   currency: string;

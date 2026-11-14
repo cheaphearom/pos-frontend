@@ -12,7 +12,7 @@ const rows = ref<Store[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
 const saving = ref(false);
-const empty = () => ({ id: '', code: '', name: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true, khrOn: true, khrRate: 4100 as number | null, cashOutNeedsApproval: true, copyProductsFrom: null as string | null });
+const empty = () => ({ id: '', code: '', name: '', externalId: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true, khrOn: true, khrRate: 4100 as number | null, cashOutNeedsApproval: true, copyProductsFrom: null as string | null });
 const form = reactive(empty());
 
 async function load() {
@@ -27,7 +27,7 @@ async function save() {
   saving.value = true;
   try {
     const body = {
-      code: form.code.toUpperCase(), name: form.name, address: form.address || undefined, phone: form.phone || undefined,
+      code: form.code.toUpperCase(), name: form.name, externalId: form.externalId.trim() || null, address: form.address || undefined, phone: form.phone || undefined,
       currency: form.currency.toUpperCase(), taxRate: Number((form.taxPercent / 100).toFixed(4)),
       khqrAccountId: form.khqrAccountId || null, khqrMerchantName: form.khqrMerchantName || null, khqrCity: form.khqrCity || null,
       khqrMerchantId: form.khqrMerchantId || null, khqrBank: form.khqrBank || null, hasKitchen: !!form.hasKitchen, onlineOrdering: !!form.onlineOrdering,
@@ -41,6 +41,44 @@ async function save() {
     await Promise.all([load(), app.loadStores()]);
   } catch (e) { notify.error(e); } finally { saving.value = false; }
 }
+// ── Sync the menu from the BROWN system
+interface SyncResult { store: string; items: number; categoriesCreated: number; productsCreated: number; productsUpdated: number; addedToStore: number; storePrices: number }
+const remembered = (k: string) => { try { return localStorage.getItem(k) ?? ''; } catch { return ''; } };
+const syncDlg = ref(false);
+const syncing = ref(false);
+const syncStore = ref<Store | null>(null);
+const syncResult = ref<SyncResult | null>(null);
+const syncError = ref('');
+const sync = reactive({ mode: 'api' as 'api' | 'paste', brownStoreId: '', devKid: remembered('pos.brown.devKid'), accessToken: '', dataEncryption: '', pasted: '' });
+const syncModes = [{ label: 'From the BROWN API', value: 'api' }, { label: 'Paste a response', value: 'paste' }];
+function openSync(s: Store) {
+  syncStore.value = s;
+  Object.assign(sync, { brownStoreId: s.externalId ?? '', accessToken: sync.accessToken, dataEncryption: '', pasted: '' });
+  syncResult.value = null;
+  syncError.value = '';
+  syncDlg.value = true;
+}
+async function runSync() {
+  if (!syncStore.value) return;
+  syncError.value = '';
+  syncResult.value = null;
+  let body: Record<string, unknown> = { brownStoreId: sync.brownStoreId.trim() || undefined };
+  if (sync.mode === 'paste') {
+    try { body.response = JSON.parse(sync.pasted); } catch { syncError.value = 'That is not the whole response: it must start with { and end with } (copy it again from Postman).'; return; }
+  } else {
+    body = { ...body, devKid: sync.devKid.trim(), accessToken: sync.accessToken.trim(), dataEncryption: sync.dataEncryption.trim() || undefined };
+    try { localStorage.setItem('pos.brown.devKid', sync.devKid.trim()); } catch { /* private window */ }
+  }
+  syncing.value = true;
+  try {
+    syncResult.value = await api.post<SyncResult>(`/stores/${syncStore.value.id}/brown-sync`, body);
+    notify.success('Menu synced', `${syncResult.value.store}: ${syncResult.value.items} items`);
+    await load();
+  } catch (e: any) {
+    syncError.value = e?.message ?? String(e);
+  } finally { syncing.value = false; }
+}
+
 // ── Table QR codes (printable)
 const origin = window.location.origin;
 const qrDlg = ref(false);
@@ -83,6 +121,7 @@ onMounted(load);
         <Column header="Riel"><template #body="{ data }"><span v-if="data.khrRate" class="num">{{ Number(data.khrRate).toLocaleString() }}</span><span v-else class="muted">off</span></template></Column>
         <Column header="KHQR"><template #body="{ data }"><span v-if="data.khqrAccountId" class="mono small">{{ data.khqrAccountId }}</span><span v-else class="muted">off</span></template></Column>
         <Column header="Status"><template #body="{ data }"><Tag :value="data.isActive ? 'active' : 'inactive'" :severity="data.isActive ? 'success' : 'secondary'" /></template></Column>
+        <Column header="BROWN menu"><template #body="{ data }"><Button label="Sync" icon="pi pi-sync" size="small" outlined @click.stop="openSync(data)" /></template></Column>
       </DataTable>
     </div>
 
@@ -93,6 +132,7 @@ onMounted(load);
           <div class="field"><label>Name *</label><InputText v-model="form.name" required /></div>
         </div>
         <div class="field"><label>Address</label><InputText v-model="form.address" /></div>
+        <div class="field"><label>BROWN store id</label><InputText v-model="form.externalId" maxlength="50" placeholder="e.g. 820161780837506397" /><span class="hint">This store's id in the BROWN system (idoutlet), used to sync its menu</span></div>
         <div class="form-2">
           <div class="field"><label>Phone</label><InputText v-model="form.phone" /></div>
           <div class="field"><label>Currency</label><InputText v-model="form.currency" maxlength="3" /></div>
@@ -136,6 +176,35 @@ onMounted(load);
         </div>
         <div class="field"><label>Merchant ID <span class="hint">(only for Bakong merchant accounts)</span></label><InputText v-model="form.khqrMerchantId" maxlength="32" /></div>
         <div class="row" style="justify-content: flex-end"><Button type="submit" label="Save" icon="pi pi-check" :loading="saving" /></div>
+      </form>
+    </Dialog>
+
+    <Dialog v-model:visible="syncDlg" :header="`Sync BROWN menu · ${syncStore?.code ?? ''}`" modal :style="{ width: '560px' }" :breakpoints="{ '720px': '95vw' }">
+      <form class="form" @submit.prevent="runSync">
+        <div class="small muted">{{ syncStore?.name }}: items with the same SKU are updated (name, picture, category), new items are created, and every item is sold in this store at the BROWN price.</div>
+        <SelectButton v-model="sync.mode" :options="syncModes" option-label="label" option-value="value" :allow-empty="false" />
+        <div class="field"><label>BROWN store id {{ sync.mode === 'api' ? '*' : '' }}</label><InputText v-model="sync.brownStoreId" :required="sync.mode === 'api'" maxlength="50" placeholder="e.g. 820161780837506397" /><span class="hint">Saved on the store for next time</span></div>
+        <template v-if="sync.mode === 'api'">
+          <div class="field"><label>dev_kid *</label><InputText v-model="sync.devKid" required inputmode="numeric" autocomplete="off" /></div>
+          <div class="field"><label>Access token *</label><Textarea v-model="sync.accessToken" required rows="3" auto-resize spellcheck="false" autocomplete="off" class="mono small" /><span class="hint">user_access_token from the BROWN guest login. It is not saved.</span></div>
+          <div class="field"><label>data_encryption <span class="hint">(optional)</span></label><InputText v-model="sync.dataEncryption" autocomplete="off" class="mono small" placeholder="Leave empty: calculated for you every month" /></div>
+        </template>
+        <div v-else class="field">
+          <label>Menu response *</label>
+          <Textarea v-model="sync.pasted" required rows="8" spellcheck="false" class="mono small" placeholder='Paste the whole Postman response: { "code": 100, "name": "ITEM MENU ...", "result": { "groups": [ ... ] } }' />
+          <span class="hint">Use this when the POS server cannot reach the BROWN API</span>
+        </div>
+        <Message v-if="syncError" severity="error" :closable="false">{{ syncError }}</Message>
+        <Message v-if="syncResult" severity="success" :closable="false">
+          <b>{{ syncResult.items }} items</b> in the {{ syncResult.store }} menu:
+          {{ syncResult.productsCreated }} new, {{ syncResult.productsUpdated }} updated,
+          {{ syncResult.addedToStore }} added to this store, {{ syncResult.categoriesCreated }} new categories,
+          {{ syncResult.storePrices }} with this store's own price.
+        </Message>
+        <div class="row" style="justify-content: flex-end">
+          <Button label="Close" text @click="syncDlg = false" />
+          <Button type="submit" label="Sync" icon="pi pi-sync" :loading="syncing" />
+        </div>
       </form>
     </Dialog>
 
