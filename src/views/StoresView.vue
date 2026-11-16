@@ -51,9 +51,10 @@ const syncing = ref(false);
 const syncStore = ref<Store | null>(null);
 const syncResult = ref<SyncResult | null>(null);
 const syncError = ref('');
-const sync = reactive({ mode: 'api' as 'api' | 'paste', brownStoreId: '', apiUrl: remembered('pos.brown.apiUrl'), username: remembered('pos.brown.username'), devKid: remembered('pos.brown.devKid'), accessToken: '', dataEncryption: '', pasted: '' });
+const sync = reactive({ mode: 'api' as 'api' | 'paste', brownStoreId: '', apiUrl: remembered('pos.brown.apiUrl'), username: remembered('pos.brown.username'), groupIds: remembered('pos.brown.groupIds'), devKid: remembered('pos.brown.devKid'), accessToken: '', dataEncryption: '', pasted: '' });
 const defaultUrl = ref('');
-const isAppApi = computed(() => /_menu_listing/i.test(sync.apiUrl));
+/** The flat API_V16 bodies need the BROWN username; the Client_API ones do not */
+const isAppApi = computed(() => /_menu_listing/i.test(sync.apiUrl) && !/client_api/i.test(sync.apiUrl));
 /** "Sync all stores": every active store with a BROWN store id, in the background */
 const syncAll = ref(false);
 const allJob = ref<SyncAllJob | null>(null);
@@ -109,7 +110,7 @@ async function runSync() {
     syncing.value = true;
     try {
       followAll(await api.post<SyncAllJob>('/stores/brown-sync-all', {
-        apiUrl: sync.apiUrl.trim() || undefined, username: isAppApi.value ? sync.username.trim() : undefined,
+        apiUrl: sync.apiUrl.trim() || undefined, username: isAppApi.value ? sync.username.trim() : undefined, groupIds: sync.groupIds.trim() || undefined,
         devKid: sync.devKid.trim(), accessToken: sync.accessToken.trim(), dataEncryption: sync.dataEncryption.trim() || undefined,
       }));
     } catch (e: any) {
@@ -121,7 +122,7 @@ async function runSync() {
   if (sync.mode === 'paste') {
     try { body.response = JSON.parse(sync.pasted); } catch { syncError.value = 'That is not the whole response: it must start with { and end with } (copy it again from Postman).'; return; }
   } else {
-    body = { ...body, apiUrl: sync.apiUrl.trim() || undefined, username: isAppApi.value ? sync.username.trim() : undefined, devKid: sync.devKid.trim(), accessToken: sync.accessToken.trim(), dataEncryption: sync.dataEncryption.trim() || undefined };
+    body = { ...body, apiUrl: sync.apiUrl.trim() || undefined, username: isAppApi.value ? sync.username.trim() : undefined, groupIds: sync.groupIds.trim() || undefined, devKid: sync.devKid.trim(), accessToken: sync.accessToken.trim(), dataEncryption: sync.dataEncryption.trim() || undefined };
     remember();
   }
   syncing.value = true;
@@ -139,6 +140,7 @@ function remember() {
   try {
     localStorage.setItem('pos.brown.devKid', sync.devKid.trim());
     localStorage.setItem('pos.brown.apiUrl', sync.apiUrl.trim());
+    localStorage.setItem('pos.brown.groupIds', sync.groupIds.trim());
     if (isAppApi.value) localStorage.setItem('pos.brown.username', sync.username.trim());
   } catch { /* private window */ }
 }
@@ -257,6 +259,11 @@ onMounted(load);
             <label>API URL <span class="hint">(optional)</span></label>
             <InputText v-model="sync.apiUrl" type="url" autocomplete="off" class="mono small" :placeholder="defaultUrl ? `Default: ${defaultUrl}` : 'Leave empty for the default address'" />
             <span class="hint">Leave empty for the default. The POS server calls this address, so the server must be able to reach it. Remembered in this browser.</span>
+          </div>
+          <div class="field">
+            <label>BROWN group ids <span class="hint">(optional)</span></label>
+            <InputText v-model="sync.groupIds" autocomplete="off" class="mono small" placeholder="Empty = all groups" />
+            <span class="hint">Sent as group_id. To sync only some groups, list their ids with commas, e.g. 420160070859702031 (Beverages). Remembered in this browser.</span>
           </div>
           <div v-if="isAppApi" class="field"><label>Username</label><InputText v-model="sync.username" autocomplete="off" /><span class="hint">The BROWN app username used for the access token</span></div>
           <div class="field"><label>dev_kid *</label><InputText v-model="sync.devKid" required inputmode="numeric" autocomplete="off" /></div>
