@@ -1,3 +1,4 @@
+import type { OwnOption } from './options';
 import { ref, shallowRef } from 'vue';
 import { api } from '@/api/client';
 import { idb } from './idb';
@@ -18,6 +19,8 @@ export interface CatalogItem {
   imageUrl?: string | null;
   /** Drink option groups (Size, Sugar...) in order */
   modifierGroupIds?: string[];
+  /** This store's own options and prices for the product (sizes, BROWN options) */
+  optionPrices?: OwnOption[];
 }
 
 interface Saved { serverTime: string; products: CatalogItem[] }

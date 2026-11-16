@@ -18,6 +18,7 @@ import { api, ApiError } from '@/api/client';
 import PosPayment, { type PayLine, type WalletCardInfo } from '@/components/pos/PosPayment.vue';
 import { formatKhr, splitChange, usdToKhrUp, type ChangeMode } from '@shared/cash';
 import PosOptions, { type ChosenOption, type OptionGroup } from '@/components/pos/PosOptions.vue';
+import { groupsForProduct } from '@/pos/options';
 import { optionsText } from '@/utils/modifiers';
 import PosReceipt from '@/components/pos/PosReceipt.vue';
 import ManagerApproval from '@/components/ManagerApproval.vue';
@@ -80,9 +81,7 @@ watch(held, (h) => localStorage.setItem(HELD_KEY, JSON.stringify(h)), { deep: tr
 const optionGroups = ref<OptionGroup[]>(readJson('pos.modifiers', []));
 const optProduct = ref<CatalogItem | null>(null);
 const optDlg = ref(false);
-const optGroupsFor = computed(() =>
-  (optProduct.value?.modifierGroupIds ?? []).map((id) => optionGroups.value.find((g) => g.id === id)).filter((g): g is OptionGroup => !!g),
-);
+const optGroupsFor = computed(() => groupsForProduct(optionGroups.value, optProduct.value?.modifierGroupIds, optProduct.value?.optionPrices));
 function onOptionsChosen(e: { modifiers: ChosenOption[]; quantity: number; note: string }) {
   if (optProduct.value) pushLine(optProduct.value, e.quantity, e.modifiers, e.note);
   focusSearch();
