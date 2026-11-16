@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import QRCode from 'qrcode';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { api } from '@/api/client';
 import type { Store } from '@/api/types';
 import { useNotify } from '@/composables/useNotify';
@@ -42,7 +42,9 @@ async function save() {
   } catch (e) { notify.error(e); } finally { saving.value = false; }
 }
 // ── Sync the menu from the BROWN system
-interface SyncResult { store: string; items: number; categoriesCreated: number; productsCreated: number; productsUpdated: number; addedToStore: number; storePrices: number }
+interface SyncResult { store: string; items: number; categoriesCreated: number; productsCreated: number; productsUpdated: number; addedToStore: number; storePrices: number; optionsUpdated?: number }
+interface SyncAllRow { store: string; name: string; ok: boolean; items?: number; productsCreated?: number; productsUpdated?: number; optionsUpdated?: number; error?: string }
+interface SyncAllJob { id: string; running: boolean; total: number; done: number; stopped: string | null; results: SyncAllRow[] }
 const remembered = (k: string) => { try { return localStorage.getItem(k) ?? ''; } catch { return ''; } };
 const syncDlg = ref(false);
 const syncing = ref(false);
@@ -51,10 +53,47 @@ const syncResult = ref<SyncResult | null>(null);
 const syncError = ref('');
 const sync = reactive({ mode: 'api' as 'api' | 'paste', brownStoreId: '', apiUrl: remembered('pos.brown.apiUrl'), username: remembered('pos.brown.username'), devKid: remembered('pos.brown.devKid'), accessToken: '', dataEncryption: '', pasted: '' });
 const defaultUrl = ref('');
-const isAppApi = computed(() => /brown_app_menu_listing/i.test(sync.apiUrl));
+const isAppApi = computed(() => /_menu_listing/i.test(sync.apiUrl));
+/** "Sync all stores": every active store with a BROWN store id, in the background */
+const syncAll = ref(false);
+const allJob = ref<SyncAllJob | null>(null);
+let allTimer: ReturnType<typeof setInterval> | undefined;
+const allOk = computed(() => allJob.value?.results.filter((r) => r.ok).length ?? 0);
+const allFailed = computed(() => allJob.value?.results.filter((r) => !r.ok) ?? []);
+function openSyncAll() {
+  syncAll.value = true;
+  syncStore.value = null;
+  Object.assign(sync, { mode: 'api', dataEncryption: '', pasted: '' });
+  syncResult.value = null;
+  syncError.value = '';
+  syncDlg.value = true;
+  if (!defaultUrl.value) api.get<{ menuUrl: string }>('/stores/brown-sync/settings').then((r) => (defaultUrl.value = r.menuUrl)).catch(() => {});
+}
+function followAll(job: SyncAllJob) {
+  allJob.value = job;
+  clearInterval(allTimer);
+  if (!job.running) return;
+  allTimer = setInterval(async () => {
+    try {
+      const j = await api.get<SyncAllJob>(`/stores/brown-sync-all/${job.id}`);
+      allJob.value = j;
+      if (!j.running) {
+        clearInterval(allTimer);
+        notify.success('All stores synced', `${j.results.filter((r) => r.ok).length} of ${j.total} stores`);
+        load();
+      }
+    } catch (e: any) {
+      clearInterval(allTimer);
+      syncError.value = e?.message ?? String(e);
+    }
+  }, 1000);
+}
+onBeforeUnmount(() => clearInterval(allTimer));
 const syncModes = [{ label: 'From the BROWN API', value: 'api' }, { label: 'Paste a response', value: 'paste' }];
 function openSync(s: Store) {
+  syncAll.value = false;
   syncStore.value = s;
+  sync.mode = 'api';
   Object.assign(sync, { brownStoreId: s.externalId ?? '', accessToken: sync.accessToken, dataEncryption: '', pasted: '' });
   syncResult.value = null;
   syncError.value = '';
@@ -62,28 +101,46 @@ function openSync(s: Store) {
   if (!defaultUrl.value) api.get<{ menuUrl: string }>('/stores/brown-sync/settings').then((r) => (defaultUrl.value = r.menuUrl)).catch(() => {});
 }
 async function runSync() {
-  if (!syncStore.value) return;
+  if (!syncStore.value && !syncAll.value) return;
   syncError.value = '';
   syncResult.value = null;
+  if (syncAll.value) {
+    remember();
+    syncing.value = true;
+    try {
+      followAll(await api.post<SyncAllJob>('/stores/brown-sync-all', {
+        apiUrl: sync.apiUrl.trim() || undefined, username: isAppApi.value ? sync.username.trim() : undefined,
+        devKid: sync.devKid.trim(), accessToken: sync.accessToken.trim(), dataEncryption: sync.dataEncryption.trim() || undefined,
+      }));
+    } catch (e: any) {
+      syncError.value = e?.message ?? String(e);
+    } finally { syncing.value = false; }
+    return;
+  }
   let body: Record<string, unknown> = { brownStoreId: sync.brownStoreId.trim() || undefined };
   if (sync.mode === 'paste') {
     try { body.response = JSON.parse(sync.pasted); } catch { syncError.value = 'That is not the whole response: it must start with { and end with } (copy it again from Postman).'; return; }
   } else {
     body = { ...body, apiUrl: sync.apiUrl.trim() || undefined, username: isAppApi.value ? sync.username.trim() : undefined, devKid: sync.devKid.trim(), accessToken: sync.accessToken.trim(), dataEncryption: sync.dataEncryption.trim() || undefined };
-    try {
-      localStorage.setItem('pos.brown.devKid', sync.devKid.trim());
-      localStorage.setItem('pos.brown.apiUrl', sync.apiUrl.trim());
-      if (isAppApi.value) localStorage.setItem('pos.brown.username', sync.username.trim());
-    } catch { /* private window */ }
+    remember();
   }
   syncing.value = true;
   try {
-    syncResult.value = await api.post<SyncResult>(`/stores/${syncStore.value.id}/brown-sync`, body);
+    syncResult.value = await api.post<SyncResult>(`/stores/${syncStore.value!.id}/brown-sync`, body);
     notify.success('Menu synced', `${syncResult.value.store}: ${syncResult.value.items} items`);
     await load();
   } catch (e: any) {
     syncError.value = e?.message ?? String(e);
   } finally { syncing.value = false; }
+}
+
+/** The browser remembers the address, dev_kid and username (never the token) */
+function remember() {
+  try {
+    localStorage.setItem('pos.brown.devKid', sync.devKid.trim());
+    localStorage.setItem('pos.brown.apiUrl', sync.apiUrl.trim());
+    if (isAppApi.value) localStorage.setItem('pos.brown.username', sync.username.trim());
+  } catch { /* private window */ }
 }
 
 // ── Table QR codes (printable)
@@ -113,7 +170,10 @@ onMounted(load);
   <div class="page">
     <div class="page-head">
       <div><h1>Stores</h1><div class="sub">Branches, their tax rate and currency</div></div>
-      <div class="actions"><Button label="New store" icon="pi pi-plus" @click="open()" /></div>
+      <div class="actions">
+        <Button :label="allJob?.running ? `Syncing ${allJob.done} of ${allJob.total}…` : 'Sync all stores'" icon="pi pi-sync" outlined :loading="allJob?.running" @click="openSyncAll" />
+        <Button label="New store" icon="pi pi-plus" @click="open()" />
+      </div>
     </div>
     <div class="card">
       <DataTable :value="rows" :loading="loading" size="small" row-hover @row-click="open($event.data)" :row-class="() => 'clickable'">
@@ -186,11 +246,12 @@ onMounted(load);
       </form>
     </Dialog>
 
-    <Dialog v-model:visible="syncDlg" :header="`Sync BROWN menu · ${syncStore?.code ?? ''}`" modal :style="{ width: '560px' }" :breakpoints="{ '720px': '95vw' }">
+    <Dialog v-model:visible="syncDlg" :header="syncAll ? 'Sync BROWN menu · all stores' : `Sync BROWN menu · ${syncStore?.code ?? ''}`" modal :style="{ width: '560px' }" :breakpoints="{ '720px': '95vw' }">
       <form class="form" @submit.prevent="runSync">
-        <div class="small muted">{{ syncStore?.name }}: items with the same SKU are updated (name, picture, category), new items are created, and every item is sold in this store at the BROWN price.</div>
-        <SelectButton v-model="sync.mode" :options="syncModes" option-label="label" option-value="value" :allow-empty="false" />
-        <div class="field"><label>BROWN store id {{ sync.mode === 'api' ? '*' : '' }}</label><InputText v-model="sync.brownStoreId" :required="sync.mode === 'api'" maxlength="50" placeholder="e.g. 820161780837506397" /><span class="hint">Saved on the store for next time</span></div>
+        <div v-if="syncAll" class="small muted">Every active store with a BROWN store id ({{ rows.filter((r) => r.isActive && r.externalId).length }} stores), one after the other. Items with the same SKU are updated, new items are created, and each store gets its own prices, sizes and options. A store that fails does not stop the others.</div>
+        <div v-else class="small muted">{{ syncStore?.name }}: items with the same SKU are updated (name, picture, category), new items are created, and every item is sold in this store at the BROWN price, with its sizes and options.</div>
+        <SelectButton v-if="!syncAll" v-model="sync.mode" :options="syncModes" option-label="label" option-value="value" :allow-empty="false" />
+        <div v-if="!syncAll" class="field"><label>BROWN store id {{ sync.mode === 'api' ? '*' : '' }}</label><InputText v-model="sync.brownStoreId" :required="sync.mode === 'api'" maxlength="50" placeholder="e.g. 820161780837506397" /><span class="hint">Saved on the store for next time</span></div>
         <template v-if="sync.mode === 'api'">
           <div class="field">
             <label>API URL <span class="hint">(optional)</span></label>
@@ -212,11 +273,27 @@ onMounted(load);
           <b>{{ syncResult.items }} items</b> in the {{ syncResult.store }} menu:
           {{ syncResult.productsCreated }} new, {{ syncResult.productsUpdated }} updated,
           {{ syncResult.addedToStore }} added to this store, {{ syncResult.categoriesCreated }} new categories,
-          {{ syncResult.storePrices }} with this store's own price.
+          {{ syncResult.storePrices }} with this store's own price<template v-if="syncResult.optionsUpdated != null">, {{ syncResult.optionsUpdated }} with new sizes or options</template>.
         </Message>
+        <div v-if="syncAll && allJob" class="all-progress">
+          <div class="row" style="justify-content: space-between">
+            <b>{{ allJob.running ? `Syncing ${allJob.done} of ${allJob.total} stores…` : `Done: ${allOk} of ${allJob.total} stores synced` }}</b>
+            <span v-if="allFailed.length" class="bad">{{ allFailed.length }} failed</span>
+          </div>
+          <div class="bar"><span :style="{ width: `${allJob.total ? (allJob.done / allJob.total) * 100 : 0}%` }" /></div>
+          <Message v-if="allJob.stopped" severity="warn" :closable="false">{{ allJob.stopped }}</Message>
+          <div class="all-list">
+            <div v-for="r in [...allJob.results].reverse()" :key="r.store" class="all-row" :class="{ bad: !r.ok }">
+              <i :class="r.ok ? 'pi pi-check' : 'pi pi-times'" />
+              <b class="mono">{{ r.store }}</b>
+              <span v-if="r.ok" class="muted">{{ r.items }} items · {{ r.productsCreated }} new · {{ r.productsUpdated }} updated · {{ r.optionsUpdated }} with new sizes/options</span>
+              <span v-else>{{ r.error }}</span>
+            </div>
+          </div>
+        </div>
         <div class="row" style="justify-content: flex-end">
           <Button label="Close" text @click="syncDlg = false" />
-          <Button type="submit" label="Sync" icon="pi pi-sync" :loading="syncing" />
+          <Button type="submit" :label="syncAll ? 'Sync all stores' : 'Sync'" icon="pi pi-sync" :loading="syncing || !!(syncAll && allJob?.running)" />
         </div>
       </form>
     </Dialog>
@@ -240,6 +317,15 @@ onMounted(load);
 </template>
 
 <style>
+.all-progress { display: grid; gap: 8px; }
+.all-progress .bar { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.all-progress .bar span { display: block; height: 100%; background: var(--p-primary-color); transition: width .3s; }
+.all-progress .bad { color: var(--bad); }
+.all-list { max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+.all-row { display: grid; grid-template-columns: 18px 56px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 6px 10px; font-size: 13px; border-top: 1px solid var(--border); }
+.all-row:first-child { border-top: 0; }
+.all-row .pi-check { color: var(--good, #16a34a); }
+.all-row.bad .pi-times, .all-row.bad span { color: var(--bad); }
 .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 .qr-card { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; text-align: center; display: grid; gap: 6px; justify-items: center; break-inside: avoid; }
 .qr-card img { width: 160px; height: 160px; }

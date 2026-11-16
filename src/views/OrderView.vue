@@ -5,6 +5,7 @@ import LangSwitch from '@/components/LangSwitch.vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PosOptions, { type ChosenOption, type OptionGroup } from '@/components/pos/PosOptions.vue';
+import { groupsForProduct } from '@/pos/options';
 import { mem, memberSession } from '@/online/memberApi';
 import { myOrders, pub } from '@/online/publicApi';
 import { optionsText } from '@/utils/modifiers';
@@ -51,7 +52,7 @@ const estimate = computed(() => cart.value.reduce((s, l) => s + l.unitPrice * l.
 // Options sheet (same component as the POS)
 const optDlg = ref(false);
 const optProduct = ref<any>(null);
-const optGroups = computed<OptionGroup[]>(() => (optProduct.value?.modifierGroupIds ?? []).map((id: string) => menu.value.groups.find((g: any) => g.id === id)).filter(Boolean));
+const optGroups = computed<OptionGroup[]>(() => groupsForProduct(menu.value.groups, optProduct.value?.modifierGroupIds, optProduct.value?.optionPrices));
 function tap(p: any) {
   if (p.soldOut) return;
   if (p.modifierGroupIds.length) {
