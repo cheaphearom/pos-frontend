@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { printElement } from '@/utils/print';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { api } from '@/api/client';
@@ -75,9 +76,7 @@ function doVoid() {
 }
 
 function printReceipt() {
-  document.body.classList.add('printing-receipt');
-  window.print();
-  setTimeout(() => document.body.classList.remove('printing-receipt'), 500);
+  printElement(document.querySelector('.receipt'));
 }
 
 // ── Refund

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** End of day: preview today's Z report, run it once all shifts are closed, reprint past ones. */
+import { printElement } from '@/utils/print';
 import { computed, onMounted, ref, watch } from 'vue';
 import { api } from '@/api/client';
 import RegisterReport from '@/components/RegisterReport.vue';
@@ -46,9 +47,7 @@ function showPreview() {
   dlg.value = true;
 }
 function print() {
-  document.body.classList.add('printing-report');
-  window.print();
-  setTimeout(() => document.body.classList.remove('printing-report'), 500);
+  printElement(document.querySelector('.reg-report'));
 }
 watch(() => app.currentStoreId, (id) => { list.filters.storeId = id; loadPreview(); });
 watch(day, loadPreview);
