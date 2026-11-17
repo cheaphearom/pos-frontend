@@ -103,8 +103,9 @@ onMounted(load);
 </template>
 
 <style scoped>
-.group { display: grid; gap: 8px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.group { display: grid; gap: 8px; align-content: start; } /* a short card next to a tall one keeps its content at the top */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; align-content: flex-start; }
 .chip { border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+.chip b { margin-left: 4px; }
 .chip.def { border-color: var(--p-primary-color); color: var(--p-primary-color); }
 </style>
