@@ -39,30 +39,19 @@ const storesChanged = (r: StoreRow) => !r.was || r.was.sells !== r.sells || r.wa
 
 // ── Drinks with sizes: the full price of each size (S / M / L) in each store
 const sizes = ref<{ id: string; name: string }[]>([]);
-const allSizes = reactive<Record<string, number | null>>({});
 const sized = computed(() => sizes.value.length > 0 && !form.isIngredient);
 function initSizes(sp: { sizes: { id: string; name: string }[]; stores: { storeId: string; prices: Record<string, number | null> }[] } | null) {
   sizes.value = sp?.sizes ?? [];
-  for (const k of Object.keys(allSizes)) delete allSizes[k];
-  for (const o of sizes.value) allSizes[o.id] = null;
   for (const r of storeRows.value) {
     const own = sp?.stores.find((x) => x.storeId === r.storeId)?.prices;
     r.sizes = Object.fromEntries(sizes.value.map((o) => [o.id, own?.[o.id] ?? null]));
     r.wasSizes = JSON.stringify(r.sizes);
   }
 }
-/** "All stores" row: copy its prices into every ticked store */
-function applyAllSizes() {
-  const given = sizes.value.filter((o) => allSizes[o.id] !== null);
-  if (!given.length) return notify.error('Enter at least one price in the "All stores" row');
-  for (const r of storeRows.value.filter((x) => x.sells)) for (const o of given) r.sizes![o.id] = allSizes[o.id];
-}
 const sizesChanged = (r: StoreRow) => r.sells && JSON.stringify(r.sizes) !== r.wasSizes;
 
-/** Edit product shows the store chosen at the top; "Show all stores" opens the full list */
-const allStores = ref(false);
-const shownRows = computed(() => (allStores.value || !app.currentStoreId ? storeRows.value : storeRows.value.filter((r) => r.storeId === app.currentStoreId)));
-const oneStore = computed(() => !allStores.value && !!app.currentStoreId);
+/** The store chosen at the top of the admin portal */
+const hereRow = computed(() => storeRows.value.find((r) => r.storeId === app.currentStoreId) ?? null);
 
 /** Turn "sold in this store" on or off from the list (super admin, or this store's manager). */
 async function toggleListed(p: Product, on: boolean) {
@@ -93,13 +82,11 @@ function openNew(ingredient = false) {
   Object.assign(pack, { size: null, price: null });
   initStores([], true);
   sizes.value = [];
-  allStores.value = false;
   dialog.value = true;
 }
 async function edit(p: Product) {
   storeRows.value = [];
   sizes.value = [];
-  allStores.value = false;
   loadingStores.value = true;
   Promise.all([api.get<any>(`/products/${p.id}`), api.get<any>(`/products/${p.id}/size-prices`).catch(() => null)])
     .then(([d, sp]) => { initStores(d.inventory ?? [], false); initSizes(sp); })
@@ -249,6 +236,21 @@ onMounted(async () => {
             <div class="row"><InputNumber v-model="pack.size" placeholder="Pack size" :min="0" fluid /><InputNumber v-model="pack.price" placeholder="Pack price" :min="0" :min-fraction-digits="2" fluid /></div>
           </div>
         </div>
+        <!-- Drinks with sizes: the full price of each size in the store chosen at the top -->
+        <div v-if="sized && hereRow" class="field">
+          <label>Size prices in {{ app.currentStore?.code }} {{ app.currentStore?.name }} <span class="hint">(full price; empty = not offered)</span></label>
+          <div class="size-fields">
+            <div v-for="o in sizes" :key="o.id" class="size-f">
+              <span class="size-h">{{ o.name }}</span>
+              <InputNumber v-model="hereRow.sizes![o.id]" placeholder="—" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" fluid />
+            </div>
+          </div>
+        </div>
+        <!-- No sizes: the Selling price above is the price; a store's own price (e.g. from BROWN) can be removed -->
+        <p v-if="!sized && !form.isIngredient && hereRow && hereRow.price !== null" class="own-price">
+          {{ app.currentStore?.code }} sells it at its own price <b>{{ money(hereRow.price, cur) }}</b>.
+          <Button label="Use the selling price" size="small" text @click="hereRow.price = null" />
+        </p>
         <div class="field"><label>Description</label><Textarea v-model="form.description" rows="2" auto-resize /></div>
         <div v-if="!form.isIngredient" class="field">
           <label>Drink options <span class="hint">(customer chooses at the POS, in this order)</span></label>
@@ -262,34 +264,6 @@ onMounted(async () => {
           <label v-if="!form.isIngredient" class="row"><ToggleSwitch v-model="form.onlineAvailable" /> Sell online</label>
           <label v-if="!form.isIngredient" class="row"><ToggleSwitch v-model="form.madeInHouse" /> Made here (bakery)</label>
           <label v-if="form.id" class="row"><ToggleSwitch v-model="form.isActive" /> Active (for sale)</label>
-        </div>
-        <div class="field">
-          <div class="store-head">
-          <label v-if="sized && oneStore">Size prices in {{ app.currentStore?.code }} {{ app.currentStore?.name }} <span class="hint">(full price of each size; empty = not offered)</span></label>
-          <label v-else-if="sized">Stores and size prices <span class="hint">(full price of each size; empty = the store does not offer that size)</span></label>
-          <label v-else-if="oneStore">Price in {{ app.currentStore?.code }} {{ app.currentStore?.name }} <span class="hint">({{ form.isIngredient ? 'tick if this store keeps it in stock' : 'empty = ' + money(form.sellPrice, cur) }})</span></label>
-          <label v-else>Stores <span class="hint">({{ form.isIngredient ? 'stores that keep it in stock' : 'stores that sell it; own price empty = ' + money(form.sellPrice, cur) }})</span></label>
-          <Button v-if="app.currentStoreId && storeRows.length > 1" class="store-switch" :label="allStores ? `Only ${app.currentStore?.code}` : `Show all stores (${storeRows.length})`" :icon="allStores ? 'pi pi-minus' : 'pi pi-list'" size="small" text @click="allStores = !allStores" />
-          </div>
-          <div v-if="loadingStores" class="muted small">Loading stores…</div>
-          <div v-else-if="sized" class="stores sized" :style="{ '--n': sizes.length }">
-            <div class="size-row head"><span>Store</span><span v-for="o in sizes" :key="o.id" class="size-h">{{ o.name }}</span></div>
-            <div v-if="!oneStore" class="size-row all">
-              <span class="row"><b>All stores</b> <Button label="Apply" size="small" text icon="pi pi-arrow-down" @click="applyAllSizes" v-tooltip="'Copy these prices to every ticked store'" /></span>
-              <InputNumber v-for="o in sizes" :key="o.id" v-model="allSizes[o.id]" :placeholder="o.name" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" input-class="size-in" />
-            </div>
-            <div v-for="r in shownRows" :key="r.storeId" class="size-row">
-              <label class="row store-l"><Checkbox v-model="r.sells" binary /> <b>{{ r.code }}</b> <span class="muted small ell">{{ r.name }}</span></label>
-              <InputNumber v-for="o in sizes" :key="o.id" v-model="r.sizes![o.id]" :disabled="!r.sells" placeholder="—" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" input-class="size-in" />
-            </div>
-            <p class="hint" style="margin: 4px 0 0">BROWN items: the next BROWN sync sets these prices again from BROWN.</p>
-          </div>
-          <div v-else class="stores">
-            <div v-for="r in shownRows" :key="r.storeId" class="store-row">
-              <label class="row"><Checkbox v-model="r.sells" binary /> <b>{{ r.code }}</b> <span class="muted small">{{ r.name }}</span></label>
-              <InputNumber v-if="!form.isIngredient" v-model="r.price" :disabled="!r.sells" placeholder="Normal price" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" input-class="price-in" />
-            </div>
-          </div>
         </div>
         <div v-if="form.madeInHouse && !form.isIngredient" class="grid2 bake">
           <div class="field"><label>Pieces per batch <span class="hint">(the recipe is for one batch)</span></label><InputNumber v-model="form.batchYield" :min="0.001" :max-fraction-digits="3" fluid /></div>
@@ -307,17 +281,8 @@ onMounted(async () => {
 
 <style scoped>
 .bake { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; border-radius: 10px; background: var(--bg); }
-.stores { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: var(--bg); }
-.store-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.store-row :deep(.price-in) { width: 130px; text-align: right; }
-.store-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.store-head > label { flex: 1 1 260px; min-width: 0; }
-.store-switch { flex-shrink: 0; margin: -6px 0; }
-.size-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(var(--n), 84px); align-items: center; gap: 8px; }
-.size-row.head { font-size: .8rem; font-weight: 700; color: var(--muted, #8a7a6e); }
-.size-row.all { padding-bottom: 8px; margin-bottom: 2px; border-bottom: 1px dashed var(--border); }
-.size-h { text-align: right; padding-right: 10px; }
-.size-row :deep(.size-in) { width: 84px; text-align: right; }
-.store-l { min-width: 0; }
-.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.size-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.size-f { display: flex; flex-direction: column; gap: 4px; }
+.size-f .size-h { font-size: .8rem; font-weight: 700; }
+.own-price { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--bg); font-size: .9rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 </style>
