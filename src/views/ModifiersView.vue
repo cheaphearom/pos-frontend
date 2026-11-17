@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useConfirm } from 'primevue/useconfirm';
 import { api } from '@/api/client';
 import { useNotify } from '@/composables/useNotify';
 import { useAuth } from '@/stores/auth';
 import { money } from '@/utils/format';
+import { initials, nameColor } from '@/utils/colors';
 
 const auth = useAuth();
 const notify = useNotify();
@@ -15,6 +16,13 @@ async function load() {
   loading.value = true;
   try { groups.value = (await api.get('/modifiers')).filter((g: any) => g.isActive); } catch (e) { notify.error(e); } finally { loading.value = false; }
 }
+
+const q = ref('');
+const shown = computed(() => {
+  const s = q.value.trim().toLowerCase();
+  return s ? groups.value.filter((g) => g.name.toLowerCase().includes(s) || g.options.some((o: any) => o.name.toLowerCase().includes(s))) : groups.value;
+});
+const totalOptions = computed(() => groups.value.reduce((n, g) => n + g.options.length, 0));
 
 const dlg = ref(false);
 const saving = ref(false);
@@ -54,30 +62,40 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="page" style="max-width: 1000px">
+  <div class="page">
     <div class="page-head">
-      <div><h1>Drink options</h1><div class="sub">Size, sugar, ice, milk, extras… Attach them to drinks on the Products page.</div></div>
-      <div class="actions"><Button v-if="auth.isAdmin" label="New option group" icon="pi pi-plus" @click="open()" /></div>
+      <div><h1>Drink options</h1><div class="sub"><b>{{ groups.length }}</b> option groups · <b>{{ totalOptions }}</b> options · attach them to drinks on the Products page</div></div>
+      <div class="actions">
+        <IconField><InputIcon class="pi pi-search" /><InputText v-model="q" placeholder="Search options" /></IconField>
+        <Button v-if="auth.isAdmin" label="New option group" icon="pi pi-plus" @click="open()" />
+      </div>
     </div>
-    <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(290px, 1fr))">
-      <div v-for="g in groups" :key="g.id" class="card group">
-        <div class="row" style="justify-content: space-between">
-          <h3 style="margin: 0">{{ g.name }}</h3>
-          <div v-if="auth.isAdmin" class="row">
+    <div v-if="loading && !groups.length" class="muted">Loading…</div>
+    <div v-else-if="!shown.length" class="card muted">{{ q ? 'Nothing matches your search.' : 'No option groups yet.' }}</div>
+    <div class="og-grid">
+      <article v-for="g in shown" :key="g.id" class="og-card" :style="{ '--c': nameColor(g.name) }">
+        <header>
+          <span class="ico">{{ initials(g.name) }}</span>
+          <div class="t">
+            <h3>{{ g.name }}</h3>
+            <div class="badges">
+              <span class="b" :class="{ req: g.minSelect }">{{ g.minSelect ? 'Required' : 'Optional' }}</span>
+              <span class="b">{{ g.maxSelect > 1 ? `up to ${g.maxSelect}` : 'choose one' }}</span>
+            </div>
+          </div>
+          <div v-if="auth.isAdmin" class="acts">
             <Button icon="pi pi-pencil" text rounded size="small" aria-label="Edit" @click="open(g)" />
             <Button icon="pi pi-trash" text rounded size="small" severity="danger" aria-label="Delete" @click="remove(g)" />
           </div>
-        </div>
-        <div class="small muted">{{ g.minSelect ? 'Required' : 'Optional' }} · {{ g.maxSelect > 1 ? `up to ${g.maxSelect}` : 'choose one' }} · on {{ g._count.products }} item(s)</div>
+        </header>
+        <div class="big"><b>{{ g._count.products }}</b> {{ g._count.products === 1 ? 'drink' : 'drinks' }} · {{ g.options.length }} {{ g.options.length === 1 ? 'option' : 'options' }}</div>
         <div class="chips">
-          <span v-for="o in g.options" :key="o.id" class="chip" :class="{ def: o.isDefault }">
-            {{ o.name }}<b v-if="Number(o.priceDelta)"> {{ Number(o.priceDelta) > 0 ? '+' : '' }}{{ money(o.priceDelta) }}</b>
+          <span v-for="o in g.options" :key="o.id" class="chip" :class="{ def: o.isDefault }" v-tooltip.top="o.isDefault ? 'Chosen by default' : undefined">
+            {{ o.name }}<b v-if="Number(o.priceDelta)" class="pd">{{ Number(o.priceDelta) > 0 ? '+' : '' }}{{ money(o.priceDelta) }}</b>
           </span>
         </div>
-      </div>
-      <div v-if="!groups.length && !loading" class="muted">No option groups yet.</div>
+      </article>
     </div>
-
     <Dialog v-model:visible="dlg" :header="form.id ? 'Edit option group' : 'New option group'" modal :style="{ width: '560px' }" :breakpoints="{ '600px': '98vw' }">
       <form class="form" @submit.prevent="save">
         <div class="field"><label>Name *</label><InputText v-model="form.name" required maxlength="60" placeholder="e.g. Size, Sugar, Toppings" /></div>
@@ -103,9 +121,26 @@ onMounted(load);
 </template>
 
 <style scoped>
-.group { display: grid; gap: 8px; align-content: start; } /* a short card next to a tall one keeps its content at the top */
-.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; align-content: flex-start; }
-.chip { border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
-.chip b { margin-left: 4px; }
-.chip.def { border-color: var(--p-primary-color); color: var(--p-primary-color); }
+.og-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.og-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; overflow: hidden; transition: transform .15s ease, box-shadow .15s ease; }
+.og-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--c); }
+.og-card:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(60, 35, 15, .12); }
+.og-card header { display: flex; align-items: center; gap: 12px; }
+.ico { flex-shrink: 0; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; color: #fff; background: var(--c); box-shadow: 0 4px 12px color-mix(in srgb, var(--c) 35%, transparent); }
+.t { min-width: 0; flex: 1; }
+.t h3 { margin: 0 0 4px; font-size: 1.05rem; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.b { font-size: .72rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--bg); color: var(--text-2); }
+.b.req { background: color-mix(in srgb, var(--c) 15%, transparent); color: var(--c); }
+.acts { display: flex; opacity: 0; transition: opacity .15s; }
+.og-card:hover .acts, .acts:focus-within { opacity: 1; }
+.big { margin: 12px 0 10px; color: var(--text-2); font-size: .9rem; }
+.big b { font-size: 1.5rem; font-weight: 800; color: var(--text); margin-right: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; align-content: flex-start; padding-top: 10px; border-top: 1px solid var(--border); }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 13px; background: var(--surface); }
+.chip.def { background: var(--c); border-color: var(--c); color: #fff; }
+.pd { font-size: 11.5px; font-weight: 800; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); }
+.chip.def .pd { background: rgba(255, 255, 255, .25); color: #fff; }
+@media (hover: none) { .acts { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .og-card, .og-card:hover { transition: none; transform: none; } }
 </style>

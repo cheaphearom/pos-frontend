@@ -47,6 +47,9 @@ a { color: var(--p-primary-color); }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .card h3 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
 .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+/* filter buttons never make the page wider than the screen: they scroll in their own row */
+.toolbar .p-selectbutton { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+.toolbar .p-selectbutton .p-togglebutton { flex-shrink: 0; white-space: nowrap; }
 .grid { display: grid; gap: 16px; }
 .grid-2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
 .grid-4 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
