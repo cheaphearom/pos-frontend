@@ -14,6 +14,15 @@ const form = reactive({ id: '', name: '', nameKm: '', parentId: null as string |
 
 const nameOf = (id: string | null) => rows.value.find((c) => c.id === id)?.name ?? '—';
 const parents = computed(() => rows.value.filter((c) => c.id !== form.id));
+/** Groups first, each followed by its categories (Beverages, then Hot Drinks, Tea...) */
+const tree = computed(() => {
+  const known = new Set(rows.value.map((c) => c.id));
+  const kids = (id: string) => rows.value.filter((c) => c.parentId === id);
+  const out: (Category & { depth: number })[] = [];
+  const walk = (c: Category, depth: number) => { out.push({ ...c, depth }); if (depth < 5) kids(c.id).forEach((k) => walk(k, depth + 1)); };
+  rows.value.filter((c) => !c.parentId || !known.has(c.parentId)).forEach((c) => walk(c, 0));
+  return out;
+});
 
 async function load() {
   loading.value = true;
@@ -48,14 +57,14 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="page" style="max-width: 900px">
+  <div class="page">
     <div class="page-head">
       <h1>Categories</h1>
       <div class="actions"><Button label="New category" icon="pi pi-plus" @click="open()" /></div>
     </div>
     <div class="card">
-      <DataTable :value="rows" :loading="loading" size="small">
-        <Column header="Name"><template #body="{ data }">{{ data.name }} <span v-if="data.nameKm" class="muted">· {{ data.nameKm }}</span></template></Column>
+      <DataTable :value="tree" :loading="loading" size="small">
+        <Column header="Name"><template #body="{ data }"><span :class="{ sub: data.depth }" :style="{ paddingLeft: data.depth * 22 + 'px' }"><i v-if="data.depth" class="pi pi-angle-right muted" /> <b v-if="!data.depth && tree.some((x) => x.parentId === data.id)">{{ data.name }}</b><template v-else>{{ data.name }}</template></span> <span v-if="data.nameKm" class="muted">· {{ data.nameKm }}</span></template></Column>
         <Column header="Parent"><template #body="{ data }">{{ nameOf(data.parentId) }}</template></Column>
         <Column header="Products" class="right"><template #body="{ data }">{{ data._count?.products ?? 0 }}</template></Column>
         <Column class="right" style="width: 110px">
