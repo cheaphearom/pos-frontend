@@ -236,6 +236,21 @@ onMounted(async () => {
             <div class="row"><InputNumber v-model="pack.size" placeholder="Pack size" :min="0" fluid /><InputNumber v-model="pack.price" placeholder="Pack price" :min="0" :min-fraction-digits="2" fluid /></div>
           </div>
         </div>
+        <!-- Drinks with sizes: the full price of each size in the store chosen at the top -->
+        <div v-if="sized && hereRow" class="field">
+          <label>Size prices in {{ app.currentStore?.code }} {{ app.currentStore?.name }} <span class="hint">(full price; empty = not offered)</span></label>
+          <div class="size-fields">
+            <div v-for="o in sizes" :key="o.id" class="size-f">
+              <span class="size-h">{{ o.name }}</span>
+              <InputNumber v-model="hereRow.sizes![o.id]" placeholder="—" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" fluid />
+            </div>
+          </div>
+        </div>
+        <!-- No sizes: the Selling price above is the price; a store's own price (e.g. from BROWN) can be removed -->
+        <p v-if="!sized && !form.isIngredient && hereRow && hereRow.price !== null" class="own-price">
+          {{ app.currentStore?.code }} sells it at its own price <b>{{ money(hereRow.price, cur) }}</b>.
+          <Button label="Use the selling price" size="small" text @click="hereRow.price = null" />
+        </p>
         <div class="field"><label>Description</label><Textarea v-model="form.description" rows="2" auto-resize /></div>
         <div v-if="!form.isIngredient" class="field">
           <label>Drink options <span class="hint">(customer chooses at the POS, in this order)</span></label>
@@ -250,21 +265,6 @@ onMounted(async () => {
           <label v-if="!form.isIngredient" class="row"><ToggleSwitch v-model="form.madeInHouse" /> Made here (bakery)</label>
           <label v-if="form.id" class="row"><ToggleSwitch v-model="form.isActive" /> Active (for sale)</label>
         </div>
-        <!-- Drinks with sizes: the full price of each size in the store chosen at the top -->
-        <div v-if="sized && hereRow" class="field">
-          <label>Size prices in {{ app.currentStore?.code }} {{ app.currentStore?.name }} <span class="hint">(full price; empty = not offered)</span></label>
-          <div class="size-fields">
-            <div v-for="o in sizes" :key="o.id" class="size-f">
-              <span class="size-h">{{ o.name }}</span>
-              <InputNumber v-model="hereRow.sizes![o.id]" placeholder="—" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" fluid />
-            </div>
-          </div>
-        </div>
-        <!-- No sizes: the Selling price above is the price; a store's own price (e.g. from BROWN) can be removed -->
-        <p v-else-if="!sized && !form.isIngredient && hereRow && hereRow.price !== null" class="own-price">
-          {{ app.currentStore?.code }} sells it at its own price <b>{{ money(hereRow.price, cur) }}</b>.
-          <Button label="Use the selling price" size="small" text @click="hereRow.price = null" />
-        </p>
         <div v-if="form.madeInHouse && !form.isIngredient" class="grid2 bake">
           <div class="field"><label>Pieces per batch <span class="hint">(the recipe is for one batch)</span></label><InputNumber v-model="form.batchYield" :min="0.001" :max-fraction-digits="3" fluid /></div>
           <div class="field"><label>Fresh for (hours) <span class="hint">(empty = keeps)</span></label><InputNumber v-model="form.shelfLifeHours" :min="1" :max="8760" fluid /></div>
