@@ -59,6 +59,11 @@ function applyAllSizes() {
 }
 const sizesChanged = (r: StoreRow) => r.sells && JSON.stringify(r.sizes) !== r.wasSizes;
 
+/** Edit product shows the store chosen at the top; "Show all stores" opens the full list */
+const allStores = ref(false);
+const shownRows = computed(() => (allStores.value || !app.currentStoreId ? storeRows.value : storeRows.value.filter((r) => r.storeId === app.currentStoreId)));
+const oneStore = computed(() => !allStores.value && !!app.currentStoreId);
+
 /** Turn "sold in this store" on or off from the list (super admin, or this store's manager). */
 async function toggleListed(p: Product, on: boolean) {
   try {
@@ -88,11 +93,13 @@ function openNew(ingredient = false) {
   Object.assign(pack, { size: null, price: null });
   initStores([], true);
   sizes.value = [];
+  allStores.value = false;
   dialog.value = true;
 }
 async function edit(p: Product) {
   storeRows.value = [];
   sizes.value = [];
+  allStores.value = false;
   loadingStores.value = true;
   Promise.all([api.get<any>(`/products/${p.id}`), api.get<any>(`/products/${p.id}/size-prices`).catch(() => null)])
     .then(([d, sp]) => { initStores(d.inventory ?? [], false); initSizes(sp); })
@@ -113,7 +120,7 @@ async function save() {
   if (!form.id && !storeRows.value.some((r) => r.sells)) return notify.error('Choose at least one store that sells this product');
   if (form.id && loadingStores.value) return;
   if (sized.value) {
-    const missing = storeRows.value.find((r) => r.sells && sizes.value.every((o) => r.sizes?.[o.id] == null));
+    const missing = storeRows.value.find((r) => sizesChanged(r) && sizes.value.every((o) => r.sizes?.[o.id] == null));
     if (missing) return notify.error(`Enter the size prices for ${missing.code}`);
   }
   saving.value = true;
@@ -257,23 +264,28 @@ onMounted(async () => {
           <label v-if="form.id" class="row"><ToggleSwitch v-model="form.isActive" /> Active (for sale)</label>
         </div>
         <div class="field">
-          <label v-if="sized">Stores and size prices <span class="hint">(full price of each size; empty = the store does not offer that size)</span></label>
+          <div class="store-head">
+          <label v-if="sized && oneStore">Size prices in {{ app.currentStore?.code }} {{ app.currentStore?.name }} <span class="hint">(full price of each size; empty = not offered)</span></label>
+          <label v-else-if="sized">Stores and size prices <span class="hint">(full price of each size; empty = the store does not offer that size)</span></label>
+          <label v-else-if="oneStore">Price in {{ app.currentStore?.code }} {{ app.currentStore?.name }} <span class="hint">({{ form.isIngredient ? 'tick if this store keeps it in stock' : 'empty = ' + money(form.sellPrice, cur) }})</span></label>
           <label v-else>Stores <span class="hint">({{ form.isIngredient ? 'stores that keep it in stock' : 'stores that sell it; own price empty = ' + money(form.sellPrice, cur) }})</span></label>
+          <Button v-if="app.currentStoreId && storeRows.length > 1" class="store-switch" :label="allStores ? `Only ${app.currentStore?.code}` : `Show all stores (${storeRows.length})`" :icon="allStores ? 'pi pi-minus' : 'pi pi-list'" size="small" text @click="allStores = !allStores" />
+          </div>
           <div v-if="loadingStores" class="muted small">Loading stores…</div>
           <div v-else-if="sized" class="stores sized" :style="{ '--n': sizes.length }">
             <div class="size-row head"><span>Store</span><span v-for="o in sizes" :key="o.id" class="size-h">{{ o.name }}</span></div>
-            <div class="size-row all">
+            <div v-if="!oneStore" class="size-row all">
               <span class="row"><b>All stores</b> <Button label="Apply" size="small" text icon="pi pi-arrow-down" @click="applyAllSizes" v-tooltip="'Copy these prices to every ticked store'" /></span>
               <InputNumber v-for="o in sizes" :key="o.id" v-model="allSizes[o.id]" :placeholder="o.name" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" input-class="size-in" />
             </div>
-            <div v-for="r in storeRows" :key="r.storeId" class="size-row">
+            <div v-for="r in shownRows" :key="r.storeId" class="size-row">
               <label class="row store-l"><Checkbox v-model="r.sells" binary /> <b>{{ r.code }}</b> <span class="muted small ell">{{ r.name }}</span></label>
               <InputNumber v-for="o in sizes" :key="o.id" v-model="r.sizes![o.id]" :disabled="!r.sells" placeholder="—" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" input-class="size-in" />
             </div>
             <p class="hint" style="margin: 4px 0 0">BROWN items: the next BROWN sync sets these prices again from BROWN.</p>
           </div>
           <div v-else class="stores">
-            <div v-for="r in storeRows" :key="r.storeId" class="store-row">
+            <div v-for="r in shownRows" :key="r.storeId" class="store-row">
               <label class="row"><Checkbox v-model="r.sells" binary /> <b>{{ r.code }}</b> <span class="muted small">{{ r.name }}</span></label>
               <InputNumber v-if="!form.isIngredient" v-model="r.price" :disabled="!r.sells" placeholder="Normal price" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" input-class="price-in" />
             </div>
@@ -298,6 +310,9 @@ onMounted(async () => {
 .stores { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: var(--bg); }
 .store-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .store-row :deep(.price-in) { width: 130px; text-align: right; }
+.store-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.store-head > label { flex: 1 1 260px; min-width: 0; }
+.store-switch { flex-shrink: 0; margin: -6px 0; }
 .size-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(var(--n), 84px); align-items: center; gap: 8px; }
 .size-row.head { font-size: .8rem; font-weight: 700; color: var(--muted, #8a7a6e); }
 .size-row.all { padding-bottom: 8px; margin-bottom: 2px; border-bottom: 1px dashed var(--border); }
