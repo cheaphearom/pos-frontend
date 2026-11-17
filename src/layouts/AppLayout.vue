@@ -11,8 +11,28 @@ import ApprovalPinDialog from '@/components/ApprovalPinDialog.vue';
 
 // Admin portal: pop-ups open as a panel on the right (styles.css, body.admin-ui). The cashier screen,
 // barista screen and customer display are outside this layout and keep their centred pop-ups.
-onMounted(() => document.body.classList.add('admin-ui'));
-onBeforeUnmount(() => document.body.classList.remove('admin-ui'));
+// Like the Sales panel: a click outside an admin panel closes it (press and release both outside,
+// so selecting text in a form and letting go outside does not close it). Yes/No confirmations are left alone.
+let pressedOn: EventTarget | null = null;
+const onPress = (e: PointerEvent) => (pressedOn = e.target);
+function onOutsideClick(e: MouseEvent) {
+  const mask = e.target as HTMLElement;
+  if (pressedOn !== mask || !mask.classList?.contains('p-dialog-mask')) return;
+  if (mask.querySelector(':scope > .p-confirmdialog')) return;
+  const masks = document.querySelectorAll('.p-dialog-mask');
+  if (masks[masks.length - 1] !== mask) return; // only the top panel
+  (mask.querySelector(':scope > .p-dialog .p-dialog-close-button') as HTMLElement | null)?.click();
+}
+onMounted(() => {
+  document.body.classList.add('admin-ui');
+  document.addEventListener('pointerdown', onPress, true);
+  document.addEventListener('click', onOutsideClick, true);
+});
+onBeforeUnmount(() => {
+  document.body.classList.remove('admin-ui');
+  document.removeEventListener('pointerdown', onPress, true);
+  document.removeEventListener('click', onOutsideClick, true);
+});
 
 const auth = useAuth();
 const pinDlg = ref(false);
