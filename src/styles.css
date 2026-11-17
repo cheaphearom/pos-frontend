@@ -6,8 +6,8 @@
   --text: #2b211b;
   --text-2: #6b5d52;
   --text-3: #9a8b7f;
-  --sidebar: #2b1d14;
-  --sidebar-text: #e3d5c6;
+  --sidebar: #1c1c1f; /* neutral dark charcoal */
+  --sidebar-text: #e4e4e7;
   --sidebar-active: #8b5a33;
   --series-1: #8b5a33;
   --accent-2: #c8893f; /* caramel, for highlights */
@@ -26,7 +26,7 @@
   --text: #f3ece4;
   --text-2: #c9bbad;
   --text-3: #998a7c;
-  --sidebar: #110c09;
+  --sidebar: #0e0e10;
   --series-1: #c9a07c;
   --good: #5cb85f;
   --bad: #f07060;
