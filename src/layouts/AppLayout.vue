@@ -131,7 +131,7 @@ async function logout() {
           </Select>
         </div>
         <div class="spacer" />
-        <RouterLink to="/pos"><Button label="Open POS" icon="pi pi-shopping-cart" size="small" /></RouterLink>
+        <RouterLink to="/pos"><Button label="Open POS" icon="pi pi-shopping-cart" size="small" class="open-pos" aria-label="Open POS" /></RouterLink>
         <LangSwitch />
         <Button :icon="dark ? 'pi pi-sun' : 'pi pi-moon'" text rounded aria-label="Toggle dark mode" @click="dark = !dark" />
         <div class="user">
@@ -197,5 +197,13 @@ async function logout() {
   .menu-btn { display: inline-flex; }
   .user { display: none; }
   .store-select { min-width: 0; width: 180px; }
+}
+/* phones: the top bar fits the screen (no sideways scroll) */
+@media (max-width: 600px) {
+  .topbar { gap: 4px; padding: 0 8px; }
+  .store-pick { flex: 1 1 auto; min-width: 0; }
+  .store-pick > .pi, .avatar, .spacer { display: none; }
+  .store-select { width: 100%; }
+  .topbar :deep(.open-pos .p-button-label) { display: none; }
 }
 </style>
