@@ -83,11 +83,13 @@ export function useCatalog(storeId: string) {
   /** Exact barcode / SKU match (what a scanner sends). */
   const findCode = (code: string) => byCode.get(code.trim().toLowerCase());
 
-  function search(q: string, categoryId?: string | null, limit = 60) {
+  /** categoryId: one category, or a list (a group and its categories) */
+  function search(q: string, categoryId?: string | string[] | null, limit = 60) {
     const s = q.trim().toLowerCase();
     const out: CatalogItem[] = [];
+    const ids = categoryId ? new Set(Array.isArray(categoryId) ? categoryId : [categoryId]) : null;
     for (const p of items.value) {
-      if (categoryId && p.categoryId !== categoryId) continue;
+      if (ids && !ids.has(p.categoryId ?? '')) continue;
       if (s && !p.name.toLowerCase().includes(s) && !p.sku.toLowerCase().includes(s) && p.barcode !== s) continue;
       out.push(p);
       if (out.length >= limit) break;

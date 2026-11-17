@@ -203,9 +203,23 @@ const search = ref('');
 const category = ref<string | null>(null);
 /** Pictures that did not load (offline, broken link): those tiles show initials instead. */
 const badImg = reactive(new Set<string>());
-const categories = ref<{ id: string; name: string; nameKm?: string | null }[]>(readJson('pos.categories', []));
+const categories = ref<{ id: string; name: string; nameKm?: string | null; parentId?: string | null }[]>(readJson('pos.categories', []));
+/** A category under the chosen group (BROWN: group Beverages > category Hot Coffee) */
+const subCategory = ref<string | null>(null);
+const usedCats = computed(() => new Set(catalog.items.value.map((p) => p.categoryId).filter(Boolean)));
+const childrenOf = (id: string) => categories.value.filter((k) => k.parentId === id);
+/** First row: groups and stand-alone categories that have products */
+const topCats = computed(() => categories.value.filter((c) => !c.parentId || !categories.value.some((x) => x.id === c.parentId))
+  .filter((c) => usedCats.value.has(c.id) || childrenOf(c.id).some((k) => usedCats.value.has(k.id))));
+/** Second row: the chosen group's categories */
+const subCats = computed(() => (category.value ? childrenOf(category.value).filter((k) => usedCats.value.has(k.id)) : []));
+const filterIds = computed(() => (subCategory.value ? [subCategory.value] : category.value ? [category.value, ...childrenOf(category.value).map((k) => k.id)] : null));
+function pickCategory(id: string | null) {
+  category.value = id && category.value !== id ? id : null;
+  subCategory.value = null;
+}
 const searchEl = ref<HTMLInputElement | null>(null);
-const results = computed(() => catalog.search(search.value, category.value, 60));
+const results = computed(() => catalog.search(search.value, filterIds.value, 60));
 const selected = ref(-1);
 const focusSearch = () => nextTick(() => searchEl.value?.focus());
 // On-screen keyboard for tills without a keyboard: types into the search box
@@ -820,8 +834,12 @@ async function logout() {
           <span v-if="catalog.syncing.value" class="pi pi-spin pi-sync muted" v-tooltip="'Updating products'" />
         </div>
         <div class="cats">
-          <button class="chip" :class="{ on: !category }" @click="category = null">All</button>
-          <button v-for="c in categories.filter((x) => catalog.items.value.some((p) => p.categoryId === x.id))" :key="c.id" class="chip" :class="{ on: category === c.id }" @click="category = category === c.id ? null : c.id">{{ localName(c) }}</button>
+          <button class="chip" :class="{ on: !category }" @click="pickCategory(null)">All</button>
+          <button v-for="c in topCats" :key="c.id" class="chip" :class="{ on: category === c.id }" @click="pickCategory(c.id)">{{ localName(c) }}</button>
+        </div>
+        <div v-if="subCats.length" class="cats sub">
+          <button class="chip" :class="{ on: !subCategory }" @click="subCategory = null">All {{ localName(categories.find((c) => c.id === category)!) }}</button>
+          <button v-for="c in subCats" :key="c.id" class="chip" :class="{ on: subCategory === c.id }" @click="subCategory = subCategory === c.id ? null : c.id">{{ localName(c) }}</button>
         </div>
         <div class="tiles">
           <button v-for="p in results" :key="p.id" class="tile" :class="{ out: p.trackStock && Number(p.stock) <= 0 }" :style="{ '--cat': catColor(p.categoryId) }" @click="addProduct(p); focusSearch()">
@@ -1158,6 +1176,9 @@ async function logout() {
 .pos-kb { flex: none; }
 .pad-target :deep(input) { border-color: var(--p-primary-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-primary-color) 22%, transparent); }
 .cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; flex-shrink: 0; scrollbar-width: none; }
+.cats.sub { margin-top: -2px; }
+.cats.sub .chip { padding: 6px 13px; font-size: .92em; }
+.cats.sub .chip:not(.on) { background: var(--bg); }
 .chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .1s; }
 .chip:hover { border-color: var(--p-primary-color); }
 .chip.on { background: var(--p-primary-color); border-color: var(--p-primary-color); color: #fff; }

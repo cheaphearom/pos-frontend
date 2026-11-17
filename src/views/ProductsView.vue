@@ -12,6 +12,10 @@ const auth = useAuth();
 const app = useApp();
 const notify = useNotify();
 const categories = ref<Category[]>([]);
+/** "Beverages › Hot Coffee": a category under a group shows its group first */
+const catOptions = computed(() => categories.value
+  .map((c) => { const parent = categories.value.find((x) => x.id === c.parentId); return { id: c.id, label: parent ? `${parent.name} › ${c.name}` : c.name }; })
+  .sort((a, b) => a.label.localeCompare(b.label)));
 const list = usePagedList<Product>('/products', { search: '', categoryId: null, storeId: app.currentStoreId, includeInactive: false, kind: null as string | null, listing: 'listed' as 'listed' | 'unlisted' | 'all' });
 const listingOptions = computed(() => [
   { l: `Sold in ${app.currentStore?.code ?? 'this store'}`, v: 'listed' },
@@ -20,7 +24,7 @@ const listingOptions = computed(() => [
 ]);
 
 // ── Which stores sell the product, and their own price (empty = the normal selling price)
-type StoreRow = { storeId: string; code: string; name: string; sells: boolean; price: number | null; was?: { sells: boolean; price: number | null } };
+type StoreRow = { storeId: string; code: string; name: string; sells: boolean; price: number | null; was?: { sells: boolean; price: number | null }; sizes?: Record<string, number | null>; wasSizes?: string };
 const storeRows = ref<StoreRow[]>([]);
 const loadingStores = ref(false);
 function initStores(inventory: any[], isNew: boolean) {
@@ -32,6 +36,28 @@ function initStores(inventory: any[], isNew: boolean) {
   });
 }
 const storesChanged = (r: StoreRow) => !r.was || r.was.sells !== r.sells || r.was.price !== r.price;
+
+// ── Drinks with sizes: the full price of each size (S / M / L) in each store
+const sizes = ref<{ id: string; name: string }[]>([]);
+const allSizes = reactive<Record<string, number | null>>({});
+const sized = computed(() => sizes.value.length > 0 && !form.isIngredient);
+function initSizes(sp: { sizes: { id: string; name: string }[]; stores: { storeId: string; prices: Record<string, number | null> }[] } | null) {
+  sizes.value = sp?.sizes ?? [];
+  for (const k of Object.keys(allSizes)) delete allSizes[k];
+  for (const o of sizes.value) allSizes[o.id] = null;
+  for (const r of storeRows.value) {
+    const own = sp?.stores.find((x) => x.storeId === r.storeId)?.prices;
+    r.sizes = Object.fromEntries(sizes.value.map((o) => [o.id, own?.[o.id] ?? null]));
+    r.wasSizes = JSON.stringify(r.sizes);
+  }
+}
+/** "All stores" row: copy its prices into every ticked store */
+function applyAllSizes() {
+  const given = sizes.value.filter((o) => allSizes[o.id] !== null);
+  if (!given.length) return notify.error('Enter at least one price in the "All stores" row');
+  for (const r of storeRows.value.filter((x) => x.sells)) for (const o of given) r.sizes![o.id] = allSizes[o.id];
+}
+const sizesChanged = (r: StoreRow) => r.sells && JSON.stringify(r.sizes) !== r.wasSizes;
 
 /** Turn "sold in this store" on or off from the list (super admin, or this store's manager). */
 async function toggleListed(p: Product, on: boolean) {
@@ -61,13 +87,15 @@ function openNew(ingredient = false) {
   Object.assign(form, empty(), ingredient ? { isIngredient: true, unit: 'g', taxable: false } : {});
   Object.assign(pack, { size: null, price: null });
   initStores([], true);
+  sizes.value = [];
   dialog.value = true;
 }
 async function edit(p: Product) {
   storeRows.value = [];
+  sizes.value = [];
   loadingStores.value = true;
-  api.get<any>(`/products/${p.id}`)
-    .then((d) => initStores(d.inventory ?? [], false))
+  Promise.all([api.get<any>(`/products/${p.id}`), api.get<any>(`/products/${p.id}/size-prices`).catch(() => null)])
+    .then(([d, sp]) => { initStores(d.inventory ?? [], false); initSizes(sp); })
     .catch((e) => notify.error(e))
     .finally(() => (loadingStores.value = false));
   Object.assign(form, {
@@ -84,6 +112,10 @@ async function edit(p: Product) {
 async function save() {
   if (!form.id && !storeRows.value.some((r) => r.sells)) return notify.error('Choose at least one store that sells this product');
   if (form.id && loadingStores.value) return;
+  if (sized.value) {
+    const missing = storeRows.value.find((r) => r.sells && sizes.value.every((o) => r.sizes?.[o.id] == null));
+    if (missing) return notify.error(`Enter the size prices for ${missing.code}`);
+  }
   saving.value = true;
   try {
     // Only the form's own fields: the edited product also carries createdAt, category, price, stock...
@@ -92,7 +124,12 @@ async function save() {
     if (id) {
       await api.patch(`/products/${id}`, payload);
       for (const r of storeRows.value.filter(storesChanged)) {
-        await api.put(`/inventory/${r.storeId}/${id}`, { isListed: r.sells, priceOverride: r.price });
+        // with sizes, the store's price comes from its size prices (saved below)
+        await api.put(`/inventory/${r.storeId}/${id}`, sized.value ? { isListed: r.sells } : { isListed: r.sells, priceOverride: r.price });
+      }
+      const changed = sized.value ? storeRows.value.filter(sizesChanged) : [];
+      if (changed.length) {
+        await api.put(`/products/${id}/size-prices`, { stores: changed.map((r) => ({ storeId: r.storeId, prices: sizes.value.map((o) => ({ optionId: o.id, price: r.sizes![o.id] })) })) });
       }
     } else {
       await api.post('/products', { ...payload, isActive: undefined, stores: storeRows.value.filter((r) => r.sells).map((r) => ({ storeId: r.storeId, price: r.price })) });
@@ -138,7 +175,7 @@ onMounted(async () => {
           <InputIcon class="pi pi-search" />
           <InputText v-model="list.filters.search" placeholder="Name, SKU or barcode" />
         </IconField>
-        <Select v-model="list.filters.categoryId" :options="categories" option-label="name" option-value="id" placeholder="All categories" show-clear />
+        <Select v-model="list.filters.categoryId" :options="catOptions" option-label="label" filter option-value="id" placeholder="All categories" show-clear />
         <SelectButton v-model="list.filters.listing" :options="listingOptions" option-label="l" option-value="v" :allow-empty="false" />
         <SelectButton v-model="list.filters.kind" :options="[{ l: 'For sale', v: 'sellable' }, { l: 'Ingredients', v: 'ingredient' }]" option-label="l" option-value="v" />
         <label class="row small"><ToggleSwitch v-model="list.filters.includeInactive" /> Show inactive</label>
@@ -194,7 +231,7 @@ onMounted(async () => {
         <div class="field"><label>Name *</label><InputText v-model="form.name" required /></div>
         <div class="field"><label>Khmer name <span class="hint">(shown on the POS, menu and receipt in Khmer)</span></label><InputText v-model="form.nameKm" maxlength="200" placeholder="ឧ. កាហ្វេទឹកដោះគោទឹកកក" /></div>
         <div class="form-2">
-          <div class="field"><label>Category</label><Select v-model="form.categoryId" :options="categories" option-label="name" option-value="id" show-clear placeholder="None" /></div>
+          <div class="field"><label>Category</label><Select v-model="form.categoryId" :options="catOptions" option-label="label" filter option-value="id" show-clear placeholder="None" /></div>
           <div class="field"><label>Unit</label><InputText v-model="form.unit" placeholder="pcs, kg, box…" /></div>
         </div>
         <div class="form-2">
@@ -220,8 +257,21 @@ onMounted(async () => {
           <label v-if="form.id" class="row"><ToggleSwitch v-model="form.isActive" /> Active (for sale)</label>
         </div>
         <div class="field">
-          <label>Stores <span class="hint">({{ form.isIngredient ? 'stores that keep it in stock' : 'stores that sell it; own price empty = ' + money(form.sellPrice, cur) }})</span></label>
+          <label v-if="sized">Stores and size prices <span class="hint">(full price of each size; empty = the store does not offer that size)</span></label>
+          <label v-else>Stores <span class="hint">({{ form.isIngredient ? 'stores that keep it in stock' : 'stores that sell it; own price empty = ' + money(form.sellPrice, cur) }})</span></label>
           <div v-if="loadingStores" class="muted small">Loading stores…</div>
+          <div v-else-if="sized" class="stores sized" :style="{ '--n': sizes.length }">
+            <div class="size-row head"><span>Store</span><span v-for="o in sizes" :key="o.id" class="size-h">{{ o.name }}</span></div>
+            <div class="size-row all">
+              <span class="row"><b>All stores</b> <Button label="Apply" size="small" text icon="pi pi-arrow-down" @click="applyAllSizes" v-tooltip="'Copy these prices to every ticked store'" /></span>
+              <InputNumber v-for="o in sizes" :key="o.id" v-model="allSizes[o.id]" :placeholder="o.name" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" input-class="size-in" />
+            </div>
+            <div v-for="r in storeRows" :key="r.storeId" class="size-row">
+              <label class="row store-l"><Checkbox v-model="r.sells" binary /> <b>{{ r.code }}</b> <span class="muted small ell">{{ r.name }}</span></label>
+              <InputNumber v-for="o in sizes" :key="o.id" v-model="r.sizes![o.id]" :disabled="!r.sells" placeholder="—" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" input-class="size-in" />
+            </div>
+            <p class="hint" style="margin: 4px 0 0">BROWN items: the next BROWN sync sets these prices again from BROWN.</p>
+          </div>
           <div v-else class="stores">
             <div v-for="r in storeRows" :key="r.storeId" class="store-row">
               <label class="row"><Checkbox v-model="r.sells" binary /> <b>{{ r.code }}</b> <span class="muted small">{{ r.name }}</span></label>
@@ -248,4 +298,11 @@ onMounted(async () => {
 .stores { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: var(--bg); }
 .store-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .store-row :deep(.price-in) { width: 130px; text-align: right; }
+.size-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(var(--n), 84px); align-items: center; gap: 8px; }
+.size-row.head { font-size: .8rem; font-weight: 700; color: var(--muted, #8a7a6e); }
+.size-row.all { padding-bottom: 8px; margin-bottom: 2px; border-bottom: 1px dashed var(--border); }
+.size-h { text-align: right; padding-right: 10px; }
+.size-row :deep(.size-in) { width: 84px; text-align: right; }
+.store-l { min-width: 0; }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
