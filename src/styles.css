@@ -123,10 +123,32 @@ body.admin-ui .p-dialog:not(.p-confirmdialog) {
 body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-content { flex: 1 1 auto; overflow-y: auto; }
 /* let form fields shrink to the panel width instead of pushing it wider (no cut-off fields) */
 body.admin-ui .p-dialog .p-dialog-content > *, body.admin-ui .p-dialog .form > *, body.admin-ui .p-dialog .form-2 > * { min-width: 0; }
-body.admin-ui .p-dialog:not(.p-confirmdialog).p-dialog-enter-active,
-body.admin-ui .p-dialog:not(.p-confirmdialog).p-dialog-leave-active { transition: transform .22s cubic-bezier(.2, .7, .2, 1), opacity .22s !important; }
-body.admin-ui .p-dialog:not(.p-confirmdialog).p-dialog-enter-from,
-body.admin-ui .p-dialog:not(.p-confirmdialog).p-dialog-leave-to { transform: translateX(100%) !important; opacity: 1 !important; }
+/* Slide in from the right (replaces PrimeVue's zoom), with a soft backdrop and the fields fading in one after another */
+body.admin-ui .p-dialog:not(.p-confirmdialog).p-dialog-enter-active { animation: admin-panel-in .45s cubic-bezier(.32, .72, 0, 1) both !important; }
+body.admin-ui .p-dialog:not(.p-confirmdialog).p-dialog-leave-active { animation: admin-panel-out .3s cubic-bezier(.4, 0, 1, 1) both !important; }
+@keyframes admin-panel-in { from { transform: translateX(100%); box-shadow: none; } to { transform: none; } }
+@keyframes admin-panel-out { from { transform: none; } to { transform: translateX(100%); box-shadow: none; } }
+body.admin-ui .p-dialog-mask.p-overlay-mask:not(:has(> .p-confirmdialog)) { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+/* header, then each field: fade and rise a little, one after another */
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-header { animation: admin-rise .4s .08s cubic-bezier(.22, 1, .36, 1) both; }
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-content > *,
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-content > form > *,
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-footer { animation: admin-rise .45s cubic-bezier(.22, 1, .36, 1) both; animation-delay: .14s; }
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-content > form > :nth-child(2) { animation-delay: .17s; }
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-content > form > :nth-child(3) { animation-delay: .20s; }
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-content > form > :nth-child(4) { animation-delay: .23s; }
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-content > form > :nth-child(5) { animation-delay: .26s; }
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-content > form > :nth-child(6) { animation-delay: .29s; }
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-content > form > :nth-child(7) { animation-delay: .32s; }
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-content > form > :nth-child(n+8) { animation-delay: .35s; }
+@keyframes admin-rise { from { opacity: 0; transform: translateY(10px); } }
+/* close button turns a little on hover */
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-close-button { transition: transform .2s ease, background-color .2s ease; }
+body.admin-ui .p-dialog:not(.p-confirmdialog) .p-dialog-close-button:hover { transform: rotate(90deg); }
+/* the Sales receipt and other side drawers already slide in; give them the same soft backdrop and fade-in content */
+body.admin-ui .p-drawer-mask.p-overlay-mask { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+body.admin-ui .p-drawer-right .p-drawer-content > * { animation: admin-rise .45s .14s cubic-bezier(.22, 1, .36, 1) both; }
 @media (prefers-reduced-motion: reduce) {
-  body.admin-ui .p-dialog.p-dialog-enter-active, body.admin-ui .p-dialog.p-dialog-leave-active { transition: none !important; }
+  body.admin-ui .p-dialog, body.admin-ui .p-dialog *, body.admin-ui .p-drawer { animation: none !important; transition: none !important; }
 }
+
