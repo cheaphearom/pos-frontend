@@ -161,7 +161,11 @@ async function logout() {
   scrollbar-width: none; /* still scrolls, but no visible bar (Firefox, Chrome, Edge) */
 }
 .sidebar::-webkit-scrollbar { display: none; } /* older Chrome / Edge / Safari */
-.brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; font-size: 17px; padding: 4px 8px 18px; border-bottom: 1px solid rgba(255, 255, 255, .08); margin-bottom: 12px; }
+/* stays at the top while the menu scrolls; same height as the top bar; sidebar colour (darker in dark mode) */
+.brand {
+  position: sticky; top: -16px; z-index: 2; display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; font-size: 17px;
+  height: 60px; margin: -16px -12px 12px; padding: 0 20px; background: var(--sidebar); border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
 .brand > span:last-child { display: grid; line-height: 1.2; }
 .brand small { font-size: 11.5px; font-weight: 500; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 .logo { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--sidebar-active), var(--accent-2)); display: grid; place-items: center; flex-shrink: 0; }
