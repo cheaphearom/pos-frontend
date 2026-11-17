@@ -6,6 +6,7 @@
  *   device with the same rules as the server, and sales wait in a queue until online.
  */
 import { localName } from '@/i18n';
+import { categoryColor } from '@/utils/colors';
 import LangSwitch from '@/components/LangSwitch.vue';
 import TouchKeyboard from '@/components/TouchKeyboard.vue';
 import NumPad from '@/components/NumPad.vue';
@@ -634,11 +635,7 @@ function showDone(sale: any) {
 }
 
 /** Each category gets its own colour on the product tiles, so cashiers find items by colour. */
-const TILE_COLORS = ['#8b5a33', '#2f7d6b', '#c8893f', '#7a4f9a', '#2c6e9b', '#b2493b', '#5f7d2f', '#9a6a00', '#4f6b7a', '#a14d7a'];
-function catColor(categoryId?: string | null) {
-  const i = categories.value.findIndex((c) => c.id === categoryId);
-  return i < 0 ? '#9a8b7f' : TILE_COLORS[i % TILE_COLORS.length];
-}
+const catColor = (categoryId?: string | null) => categoryColor(categories.value, categoryId);
 const initials = (name: string) => name.split(/\s+/).filter((w) => /^[\p{L}]/u.test(w)).slice(0, 2).map((w) => [...w][0]).join('').toUpperCase() || '•';
 
 /** Riel per dollar for this store (null = no riel cash) */

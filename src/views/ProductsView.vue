@@ -7,12 +7,19 @@ import { usePagedList } from '@/composables/usePagedList';
 import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
 import { money, qty } from '@/utils/format';
+import { categoryColor, initials } from '@/utils/colors';
 
 const auth = useAuth();
 const app = useApp();
 const notify = useNotify();
 const categories = ref<Category[]>([]);
 /** "Beverages › Hot Coffee": a category under a group shows its group first */
+const catColor = (id?: string | null) => categoryColor(categories.value, id);
+const catLabel = (id?: string | null) => catOptions.value.find((c) => c.id === id)?.label ?? '—';
+/** Quick filter chips: groups and stand-alone categories */
+const topCats = computed(() => categories.value.filter((c) => !c.parentId));
+const badImg = reactive(new Set<string>());
+const marginClass = (m: number) => (isNaN(m) ? '' : m >= 60 ? 'good' : m >= 30 ? 'ok' : 'low');
 const catOptions = computed(() => categories.value
   .map((c) => { const parent = categories.value.find((x) => x.id === c.parentId); return { id: c.id, label: parent ? `${parent.name} › ${c.name}` : c.name }; })
   .sort((a, b) => a.label.localeCompare(b.label)));
@@ -155,7 +162,7 @@ onMounted(async () => {
     <div class="page-head">
       <div>
         <h1>Products</h1>
-        <div class="sub">One product list · each store sells its own products at its own price · showing {{ app.currentStore?.code }}</div>
+        <div class="sub"><b>{{ list.total.value }}</b> products · each store sells its own products at its own price · showing <b>{{ app.currentStore?.code }}</b></div>
       </div>
       <div class="actions">
         <Button v-if="auth.isAdmin" label="New ingredient" icon="pi pi-plus" severity="secondary" @click="openNew(true)" />
@@ -174,34 +181,45 @@ onMounted(async () => {
         <SelectButton v-model="list.filters.kind" :options="[{ l: 'For sale', v: 'sellable' }, { l: 'Ingredients', v: 'ingredient' }]" option-label="l" option-value="v" />
         <label class="row small"><ToggleSwitch v-model="list.filters.includeInactive" /> Show inactive</label>
       </div>
+      <div v-if="topCats.length" class="cat-chips">
+        <button type="button" class="cchip" :class="{ on: !list.filters.categoryId }" @click="list.filters.categoryId = null">All</button>
+        <button v-for="c in topCats" :key="c.id" type="button" class="cchip" :class="{ on: list.filters.categoryId === c.id }" :style="{ '--c': catColor(c.id) }" @click="list.filters.categoryId = list.filters.categoryId === c.id ? null : c.id"><span class="dot" />{{ c.name }}</button>
+      </div>
 
       <DataTable :value="list.rows.value" lazy paginator :rows="list.page.rows" :first="list.page.first" :total-records="list.total.value"
         :rows-per-page-options="[25, 50, 100]" :loading="list.loading.value" data-key="id" size="small" striped-rows
         @page="list.onPage" @row-click="auth.isAdmin && edit($event.data)" :row-class="() => (auth.isAdmin ? 'clickable' : '')">
         <template #empty><span class="muted">No products found</span></template>
-        <Column field="sku" header="SKU"><template #body="{ data }"><span class="mono">{{ data.sku }}</span></template></Column>
-        <Column field="name" header="Name">
+        <Column field="name" header="Product">
           <template #body="{ data }">
-            {{ data.name }} <span v-if="data.nameKm" class="muted small">· {{ data.nameKm }}</span> <Tag v-if="!data.isActive" value="inactive" severity="secondary" />
-            <Tag v-if="data.isIngredient" value="ingredient" severity="warn" style="margin-left: 4px" />
-            <Tag v-if="data.madeInHouse" value="bakery" severity="info" style="margin-left: 4px" />
-            <Tag v-if="data.modifierGroups?.length" :value="`${data.modifierGroups.length} options`" severity="info" style="margin-left: 4px" />
-            <div class="small muted mono">{{ data.barcode }}</div>
+            <div class="prod" :class="{ off: !data.isActive }">
+              <img v-if="data.imageUrl && !badImg.has(data.imageUrl)" :src="data.imageUrl" alt="" class="thumb" loading="lazy" @error="badImg.add(data.imageUrl)" />
+              <span v-else class="thumb ini" :style="{ '--c': catColor(data.categoryId) }">{{ initials(data.name) }}</span>
+              <div class="pname">
+                <div class="nm">{{ data.name }}
+                  <Tag v-if="!data.isActive" value="inactive" severity="secondary" />
+                  <Tag v-if="data.isIngredient" value="ingredient" severity="warn" />
+                  <Tag v-if="data.madeInHouse" value="bakery" severity="info" />
+                  <Tag v-if="data.modifierGroups?.length" :value="`${data.modifierGroups.length} options`" severity="info" />
+                </div>
+                <div class="small muted"><span class="mono">{{ data.sku }}</span><template v-if="data.barcode"> · <span class="mono">{{ data.barcode }}</span></template><template v-if="data.nameKm"> · {{ data.nameKm }}</template></div>
+              </div>
+            </div>
           </template>
         </Column>
-        <Column header="Category"><template #body="{ data }">{{ data.category?.name ?? '—' }}</template></Column>
+        <Column header="Category"><template #body="{ data }"><span v-if="data.categoryId" class="pcat" :style="{ '--c': catColor(data.categoryId) }"><span class="dot" />{{ catLabel(data.categoryId) }}</span><span v-else class="muted">—</span></template></Column>
         <Column header="Cost" class="right"><template #body="{ data }">{{ data.isIngredient ? '$' + Number(data.costPrice).toFixed(4) + ' / ' + data.unit : money(data.costPrice, cur) }}</template></Column>
         <Column header="Price" class="right">
           <template #body="{ data }">
-            {{ money(data.price ?? data.sellPrice, cur) }}
+            <b class="price">{{ money(data.price ?? data.sellPrice, cur) }}</b>
             <i v-if="data.price && data.price !== data.sellPrice" class="pi pi-tag small muted" v-tooltip="`Store price. Default ${money(data.sellPrice, cur)}`" />
           </template>
         </Column>
-        <Column header="Margin" class="right"><template #body="{ data }">{{ isNaN(margin(data)) ? '—' : margin(data).toFixed(0) + '%' }}</template></Column>
+        <Column header="Margin" class="right"><template #body="{ data }"><span v-if="!isNaN(margin(data))" class="mpill" :class="marginClass(margin(data))">{{ margin(data).toFixed(0) }}%</span><span v-else class="muted">—</span></template></Column>
         <Column header="Stock" class="right">
           <template #body="{ data }">
-            <span v-if="!data.trackStock" class="muted">service</span>
-            <span v-else :class="{ neg: Number(data.stock) <= 0 }">{{ qty(data.stock) }} {{ data.unit }}</span>
+            <span v-if="!data.trackStock" class="muted small">not tracked</span>
+            <span v-else class="spill" :class="{ out: Number(data.stock) <= 0 }">{{ qty(data.stock) }} {{ data.unit }}</span>
           </template>
         </Column>
         <Column header="Tax" class="right"><template #body="{ data }"><i :class="data.taxable ? 'pi pi-check' : 'pi pi-minus muted'" /></template></Column>
@@ -280,6 +298,24 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.cat-chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: thin; }
+.cchip { --c: var(--text-2); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s; }
+.cchip:hover { border-color: var(--c); }
+.cchip.on { background: var(--c); border-color: var(--c); color: #fff; }
+.cchip.on .dot { background: #fff; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex-shrink: 0; }
+.prod { display: flex; align-items: center; gap: 12px; min-width: 220px; }
+.prod.off { opacity: .6; }
+.thumb { width: 42px; height: 42px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: var(--bg); }
+.thumb.ini { display: grid; place-items: center; color: #fff; font-weight: 800; font-size: .85rem; background: var(--c); }
+.pname { min-width: 0; }
+.nm { font-weight: 650; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pcat { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.price { font-weight: 750; }
+.mpill, .spill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: .8rem; font-weight: 700; background: var(--bg); color: var(--text-2); white-space: nowrap; }
+.mpill.good { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+.mpill.ok { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+.mpill.low, .spill.out { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
 .bake { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; border-radius: 10px; background: var(--bg); }
 .size-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
 .size-f { display: flex; flex-direction: column; gap: 4px; }

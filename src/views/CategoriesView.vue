@@ -4,6 +4,7 @@ import { useConfirm } from 'primevue/useconfirm';
 import { api } from '@/api/client';
 import type { Category } from '@/api/types';
 import { useNotify } from '@/composables/useNotify';
+import { categoryColor, initials } from '@/utils/colors';
 
 const notify = useNotify();
 const confirm = useConfirm();
@@ -25,9 +26,7 @@ function open(c?: Category, parentId: string | null = null) {
 
 // ── Cards: one per group (or stand-alone category), with its categories inside
 /** Same colours as the category tiles on the cashier screen */
-const COLORS = ['#8b5a33', '#2f7d6b', '#c8893f', '#7a4f9a', '#2c6e9b', '#b2493b', '#5f7d2f', '#9a6a00', '#4f6b7a', '#a14d7a'];
-const color = (id: string) => { const i = rows.value.findIndex((c) => c.id === id); return i < 0 ? '#9a8b7f' : COLORS[i % COLORS.length]; };
-const initials = (name: string) => name.split(/\s+/).filter((w) => /^[\p{L}\p{N}]/u.test(w)).slice(0, 2).map((w) => [...w][0]).join('').toUpperCase() || '•';
+const color = (id: string) => categoryColor(rows.value, id);
 const q = ref('');
 const hideEmpty = ref(false);
 const count = (c: Category) => c._count?.products ?? 0;
