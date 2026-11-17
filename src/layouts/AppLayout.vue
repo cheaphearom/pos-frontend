@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { useDark } from '@/composables/useDark';
 import LangSwitch from '@/components/LangSwitch.vue';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { Role } from '@/api/types';
 import { ROLE_LABEL } from '@/api/types';
 import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
 import ApprovalPinDialog from '@/components/ApprovalPinDialog.vue';
+
+// Admin portal: pop-ups open as a panel on the right (styles.css, body.admin-ui). The cashier screen,
+// barista screen and customer display are outside this layout and keep their centred pop-ups.
+onMounted(() => document.body.classList.add('admin-ui'));
+onBeforeUnmount(() => document.body.classList.remove('admin-ui'));
 
 const auth = useAuth();
 const pinDlg = ref(false);
