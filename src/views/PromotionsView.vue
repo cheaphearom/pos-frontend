@@ -56,20 +56,6 @@ function whenText(p: any) {
   if (p.startMinute != null || p.endMinute != null) parts.push(`${hhmm(p.startMinute ?? 0)}–${hhmm(p.endMinute ?? 1440)}`);
   return parts.join(' · ') || 'Always';
 }
-/** The deal in big letters on the card */
-function bigDeal(p: any) {
-  const v = Number(p.value);
-  if (p.type === 'PERCENT_OFF') return { big: `${v.toFixed(v % 1 ? 1 : 0)}%`, small: 'off' };
-  if (p.type === 'AMOUNT_OFF') return { big: `$${v.toFixed(2)}`, small: 'off each' };
-  return { big: `${p.buyQty}+${p.getQty}`, small: `buy ${p.buyQty} get ${p.getQty} free` };
-}
-const STATE_COLOR: Record<string, string> = { 'Running now': 'var(--good)', Scheduled: '#2c6e9b', Ended: 'var(--text-3)', Off: 'var(--text-3)' };
-const show = ref<'all' | 'Running now' | 'Scheduled' | 'Ended' | 'Off'>('all');
-const shown = computed(() => (show.value === 'all' ? list.rows.value : list.rows.value.filter((p: any) => state(p).l === show.value)));
-const countOf = (l: string) => list.rows.value.filter((p: any) => state(p).l === l).length;
-const pages = computed(() => Math.max(1, Math.ceil(list.total.value / list.page.rows)));
-const pageNo = computed(() => Math.floor(list.page.first / list.page.rows) + 1);
-const goPage = (n: number) => list.onPage({ first: (n - 1) * list.page.rows, rows: list.page.rows });
 const storesText = (p: any) => (p.storeIds.length ? p.storeIds.map((id: string) => allStores.value.find((s) => s.id === id)?.code ?? '?').join(', ') : 'All stores');
 
 // ── Edit
@@ -141,37 +127,19 @@ onMounted(async () => {
       <div><h1>Promotions</h1><div class="sub">Applied automatically at the POS, also offline · times use the {{ timeZone }} clock</div></div>
       <div class="actions"><Button v-if="auth.isAdmin" label="New promotion" icon="pi pi-plus" @click="open()" /></div>
     </div>
-    <div class="toolbar pr-tools">
-      <IconField><InputIcon class="pi pi-search" /><InputText v-model="list.filters.search" placeholder="Search promotions" /></IconField>
-      <SelectButton v-model="show" :options="[{ l: `All ${list.rows.value.length}`, v: 'all' }, { l: `Running ${countOf('Running now')}`, v: 'Running now' }, { l: `Scheduled ${countOf('Scheduled')}`, v: 'Scheduled' }, { l: `Ended ${countOf('Ended')}`, v: 'Ended' }, { l: `Off ${countOf('Off')}`, v: 'Off' }]" option-label="l" option-value="v" :allow-empty="false" />
-    </div>
-    <div v-if="list.loading.value && !list.rows.value.length" class="muted">Loading…</div>
-    <div v-else-if="!shown.length" class="card muted">{{ list.rows.value.length ? 'No promotion in this list.' : 'No promotions yet.' }}</div>
-    <div class="pr-grid">
-      <article v-for="p in shown" :key="p.id" class="pr-card" :class="{ dim: ['Ended', 'Off'].includes(state(p).l), click: auth.isAdmin }" :style="{ '--s': STATE_COLOR[state(p).l] }" @click="auth.isAdmin && open(p)">
-        <div class="deal">
-          <span class="big">{{ bigDeal(p).big }}</span>
-          <span class="dsmall">{{ bigDeal(p).small }}</span>
-        </div>
-        <div class="body">
-          <div class="top">
-            <span class="state"><span class="pulse" />{{ state(p).l }}</span>
-            <ToggleSwitch v-if="auth.isAdmin" :model-value="p.isActive" @click.stop @update:model-value="toggle(p)" v-tooltip.left="p.isActive ? 'Turn off' : 'Turn on'" />
-          </div>
-          <h3>{{ p.name }}</h3>
-          <div v-if="p.description" class="small muted desc">{{ p.description }}</div>
-          <ul class="meta">
-            <li><i class="pi pi-tag" /> {{ scopeText(p) }}</li>
-            <li><i class="pi pi-building" /> {{ storesText(p) }}</li>
-            <li><i class="pi pi-clock" /> {{ whenText(p) }}</li>
-          </ul>
-        </div>
-      </article>
-    </div>
-    <div v-if="pages > 1" class="pager">
-      <Button icon="pi pi-angle-left" text rounded :disabled="pageNo <= 1" aria-label="Previous page" @click="goPage(pageNo - 1)" />
-      <span class="small muted">Page {{ pageNo }} of {{ pages }}</span>
-      <Button icon="pi pi-angle-right" text rounded :disabled="pageNo >= pages" aria-label="Next page" @click="goPage(pageNo + 1)" />
+    <div class="card">
+      <div class="toolbar"><IconField><InputIcon class="pi pi-search" /><InputText v-model="list.filters.search" placeholder="Name" /></IconField></div>
+      <DataTable :value="list.rows.value" lazy paginator :rows="list.page.rows" :first="list.page.first" :total-records="list.total.value"
+        :loading="list.loading.value" size="small" @page="list.onPage" @row-click="auth.isAdmin && open($event.data)" :row-class="() => (auth.isAdmin ? 'clickable' : '')">
+        <template #empty><span class="muted">No promotions yet</span></template>
+        <Column header="Name"><template #body="{ data }"><b>{{ data.name }}</b><div class="small muted">{{ data.description }}</div></template></Column>
+        <Column header="Deal"><template #body="{ data }">{{ describePromotion(data) }}</template></Column>
+        <Column header="On"><template #body="{ data }">{{ scopeText(data) }}</template></Column>
+        <Column header="Stores"><template #body="{ data }">{{ storesText(data) }}</template></Column>
+        <Column header="When"><template #body="{ data }"><span class="small">{{ whenText(data) }}</span></template></Column>
+        <Column header="Status"><template #body="{ data }"><Tag :value="state(data).l" :severity="state(data).s" /></template></Column>
+        <Column v-if="auth.isAdmin" style="width: 70px"><template #body="{ data }"><ToggleSwitch :model-value="data.isActive" @click.stop @update:model-value="toggle(data)" /></template></Column>
+      </DataTable>
     </div>
 
     <Dialog v-model:visible="dlg" :header="form.id ? 'Edit promotion' : 'New promotion'" modal :style="{ width: '720px' }" :breakpoints="{ '760px': '98vw' }">
@@ -236,31 +204,3 @@ onMounted(async () => {
     </Dialog>
   </div>
 </template>
-
-<style scoped>
-.pr-tools { margin-bottom: 14px; }
-.pr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; align-items: stretch; }
-.pr-card { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; transition: transform .15s ease, box-shadow .15s ease; }
-.pr-card.click { cursor: pointer; }
-.pr-card.click:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(60, 35, 15, .12); }
-.pr-card.dim { opacity: .65; }
-.deal { flex-shrink: 0; width: 112px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 12px 8px; color: #fff; text-align: center;
-  background: linear-gradient(160deg, var(--p-primary-color), color-mix(in srgb, var(--p-primary-color) 65%, #000)); position: relative; }
-.deal::after { content: ''; position: absolute; right: -7px; top: 0; bottom: 0; width: 14px; background: radial-gradient(circle at 7px 7px, var(--surface) 4.5px, transparent 5px) 0 0 / 14px 14px repeat-y; }
-.big { font-size: 1.9rem; font-weight: 850; line-height: 1; letter-spacing: -.02em; }
-.dsmall { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; opacity: .9; }
-.body { flex: 1; min-width: 0; padding: 12px 14px 12px 18px; display: flex; flex-direction: column; gap: 4px; }
-.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.state { display: inline-flex; align-items: center; gap: 6px; font-size: .75rem; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; color: var(--s); }
-.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--s); }
-.pr-card:not(.dim) .state .pulse { animation: pulse 1.8s ease-out infinite; }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--s) 60%, transparent); } 100% { box-shadow: 0 0 0 7px transparent; } }
-.body h3 { margin: 2px 0 0; font-size: 1.02rem; font-weight: 750; }
-.desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.meta { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; font-size: .84rem; color: var(--text-2); }
-.meta li { display: flex; gap: 7px; align-items: baseline; min-width: 0; }
-.meta .pi { font-size: .78rem; color: var(--text-3); }
-.pager { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 14px; }
-@media (max-width: 420px) { .pr-grid { grid-template-columns: 1fr; } .deal { width: 92px; } .big { font-size: 1.5rem; } }
-@media (prefers-reduced-motion: reduce) { .pr-card, .pr-card:hover { transition: none; transform: none; } .state .pulse { animation: none !important; } }
-</style>

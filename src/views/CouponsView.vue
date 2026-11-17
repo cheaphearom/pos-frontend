@@ -25,20 +25,6 @@ const state = (c: any) => {
   return { l: 'Active', s: 'success' };
 };
 
-// ── Cards
-const STATE_COLOR: Record<string, string> = { Active: 'var(--good)', Scheduled: '#2c6e9b', 'Used up': 'var(--warn)', Expired: 'var(--text-3)', Off: 'var(--text-3)' };
-const which = ref<'all' | 'Active' | 'Scheduled' | 'Used up' | 'Expired' | 'Off'>('all');
-const shown = computed(() => (which.value === 'all' ? list.rows.value : list.rows.value.filter((c: any) => state(c).l === which.value)));
-const countOf = (l: string) => list.rows.value.filter((c: any) => state(c).l === l).length;
-function bigDeal(c: any) {
-  const v = Number(c.value);
-  return c.type === 'PERCENT' ? { big: `${v.toFixed(v % 1 ? 1 : 0)}%`, small: 'off the sale' } : { big: m(v).replace(/\.00$/, ''), small: 'off the sale' };
-}
-const usedPct = (c: any) => (c.usageLimit ? Math.min(100, Math.round((c.usedCount / c.usageLimit) * 100)) : 0);
-const pages = computed(() => Math.max(1, Math.ceil(list.total.value / list.page.rows)));
-const pageNo = computed(() => Math.floor(list.page.first / list.page.rows) + 1);
-const goPage = (n: number) => list.onPage({ first: (n - 1) * list.page.rows, rows: list.page.rows });
-
 // ── Create
 const dlg = ref(false);
 const saving = ref(false);
@@ -105,40 +91,19 @@ onMounted(async () => {
       <div><h1>Coupons</h1><div class="sub">Discount codes the cashier scans or types at the POS</div></div>
       <div class="actions"><Button v-if="auth.isAdmin" label="New coupon" icon="pi pi-plus" @click="Object.assign(form, empty()); dlg = true" /></div>
     </div>
-    <div class="toolbar cp-tools">
-      <IconField><InputIcon class="pi pi-search" /><InputText v-model="list.filters.search" placeholder="Campaign name" /></IconField>
-      <SelectButton v-model="which" :options="[{ l: `All ${list.rows.value.length}`, v: 'all' }, { l: `Active ${countOf('Active')}`, v: 'Active' }, { l: `Scheduled ${countOf('Scheduled')}`, v: 'Scheduled' }, { l: `Used up ${countOf('Used up')}`, v: 'Used up' }, { l: `Expired ${countOf('Expired')}`, v: 'Expired' }, { l: `Off ${countOf('Off')}`, v: 'Off' }]" option-label="l" option-value="v" :allow-empty="false" />
-    </div>
-    <div v-if="list.loading.value && !list.rows.value.length" class="muted">Loading…</div>
-    <div v-else-if="!shown.length" class="card muted">{{ list.rows.value.length ? 'No coupon in this list.' : 'No coupons yet.' }}</div>
-    <div class="cp-grid">
-      <article v-for="c in shown" :key="c.id" class="cp-card" :class="{ dim: ['Expired', 'Off'].includes(state(c).l) }" :style="{ '--s': STATE_COLOR[state(c).l] }" @click="open(c)">
-        <div class="deal">
-          <i class="pi pi-ticket" />
-          <span class="big">{{ bigDeal(c).big }}</span>
-          <span class="dsmall">{{ bigDeal(c).small }}</span>
-        </div>
-        <div class="body">
-          <div class="top">
-            <span class="state"><span class="dot" />{{ state(c).l }}</span>
-            <ToggleSwitch v-if="auth.isAdmin" :model-value="c.isActive" @click.stop @update:model-value="toggle(c)" v-tooltip.left="c.isActive ? 'Turn off' : 'Turn on'" />
-          </div>
-          <h3>{{ c.name }}</h3>
-          <div class="small muted">{{ describeCoupon(c) }}</div>
-          <div class="nums">
-            <span><b>{{ c._count.codes }}</b> {{ c._count.codes === 1 ? 'code' : 'codes' }}</span>
-            <span><b>{{ c.usedCount }}</b><template v-if="c.usageLimit"> / {{ c.usageLimit }}</template> used</span>
-            <span><b>{{ m(c.discountGiven) }}</b> given</span>
-          </div>
-          <div v-if="c.usageLimit" class="bar" :title="`${usedPct(c)}% used`"><span :style="{ width: usedPct(c) + '%' }" /></div>
-          <div class="small muted when"><i class="pi pi-calendar" /> {{ c.startsAt ? date(c.startsAt) : 'now' }} → {{ c.endsAt ? date(c.endsAt) : 'no end' }}</div>
-        </div>
-      </article>
-    </div>
-    <div v-if="pages > 1" class="pager">
-      <Button icon="pi pi-angle-left" text rounded :disabled="pageNo <= 1" aria-label="Previous page" @click="goPage(pageNo - 1)" />
-      <span class="small muted">Page {{ pageNo }} of {{ pages }}</span>
-      <Button icon="pi pi-angle-right" text rounded :disabled="pageNo >= pages" aria-label="Next page" @click="goPage(pageNo + 1)" />
+    <div class="card">
+      <div class="toolbar"><IconField><InputIcon class="pi pi-search" /><InputText v-model="list.filters.search" placeholder="Campaign name" /></IconField></div>
+      <DataTable :value="list.rows.value" lazy paginator :rows="list.page.rows" :first="list.page.first" :total-records="list.total.value"
+        :loading="list.loading.value" size="small" @page="list.onPage" @row-click="open($event.data)" :row-class="() => 'clickable'">
+        <template #empty><span class="muted">No coupons yet</span></template>
+        <Column header="Campaign"><template #body="{ data }"><b>{{ data.name }}</b><div class="small muted">{{ describeCoupon(data) }}</div></template></Column>
+        <Column header="Codes" class="right"><template #body="{ data }">{{ data._count.codes }}</template></Column>
+        <Column header="Used" class="right"><template #body="{ data }">{{ data.usedCount }}<span v-if="data.usageLimit" class="muted"> / {{ data.usageLimit }}</span></template></Column>
+        <Column header="Discount given" class="right"><template #body="{ data }">{{ m(data.discountGiven) }}</template></Column>
+        <Column header="Valid"><template #body="{ data }"><span class="small">{{ data.startsAt ? date(data.startsAt) : 'now' }} → {{ data.endsAt ? date(data.endsAt) : 'no end' }}</span></template></Column>
+        <Column header="Status"><template #body="{ data }"><Tag :value="state(data).l" :severity="state(data).s" /></template></Column>
+        <Column v-if="auth.isAdmin" style="width: 70px"><template #body="{ data }"><ToggleSwitch :model-value="data.isActive" @click.stop @update:model-value="toggle(data)" /></template></Column>
+      </DataTable>
     </div>
 
     <Dialog v-model:visible="dlg" header="New coupon" modal :style="{ width: '680px' }" :breakpoints="{ '720px': '98vw' }">
@@ -207,30 +172,5 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.cp-tools { margin-bottom: 14px; }
-.cp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; align-items: stretch; }
-.cp-card { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
-.cp-card:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(60, 35, 15, .12); }
-.cp-card.dim { opacity: .65; }
-.deal { flex-shrink: 0; width: 112px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 12px 8px; color: #fff; text-align: center; position: relative;
-  background: linear-gradient(160deg, var(--accent-2, #c8893f), color-mix(in srgb, var(--accent-2, #c8893f) 60%, #000)); }
-.deal::after { content: ''; position: absolute; right: -7px; top: 0; bottom: 0; width: 14px; background: radial-gradient(circle at 7px 7px, var(--surface) 4.5px, transparent 5px) 0 0 / 14px 14px repeat-y; }
-.deal .pi { font-size: 1rem; opacity: .85; }
-.big { font-size: 1.8rem; font-weight: 850; line-height: 1; letter-spacing: -.02em; }
-.dsmall { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; opacity: .9; }
-.body { flex: 1; min-width: 0; padding: 12px 14px 12px 18px; display: flex; flex-direction: column; gap: 4px; }
-.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.state { display: inline-flex; align-items: center; gap: 6px; font-size: .75rem; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; color: var(--s); }
-.state .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--s); }
-.body h3 { margin: 2px 0 0; font-size: 1.02rem; font-weight: 750; }
-.nums { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .84rem; color: var(--text-2); margin-top: 6px; }
-.nums b { color: var(--text); font-weight: 800; }
-.bar { height: 6px; border-radius: 999px; background: var(--bg); overflow: hidden; }
-.bar span { display: block; height: 100%; border-radius: 999px; background: var(--accent-2, #c8893f); }
-.when { margin-top: 2px; }
-.pager { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 14px; }
-@media (max-width: 420px) { .cp-grid { grid-template-columns: 1fr; } .deal { width: 92px; } .big { font-size: 1.45rem; } }
-@media (prefers-reduced-motion: reduce) { .cp-card, .cp-card:hover { transition: none; transform: none; } }
-
 .stat { font-size: 20px; font-weight: 650; }
 </style>
