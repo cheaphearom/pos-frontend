@@ -84,7 +84,10 @@ async function request<T>(method: string, path: string, opts: { query?: Query; b
   const body = text ? safeJson(text) : undefined;
   if (!res.ok) {
     const msg = (body as any)?.message;
-    throw new ApiError(res.status, Array.isArray(msg) ? msg.join('; ') : msg || res.statusText, body);
+    // an HTML page (e.g. Cloudflare's "Bad gateway") instead of the POS's own JSON answer
+    const page = typeof body === 'string' && body.trimStart().startsWith('<');
+    const fallback = page ? `The server did not answer (error ${res.status}). Check that the POS server and its link are running, then try again.` : res.statusText || `Error ${res.status}`;
+    throw new ApiError(res.status, Array.isArray(msg) ? msg.join('; ') : msg || fallback, body);
   }
   return body as T;
 }
