@@ -5,6 +5,7 @@ import { api } from '@/api/client';
 import type { Store } from '@/api/types';
 import { useNotify } from '@/composables/useNotify';
 import { useApp } from '@/stores/app';
+import { nameColor } from '@/utils/colors';
 
 const notify = useNotify();
 const app = useApp();
@@ -14,6 +15,21 @@ const dialog = ref(false);
 const saving = ref(false);
 const empty = () => ({ id: '', code: '', name: '', externalId: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true, khrOn: true, khrRate: 4100 as number | null, cashOutNeedsApproval: true, copyProductsFrom: null as string | null });
 const form = reactive(empty());
+
+// ── Cards: search and filters
+const q = ref('');
+const show = ref<'all' | 'active' | 'inactive' | 'unlinked'>('active');
+const shown = computed(() => {
+  const s = q.value.trim().toLowerCase();
+  return rows.value
+    .filter((r) => show.value === 'all' || (show.value === 'active' ? r.isActive : show.value === 'inactive' ? !r.isActive : r.isActive && !r.externalId))
+    .filter((r) => !s || [r.code, r.name, r.address, r.phone, r.externalId].some((x) => (x ?? '').toLowerCase().includes(s)));
+});
+const counts = computed(() => ({
+  all: rows.value.length, active: rows.value.filter((r) => r.isActive).length, inactive: rows.value.filter((r) => !r.isActive).length,
+  unlinked: rows.value.filter((r) => r.isActive && !r.externalId).length,
+}));
+const taxText = (r: Store) => (Number(r.taxRate) * 100).toFixed(2).replace(/\.?0+$/, '') + '%';
 
 async function load() {
   loading.value = true;
@@ -171,27 +187,43 @@ onMounted(load);
 <template>
   <div class="page">
     <div class="page-head">
-      <div><h1>Stores</h1><div class="sub">Branches, their tax rate and currency</div></div>
+      <div><h1>Stores</h1><div class="sub"><b>{{ counts.active }}</b> active stores<template v-if="counts.inactive"> · {{ counts.inactive }} inactive</template> · <b>{{ counts.active - counts.unlinked }}</b> linked to BROWN</div></div>
       <div class="actions">
         <Button :label="allJob?.running ? `Syncing ${allJob.done} of ${allJob.total}…` : 'Sync all stores'" icon="pi pi-sync" outlined :loading="allJob?.running" @click="openSyncAll" />
         <Button label="New store" icon="pi pi-plus" @click="open()" />
       </div>
     </div>
-    <div class="card">
-      <DataTable :value="rows" :loading="loading" size="small" row-hover @row-click="open($event.data)" :row-class="() => 'clickable'">
-        <Column header="Code"><template #body="{ data }"><b class="mono">{{ data.code }}</b></template></Column>
-        <Column field="name" header="Name" />
-        <Column field="address" header="Address" />
-        <Column field="phone" header="Phone" />
-        <Column field="currency" header="Currency" />
-        <Column header="Tax" class="right"><template #body="{ data }">{{ (Number(data.taxRate) * 100).toFixed(2).replace(/\.?0+$/, '') }}%</template></Column>
-        <Column header="Café"><template #body="{ data }"><i v-if="data.hasKitchen" class="pi pi-check" /></template></Column>
-        <Column header="Online"><template #body="{ data }"><a v-if="data.onlineOrdering" :href="`/order/${data.code}`" target="_blank" @click.stop><i class="pi pi-external-link" /></a></template></Column>
-        <Column header="Riel"><template #body="{ data }"><span v-if="data.khrRate" class="num">{{ Number(data.khrRate).toLocaleString() }}</span><span v-else class="muted">off</span></template></Column>
-        <Column header="KHQR"><template #body="{ data }"><span v-if="data.khqrAccountId" class="mono small">{{ data.khqrAccountId }}</span><span v-else class="muted">off</span></template></Column>
-        <Column header="Status"><template #body="{ data }"><Tag :value="data.isActive ? 'active' : 'inactive'" :severity="data.isActive ? 'success' : 'secondary'" /></template></Column>
-        <Column header="BROWN menu"><template #body="{ data }"><Button label="Sync" icon="pi pi-sync" size="small" outlined @click.stop="openSync(data)" /></template></Column>
-      </DataTable>
+    <div class="toolbar st-tools">
+      <IconField><InputIcon class="pi pi-search" /><InputText v-model="q" placeholder="Code, name, address, BROWN id" /></IconField>
+      <SelectButton v-model="show" :options="[{ l: `Active ${counts.active}`, v: 'active' }, { l: `Not linked ${counts.unlinked}`, v: 'unlinked' }, { l: `Inactive ${counts.inactive}`, v: 'inactive' }, { l: `All ${counts.all}`, v: 'all' }]" option-label="l" option-value="v" :allow-empty="false" />
+    </div>
+    <div v-if="loading && !rows.length" class="muted">Loading…</div>
+    <div v-else-if="!shown.length" class="card muted">No store matches.</div>
+    <div class="st-grid">
+      <article v-for="r in shown" :key="r.id" class="st-card" :class="{ off: !r.isActive }" :style="{ '--c': nameColor(r.code) }" tabindex="0" @click="open(r)" @keydown.enter.self="open(r)">
+        <header>
+          <span class="code">{{ r.code }}</span>
+          <div class="t">
+            <h3>{{ r.name }}</h3>
+            <div class="small muted ell"><i class="pi pi-map-marker" /> {{ r.address || 'No address' }}</div>
+          </div>
+          <Tag v-if="!r.isActive" value="inactive" severity="secondary" />
+        </header>
+        <div class="feats">
+          <span class="f"><i class="pi pi-percentage" /> Tax {{ taxText(r) }}</span>
+          <span class="f">{{ r.currency }}</span>
+          <span v-if="(r as any).khrRate" class="f">៛ {{ Number((r as any).khrRate).toLocaleString() }}</span>
+          <span v-if="(r as any).khqrAccountId" class="f on"><i class="pi pi-qrcode" /> KHQR</span>
+          <span v-if="(r as any).hasKitchen" class="f on"><i class="pi pi-th-large" /> Café</span>
+          <a v-if="(r as any).onlineOrdering" class="f on" :href="`/order/${r.code}`" target="_blank" @click.stop><i class="pi pi-globe" /> Online</a>
+          <span v-if="r.phone" class="f"><i class="pi pi-phone" /> {{ r.phone }}</span>
+        </div>
+        <footer>
+          <span v-if="r.externalId" class="brown ok" v-tooltip.top="`BROWN store id ${r.externalId}`"><i class="pi pi-link" /> BROWN <span class="mono">…{{ r.externalId.slice(-6) }}</span></span>
+          <span v-else class="brown"><i class="pi pi-exclamation-circle" /> Not linked to BROWN</span>
+          <Button label="Sync" icon="pi pi-sync" size="small" outlined @click.stop="openSync(r)" />
+        </footer>
+      </article>
     </div>
 
     <Dialog v-model:visible="dialog" :header="form.id ? 'Edit store' : 'New store'" modal :style="{ width: '560px' }" :breakpoints="{ '720px': '95vw' }">
@@ -343,4 +375,26 @@ onMounted(load);
   body.printing-qr #print-qr, body.printing-qr #print-qr * { visibility: visible; color: #000 !important; }
   body.printing-qr #print-qr { position: absolute; left: 0; top: 0; width: 100%; grid-template-columns: repeat(3, 1fr); }
 }
+</style>
+
+<style scoped>
+.st-tools { margin-bottom: 14px; }
+.st-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+.st-card { position: relative; display: flex; flex-direction: column; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; cursor: pointer; overflow: hidden; transition: transform .15s ease, box-shadow .15s ease, border-color .15s; }
+.st-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--c); }
+.st-card:hover, .st-card:focus-visible { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(60, 35, 15, .12); border-color: color-mix(in srgb, var(--c) 40%, var(--border)); outline: none; }
+.st-card.off { opacity: .6; }
+.st-card header { display: flex; align-items: center; gap: 12px; }
+.code { flex-shrink: 0; min-width: 52px; height: 44px; padding: 0 8px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: .9rem; letter-spacing: .02em; color: #fff; background: var(--c); }
+.t { min-width: 0; flex: 1; }
+.t h3 { margin: 0 0 2px; font-size: 1rem; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feats { display: flex; flex-wrap: wrap; gap: 6px; }
+.f { display: inline-flex; align-items: center; gap: 5px; font-size: .78rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--bg); color: var(--text-2); text-decoration: none; }
+.f .pi { font-size: .75rem; }
+.f.on { background: color-mix(in srgb, var(--c) 13%, transparent); color: var(--c); }
+.st-card footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+.brown { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; font-weight: 600; color: var(--warn); }
+.brown.ok { color: var(--good); }
+@media (prefers-reduced-motion: reduce) { .st-card, .st-card:hover { transition: none; transform: none; } }
 </style>
