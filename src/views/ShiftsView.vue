@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { printElement } from '@/utils/print';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { api } from '@/api/client';
@@ -54,9 +55,7 @@ async function openX() {
   try { xReport.value = await api.get(`/shifts/${detail.value.id}/x-report`); xDlg.value = true; } catch (e) { notify.error(e); }
 }
 function printX() {
-  document.body.classList.add('printing-report');
-  window.print();
-  setTimeout(() => document.body.classList.remove('printing-report'), 500);
+  printElement(document.querySelector('.reg-report'));
 }
 
 const closeDlg = ref(false);

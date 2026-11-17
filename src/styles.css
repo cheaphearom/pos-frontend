@@ -79,17 +79,7 @@ a { color: var(--p-primary-color); }
 .p-datatable .right, .p-datatable td.right { text-align: right; }
 .p-datatable th.right .p-datatable-column-header-content { justify-content: flex-end; }
 
-/* Print only the receipt drawer */
-@media print {
-  body.printing-receipt * { visibility: hidden; }
-  body.printing-receipt .receipt, body.printing-receipt .receipt * { visibility: visible; color: #000 !important; }
-  body.printing-receipt .receipt { position: absolute; left: 0; top: 0; width: 80mm; font-size: 12px; }
-  body.printing-receipt .no-print { display: none !important; }
-  body.printing-report * { visibility: hidden; }
-  body.printing-report .reg-report, body.printing-report .reg-report * { visibility: visible; color: #000 !important; }
-  body.printing-report .reg-report { position: absolute; left: 0; top: 0; width: 80mm; font-size: 12px; background: #fff; }
-  body.printing-report .no-print { display: none !important; }
-}
+/* Receipts and shift reports are printed on their own by utils/print.ts (no page-wide print rules needed) */
 .p-overlay-mask.p-dialog-mask, .p-overlay-mask.p-drawer-mask { background: rgba(10, 15, 25, 0.45); }
 
 /* Khmer: the script needs a little more line height to stay readable */

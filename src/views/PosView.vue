@@ -21,6 +21,7 @@ import PosOptions, { type ChosenOption, type OptionGroup } from '@/components/po
 import { groupsForProduct } from '@/pos/options';
 import { optionsText } from '@/utils/modifiers';
 import PosReceipt from '@/components/pos/PosReceipt.vue';
+import { printElement } from '@/utils/print';
 import ManagerApproval from '@/components/ManagerApproval.vue';
 import RegisterReport from '@/components/RegisterReport.vue';
 import { useNotify } from '@/composables/useNotify';
@@ -542,9 +543,7 @@ async function saveOffline(body: any, payments: { method: string; amount: number
 }
 
 function printReceipt() {
-  document.body.classList.add('printing-pos');
-  window.print();
-  setTimeout(() => document.body.classList.remove('printing-pos'), 500);
+  printElement(document.getElementById('print-receipt'));
 }
 function nextSale() {
   receiptDlg.value = false;
@@ -662,9 +661,7 @@ async function openX() {
   try { xReport.value = await api.get(`/shifts/${shift.value.id}/x-report`); xDlg.value = true; } catch (e) { notify.error(e); }
 }
 function printX() {
-  document.body.classList.add('printing-report');
-  window.print();
-  setTimeout(() => document.body.classList.remove('printing-report'), 500);
+  printElement(document.querySelector('.reg-report'));
 }
 
 const displayState = computed<DisplayState>(() => {
@@ -1238,10 +1235,7 @@ kbd { font: inherit; font-size: 11px; font-weight: 700; border: 1px solid var(--
 </style>
 
 <style>
-@media print {
-  body.printing-pos * { visibility: hidden; }
-  body.printing-pos #print-receipt, body.printing-pos #print-receipt * { visibility: visible; color: #000 !important; }
-  body.printing-pos #print-receipt { display: block !important; position: absolute; left: 0; top: 0; width: 72mm; }
-  @page { size: 80mm auto; margin: 4mm; }
-}
+/* the print frame (utils/print.ts) shows the hidden receipt copy */
+#print-receipt { width: 72mm; }
+body > #print-receipt { display: block !important; }
 </style>
