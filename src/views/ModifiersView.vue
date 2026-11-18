@@ -5,7 +5,7 @@ import { api } from '@/api/client';
 import { useNotify } from '@/composables/useNotify';
 import { useAuth } from '@/stores/auth';
 import { money } from '@/utils/format';
-import { initials, nameColor } from '@/utils/colors';
+import { nameColor } from '@/utils/colors';
 
 const auth = useAuth();
 const notify = useNotify();
@@ -70,31 +70,35 @@ onMounted(load);
         <Button v-if="auth.isAdmin" label="New option group" icon="pi pi-plus" @click="open()" />
       </div>
     </div>
-    <div v-if="loading && !groups.length" class="muted">Loading…</div>
-    <div v-else-if="!shown.length" class="card muted">{{ q ? 'Nothing matches your search.' : 'No option groups yet.' }}</div>
-    <div class="og-grid">
-      <article v-for="g in shown" :key="g.id" class="og-card" :style="{ '--c': nameColor(g.name) }">
-        <header>
-          <span class="ico">{{ initials(g.name) }}</span>
-          <div class="t">
-            <h3>{{ g.name }}</h3>
-            <div class="badges">
-              <span class="b" :class="{ req: g.minSelect }">{{ g.minSelect ? 'Required' : 'Optional' }}</span>
-              <span class="b">{{ g.maxSelect > 1 ? `up to ${g.maxSelect}` : 'choose one' }}</span>
+    <div class="card">
+      <DataTable :value="shown" :loading="loading" data-key="id" size="small">
+        <template #empty><span class="muted">{{ q ? 'Nothing matches your search.' : 'No option groups yet.' }}</span></template>
+        <Column header="Option group" style="width: 220px">
+          <template #body="{ data }"><span class="gname" :style="{ '--c': nameColor(data.name) }"><span class="dot" /><b>{{ data.name }}</b></span></template>
+        </Column>
+        <Column header="Rule" style="width: 190px">
+          <template #body="{ data }">
+            <span class="b" :class="{ req: data.minSelect }" :style="{ '--c': nameColor(data.name) }">{{ data.minSelect ? 'Required' : 'Optional' }}</span>
+            <span class="b">{{ data.maxSelect > 1 ? `up to ${data.maxSelect}` : 'choose one' }}</span>
+          </template>
+        </Column>
+        <Column header="Options">
+          <template #body="{ data }">
+            <div class="chips" :style="{ '--c': nameColor(data.name) }">
+              <span v-for="o in data.options" :key="o.id" class="chip" :class="{ def: o.isDefault }" v-tooltip.top="o.isDefault ? 'Chosen by default' : undefined">
+                {{ o.name }}<b v-if="Number(o.priceDelta)" class="pd">{{ Number(o.priceDelta) > 0 ? '+' : '' }}{{ money(o.priceDelta) }}</b>
+              </span>
             </div>
-          </div>
-          <div v-if="auth.isAdmin" class="acts">
-            <Button icon="pi pi-pencil" text rounded size="small" aria-label="Edit" @click="open(g)" />
-            <Button icon="pi pi-trash" text rounded size="small" severity="danger" aria-label="Delete" @click="remove(g)" />
-          </div>
-        </header>
-        <div class="big"><b>{{ g._count.products }}</b> {{ g._count.products === 1 ? 'drink' : 'drinks' }} · {{ g.options.length }} {{ g.options.length === 1 ? 'option' : 'options' }}</div>
-        <div class="chips">
-          <span v-for="o in g.options" :key="o.id" class="chip" :class="{ def: o.isDefault }" v-tooltip.top="o.isDefault ? 'Chosen by default' : undefined">
-            {{ o.name }}<b v-if="Number(o.priceDelta)" class="pd">{{ Number(o.priceDelta) > 0 ? '+' : '' }}{{ money(o.priceDelta) }}</b>
-          </span>
-        </div>
-      </article>
+          </template>
+        </Column>
+        <Column header="Drinks" class="right" style="width: 90px"><template #body="{ data }"><b>{{ data._count.products }}</b></template></Column>
+        <Column v-if="auth.isAdmin" class="right" style="width: 110px">
+          <template #body="{ data }">
+            <Button icon="pi pi-pencil" text rounded aria-label="Edit" @click="open(data)" />
+            <Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete" @click="remove(data)" />
+          </template>
+        </Column>
+      </DataTable>
     </div>
     <Dialog v-model:visible="dlg" :header="form.id ? 'Edit option group' : 'New option group'" modal :style="{ width: '560px' }" :breakpoints="{ '600px': '98vw' }">
       <form class="form" @submit.prevent="save">
@@ -121,26 +125,12 @@ onMounted(load);
 </template>
 
 <style scoped>
-.og-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; align-items: start; }
-.og-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; overflow: hidden; transition: transform .15s ease, box-shadow .15s ease; }
-.og-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--c); }
-.og-card:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(60, 35, 15, .12); }
-.og-card header { display: flex; align-items: center; gap: 12px; }
-.ico { flex-shrink: 0; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; color: #fff; background: var(--c); box-shadow: 0 4px 12px color-mix(in srgb, var(--c) 35%, transparent); }
-.t { min-width: 0; flex: 1; }
-.t h3 { margin: 0 0 4px; font-size: 1.05rem; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.badges { display: flex; gap: 4px; flex-wrap: wrap; }
-.b { font-size: .72rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--bg); color: var(--text-2); }
+.gname { display: inline-flex; align-items: center; gap: 8px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex-shrink: 0; }
+.b { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--bg); color: var(--text-2); margin-right: 4px; white-space: nowrap; }
 .b.req { background: color-mix(in srgb, var(--c) 15%, transparent); color: var(--c); }
-.acts { display: flex; opacity: 0; transition: opacity .15s; }
-.og-card:hover .acts, .acts:focus-within { opacity: 1; }
-.big { margin: 12px 0 10px; color: var(--text-2); font-size: .9rem; }
-.big b { font-size: 1.5rem; font-weight: 800; color: var(--text); margin-right: 2px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; align-content: flex-start; padding-top: 10px; border-top: 1px solid var(--border); }
-.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 13px; background: var(--surface); }
-.chip.def { background: var(--c); border-color: var(--c); color: #fff; }
-.pd { font-size: 11.5px; font-weight: 800; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); }
-.chip.def .pd { background: rgba(255, 255, 255, .25); color: #fff; }
-@media (hover: none) { .acts { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .og-card, .og-card:hover { transition: none; transform: none; } }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: flex-start; }
+.chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; font-size: 12.5px; background: var(--surface); white-space: nowrap; }
+.chip.def { border-color: var(--c); color: var(--c); font-weight: 650; }
+.pd { font-size: 11px; font-weight: 800; color: var(--c); }
 </style>
