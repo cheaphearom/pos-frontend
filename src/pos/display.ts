@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /**
  * Link between the POS window and the customer display window on the same computer.
  * Uses BroadcastChannel: no server, works offline, instant.

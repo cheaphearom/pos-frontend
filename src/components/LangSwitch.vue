@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** ខ្មែរ / English switch. The choice is kept on this device (and followed by the customer display). */
 import { lang, setLang } from '@/i18n';

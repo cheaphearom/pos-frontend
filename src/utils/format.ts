@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /** Formatting helpers. The API returns money as strings like "12.50". */
 export function money(v: string | number | null | undefined, currency = 'USD') {
   const n = Number(v ?? 0);

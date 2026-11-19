@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /**
  * "Keyboard" button: the cashier chooses whether to use the on-screen keyboard / number pad on this till.

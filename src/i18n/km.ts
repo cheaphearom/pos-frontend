@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /**
  * Khmer translations. Key = the English text exactly as it appears on screen (spaces at the ends are ignored).
  * To translate more of the app, add lines here; anything missing stays in English.

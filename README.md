@@ -139,3 +139,9 @@ Every request is checked against the stores the user is assigned to. A cashier i
 
 - How every part works (POS, café mode, wallet, coupons, riel cash, X/Z reports, Khmer…): **[docs/FEATURES.md](docs/FEATURES.md)**
 - API, database, integration API and server deployment: **pos-backend**
+
+## License
+
+Copyright (c) 2026 Chea Phearom. All rights reserved.
+
+This is proprietary software: no use, copying, changes or distribution without written permission. See [LICENSE](LICENSE). Third-party packages installed by npm keep their own licenses.

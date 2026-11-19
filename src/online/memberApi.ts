@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /** Member app: login token kept on the phone, and calls to /member/* with it. */
 import { reactive } from 'vue';
 import { PublicError } from './publicApi';

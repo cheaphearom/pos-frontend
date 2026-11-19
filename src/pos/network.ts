@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 import { ref } from 'vue';
 
 /** true while the browser thinks it is online. Requests can still fail; callers handle that. */

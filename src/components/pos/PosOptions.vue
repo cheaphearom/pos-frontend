@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Choose drink options (size, sugar, ice, milk, extras) before adding to the cart. */
 import { computed, reactive, ref, watch } from 'vue';

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { setLoggedOutHandler } from './api/client';
 import { memberSession, setMemberLoggedOutHandler } from './online/memberApi';

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 import type { OptionGroup } from '@/components/pos/PosOptions.vue';
 
 /** A product's own option in this store (sizes with their price, which BROWN options a drink offers). */

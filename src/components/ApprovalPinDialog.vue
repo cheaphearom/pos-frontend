@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Managers set the PIN they type on a cashier's POS to approve discounts, refunds and voids. */
 import { reactive, watch } from 'vue';

@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /**
  * System monitor (super admins): health of the API, database, Redis, webhook queue and the ML anomaly

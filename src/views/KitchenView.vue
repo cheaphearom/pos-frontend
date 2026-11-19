@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Barista / kitchen screen: live café orders from the POS and online, New → Preparing → Ready → Done. */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';

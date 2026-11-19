@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 import { ref } from 'vue';
 import { api, ApiError } from '@/api/client';
 import { idb } from './idb';

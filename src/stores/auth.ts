@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 import { defineStore } from 'pinia';
 import { setBusinessTimezone } from '@/utils/format';
 import { computed, ref } from 'vue';

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 const { chromium } = require('playwright');
 // End-to-end test of the POS screen, including offline mode.
 // Needs: API on :3000 with seed data, `npm run build && npx vite preview` on :4173, and Playwright installed.

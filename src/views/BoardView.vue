@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Pickup board for a TV in the café: /board?store=PP01. Public; shows queue numbers only. */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';

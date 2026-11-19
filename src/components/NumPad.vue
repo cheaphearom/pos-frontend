@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /**
  * On-screen number pad for touchscreen tills (money received, amounts). The first key replaces the amount

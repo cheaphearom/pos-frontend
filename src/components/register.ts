@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 import type { App } from 'vue';
 import AutoComplete from 'primevue/autocomplete';
 import Button from 'primevue/button';

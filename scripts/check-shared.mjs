@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 // Checks that src/shared/* are the same as the pos-backend files they copy (apart from the header note).
 // Usage: npm run check:shared [path to pos-backend]   (default ../pos-backend)
 import { readFileSync, existsSync } from 'node:fs';
@@ -9,8 +11,8 @@ if (!existsSync(backend + '/src')) {
   process.exit(2);
 }
 const files = { 'promotions.ts': 'src/promotions/engine.ts', 'coupons.ts': 'src/coupons/calc.ts', 'cash.ts': 'src/sales/cash.ts' };
-// Both copies start with a /* SHARED WITH ... */ note; compare what follows it.
-const body = (path) => readFileSync(path, 'utf8').replace(/^\/\*\s*\n \* SHARED WITH THE (FRONTEND|BACKEND)[\s\S]*?\*\/\n/, '');
+// Both copies start with the copyright lines and a /* SHARED WITH ... */ note; compare what follows them.
+const body = (path) => readFileSync(path, 'utf8').replace(/^(\/\/ (Copyright|Proprietary)[^\n]*\n)+/, '').replace(/^\/\*\s*\n \* SHARED WITH THE (FRONTEND|BACKEND)[\s\S]*?\*\/\n/, '');
 let bad = 0;
 for (const [mine, theirs] of Object.entries(files)) {
   const same = body(`src/shared/${mine}`) === body(`${backend}/${theirs}`);

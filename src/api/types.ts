@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 export type Role = 'SUPER_ADMIN' | 'STORE_MANAGER' | 'CASHIER';
 
 export interface StoreRef { id: string; code: string; name: string }

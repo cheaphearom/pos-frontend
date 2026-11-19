@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 // Browser test: online ordering on a phone (table QR + KHQR, pay at counter), POS online orders, barista, QR sheet.
 // Needs: fresh seed data, API on :3000 (KHQR_MODE=manual), vite preview on :4173, Playwright.
 const { chromium, devices } = require('playwright');

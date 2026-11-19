@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /**
  * Prints one element (a receipt, a shift report) on its own, for 80 mm thermal printers.
  *

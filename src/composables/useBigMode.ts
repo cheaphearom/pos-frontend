@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 import { ref, watch } from 'vue';
 
 /** Big mode on the POS screen: everything larger, for touchscreens. The cashier's choice, remembered on the till. */

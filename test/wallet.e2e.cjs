@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 const { chromium } = require('playwright');
 // Browser test: wallet cards at the POS (scan, PIN, top-up, activation, split payment) and admin page.
 // Needs: fresh seed data, API on :3000, vite preview on :4173, Playwright.

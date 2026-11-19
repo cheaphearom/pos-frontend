@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /** Minimal key-value store on IndexedDB (survives reloads and works offline). */
 const DB = 'pos-offline';
 const STORE = 'kv';

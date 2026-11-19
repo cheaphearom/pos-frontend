@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 import QRCode from 'qrcode';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';

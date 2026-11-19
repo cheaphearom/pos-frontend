@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Purchase history: every receipt linked to the member (in store and online). */
 import { lang } from '@/i18n';

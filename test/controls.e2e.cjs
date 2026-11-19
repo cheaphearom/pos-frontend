@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 // Browser test: cashier controls — discount limit with manager PIN at the POS, cashier refund and void with a PIN,
 // manager sets their PIN, store settings, audit log.
 // Needs: fresh seed data (manager.pp PIN 2580), API on :3000, vite preview on :4173, Playwright.

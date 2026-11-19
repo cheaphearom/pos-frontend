@@ -1,6 +1,8 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 import { useDark } from '@/composables/useDark';
 import LangSwitch from '@/components/LangSwitch.vue';
+import { COPYRIGHT } from '@/utils/copyright';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { Role } from '@/api/types';
@@ -110,6 +112,7 @@ async function logout() {
           </RouterLink>
         </div>
       </nav>
+      <p class="side-copy">{{ COPYRIGHT }}</p>
     </aside>
     <div class="backdrop" @click="open = false" />
 
@@ -160,6 +163,7 @@ async function logout() {
   position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 16px 12px;
   scrollbar-width: none; /* still scrolls, but no visible bar (Firefox, Chrome, Edge) */
 }
+.side-copy { margin: 18px 8px 4px; font-size: 11px; line-height: 1.4; color: var(--sidebar-text); opacity: .55; }
 .sidebar::-webkit-scrollbar { display: none; } /* older Chrome / Edge / Safari */
 /* stays at the top while the menu scrolls; same height as the top bar; sidebar colour (darker in dark mode) */
 .brand {

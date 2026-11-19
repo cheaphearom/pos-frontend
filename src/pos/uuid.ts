@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /** UUID v4. crypto.randomUUID only exists on HTTPS/localhost; getRandomValues works everywhere. */
 export function uuid(): string {
   if (typeof crypto.randomUUID === 'function' && window.isSecureContext) return crypto.randomUUID();

@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Order ahead: choose the store, then the normal online menu (logged in, so points and wallet work). */
 import { onMounted, ref } from 'vue';

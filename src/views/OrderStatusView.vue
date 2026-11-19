@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Customer's order status: KHQR to pay, then queue number and live progress until "Ready". */
 import { localName } from '@/i18n';

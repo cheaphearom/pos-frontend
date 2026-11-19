@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 // Browser test: bakery production (plan, bake, planned → done, batch sheet), end-of-day write-off, waste, report, product settings.
 // Needs: fresh seed data, API on :3000, vite preview on :4173, Playwright.
 const { chromium } = require('playwright');
