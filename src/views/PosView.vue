@@ -850,7 +850,12 @@ async function logout() {
               <span v-if="p.trackStock" class="stock" :class="{ neg: Number(p.stock) <= 0, low: Number(p.stock) > 0 && Number(p.stock) <= 5 }">{{ qty(p.stock) }} {{ p.unit }}</span>
             </span>
           </button>
-          <div v-if="!results.length" class="empty muted">
+          <div v-if="!results.length && catalog.items.value.length && search.trim()" class="empty">
+            <span class="muted">No product matches <b class="mono">{{ search.trim() }}</b>.</span>
+            <span class="muted small">A gift voucher, wallet card, coupon or member card? Press <b>Enter</b> or:</span>
+            <Button label="Look up this code" icon="pi pi-search" size="small" @click="onSearchEnter" />
+          </div>
+          <div v-else-if="!results.length" class="empty muted">
             {{ catalog.items.value.length ? 'No matching products' : online ? 'Loading products…' : 'No products saved on this device yet. Connect to the internet once to download them.' }}
           </div>
         </div>
