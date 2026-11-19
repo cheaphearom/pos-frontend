@@ -182,10 +182,9 @@ onBeforeUnmount(() => {
               <div class="ln-main">
                 <div class="ln-name">{{ l.name }}</div>
                 <div v-if="l.options" class="ln-opts">{{ l.options }}</div>
-                <div class="ln-sub">{{ money(l.price) }} / {{ l.unit }}</div>
+                <div class="ln-sub"><b>{{ qty(l.quantity) }}</b> {{ l.unit }} × {{ money(l.price) }}</div>
                 <div v-if="l.promo" class="ln-promo"><i class="pi pi-tag" /> {{ l.promo }}</div>
               </div>
-              <div class="ln-qty" :aria-label="`Quantity ${qty(l.quantity)}`">{{ qty(l.quantity) }}</div>
               <div class="ln-total">{{ money(l.total) }}</div>
             </div>
           </TransitionGroup>
@@ -302,15 +301,14 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; color: var(--text); }
 .member i { color: var(--caramel); }
 .list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
 /* item rows, as on the cashier's screen: name and price per unit, quantity box, line total */
-.line { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(4.5em, auto); gap: 1em; align-items: center; padding: 1.3vh 2.5vw; border-bottom: 1px solid var(--line); border-left: 5px solid transparent; }
+.line { display: grid; grid-template-columns: minmax(0, 1fr) minmax(4.5em, auto); gap: 1em; align-items: center; padding: 1.3vh 2.5vw; border-bottom: 1px solid var(--line); border-left: 5px solid transparent; }
 .line.last { background: var(--hl); border-left-color: var(--caramel); }
 .ln-main { min-width: 0; }
 .ln-name { font-weight: 700; line-height: 1.25; }
 .ln-opts { color: var(--muted); font-size: .8em; }
-.ln-sub { color: var(--muted); font-weight: 400; font-size: .78em; }
+.ln-sub { color: var(--muted); font-weight: 400; font-size: .8em; font-variant-numeric: tabular-nums; }
+.ln-sub b { color: var(--text); font-weight: 800; }
 .ln-promo { color: var(--save); font-size: .78em; font-weight: 600; }
-.ln-qty { min-width: 2.2em; height: 2.2em; padding: 0 .5em; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); display: grid; place-items: center;
-  font-weight: 800; font-variant-numeric: tabular-nums; }
 .ln-total { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* summary along the bottom, as on the cashier's screen */
 .summary { background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgba(60, 35, 15, .05); padding: 2vh 2.5vw 2.4vh; display: grid; gap: 1vh; }
