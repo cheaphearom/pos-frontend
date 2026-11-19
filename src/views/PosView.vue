@@ -24,6 +24,8 @@ import { groupsForProduct } from '@/pos/options';
 import { optionsText } from '@/utils/modifiers';
 import PosReceipt from '@/components/pos/PosReceipt.vue';
 import { printElement } from '@/utils/print';
+import KitchenTicket from '@/components/pos/KitchenTicket.vue';
+import { connectQz, listPrinters, loadPrinters, printSlips, qzState, savePrinters, type Slip } from '@/pos/printing';
 import ManagerApproval from '@/components/ManagerApproval.vue';
 import RegisterReport from '@/components/RegisterReport.vue';
 import { useNotify } from '@/composables/useNotify';
@@ -397,7 +399,9 @@ async function doTopup() {
 const custDlg = ref(false);
 const custCode = ref('');
 const custBusy = ref(false);
-const newCust = reactive({ show: false, name: '', phone: '' });
+const newCust = reactive({ show: false, name: '', phone: '', card: '' });
+/** A Cambodian phone number (0… 9-10 digits, or +855…), so a typed or tapped card number is not taken for a phone */
+const looksLikePhone = (v: string) => /^(\+?855|0)\d{7,9}$/.test(v.replace(/[\s-]/g, ''));
 async function findCustomer() {
   if (!custCode.value.trim()) return;
   custBusy.value = true;
@@ -407,7 +411,10 @@ async function findCustomer() {
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) {
       newCust.show = true;
-      newCust.phone = custCode.value.trim();
+      const typed = custCode.value.trim();
+      // a phone number goes in Phone; anything else (a tapped NFC card, a printed card number) is the member card
+      newCust.phone = looksLikePhone(typed) ? typed : '';
+      newCust.card = looksLikePhone(typed) ? '' : typed;
     } else notify.error(isNetworkError(e) ? 'Offline: member lookup needs internet' : e);
   } finally {
     custBusy.value = false;
@@ -415,7 +422,8 @@ async function findCustomer() {
 }
 async function createCustomer() {
   try {
-    setCustomer(await api.post('/customers', { name: newCust.name, phone: newCust.phone || undefined }));
+    setCustomer(await api.post('/customers', { name: newCust.name, phone: newCust.phone || undefined, code: newCust.card.trim() || undefined }));
+    newCust.card = '';
   } catch (e) { notify.error(e); }
 }
 function setCustomer(c: any) {
@@ -556,6 +564,7 @@ async function complete(payments: PayLine[], changeIn: ChangeMode = 'MIXED') {
     cart.lines.forEach((l) => catalog.deduct(l.productId, l.quantity));
     receipt.value = sale;
     showDone(sale);
+    if ((store.value as any)?.printAuto) printSale(sale, storeSlips.value);
     payment.value = false;
     receiptDlg.value = true;
     Object.assign(cart, newCart());
@@ -598,8 +607,63 @@ async function saveOffline(body: any, payments: { method: string; amount: number
   return local;
 }
 
+// ───────────── Printing: customer receipt, cashier copy, kitchen ticket ─────────────
+/** The sale whose slips are drawn off-screen for printing */
+const slipSale = ref<any>(null);
+const slipCustomer = ref<HTMLElement | null>(null);
+const slipCashier = ref<HTMLElement | null>(null);
+const slipKitchen = ref<HTMLElement | null>(null);
+const printing = ref(false);
+type SlipKind = Slip['kind'];
+/** The slips this store prints after a sale */
+const storeSlips = computed<SlipKind[]>(() => {
+  const st: any = store.value ?? {};
+  const k: SlipKind[] = [];
+  if (st.printCustomer ?? true) k.push('customer');
+  if (st.printCashierCopy) k.push('cashier');
+  if (st.printKitchen) k.push('kitchen');
+  return k;
+});
+async function printSale(sale: any, kinds: SlipKind[]) {
+  if (!sale || !kinds.length) return;
+  printing.value = true;
+  slipSale.value = sale;
+  await nextTick();
+  try {
+    const els = { customer: slipCustomer.value, cashier: slipCashier.value, kitchen: slipKitchen.value };
+    const slips = kinds.map((kind) => ({ kind, el: els[kind] })).filter((x): x is Slip => !!x.el);
+    await printSlips(slips);
+  } catch (e) {
+    notify.error(`Printing failed: ${e instanceof Error ? e.message : String(e)}. The sale is saved; press Print to try again.`);
+  } finally {
+    printing.value = false;
+  }
+}
 function printReceipt() {
-  printElement(document.getElementById('print-receipt'));
+  printSale(receipt.value, ['customer']);
+}
+
+// Printers of this till (QZ Tray)
+const printersDlg = ref(false);
+const printerList = ref<string[]>([]);
+const tillPrinters = reactive(loadPrinters());
+async function openPrinters() {
+  printersDlg.value = true;
+  printerList.value = await listPrinters().catch(() => []);
+}
+function savePrinterChoice() {
+  savePrinters({ receipt: tillPrinters.receipt, kitchen: tillPrinters.kitchen });
+  notify.success('Printers saved for this till');
+  printersDlg.value = false;
+}
+const printerOptions = computed(() => [{ v: null as string | null, l: 'Browser printing (default printer)' }, ...printerList.value.map((x) => ({ v: x as string | null, l: x }))]);
+const testSale = computed(() => ({
+  receiptNo: 'TEST-0001', queueNo: 'A000', orderType: 'TAKEAWAY', createdAt: new Date().toISOString(), store: store.value, cashier: { fullName: auth.user?.fullName },
+  items: [{ name: 'Test print', quantity: 1, unitPrice: 0, lineTotal: 0, modifiers: [], note: 'Printer works' }], subtotal: 0, discountTotal: 0, taxTotal: 0, total: 0, payments: [],
+}));
+async function testPrint(kind: SlipKind) {
+  savePrinters({ receipt: tillPrinters.receipt, kitchen: tillPrinters.kitchen });
+  await printSale(testSale.value, [kind]);
 }
 function nextSale() {
   receiptDlg.value = false;
@@ -868,6 +932,7 @@ async function logout() {
       <Button icon="pi pi-wallet" label="Top up" size="small" text :disabled="!online" v-tooltip.bottom="'Top up a wallet card'" @click="openTopup()" />
       <Button v-if="shift" icon="pi pi-arrow-right-arrow-left" label="Cash in/out" size="small" text :disabled="!online" v-tooltip.bottom="'Money put in or taken out of the drawer'" @click="openCash('PAY_OUT')" />
       <Button v-if="shift" icon="pi pi-file" label="X report" size="small" text :disabled="!online" v-tooltip.bottom="'Print the shift so far'" @click="openX" />
+      <Button icon="pi pi-print" label="Printers" size="small" text v-tooltip.bottom="'Receipt and kitchen printers of this till'" @click="openPrinters" />
       <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
       </div>
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
@@ -1021,12 +1086,43 @@ async function logout() {
         <Message v-if="receipt.offline" severity="warn" :closable="false" size="small">Offline: saved on this device and will upload automatically.</Message>
         <div class="receipt-box"><PosReceipt :sale="receipt" :currency="cur" /></div>
         <div class="row mt">
-          <Button label="Print" icon="pi pi-print" severity="secondary" class="w-full" @click="printReceipt" />
+          <Button label="Print" icon="pi pi-print" severity="secondary" class="w-full" :loading="printing" @click="printReceipt" />
           <Button label="New sale (Enter)" icon="pi pi-plus" class="w-full" autofocus @click="nextSale" />
         </div>
       </div>
     </Dialog>
     <div id="print-receipt"><PosReceipt v-if="receipt" :sale="receipt" :currency="cur" /></div>
+    <!-- slips drawn off-screen, then printed (pictures of them go to QZ Tray) -->
+    <div v-if="slipSale" class="slips-offscreen" aria-hidden="true">
+      <div ref="slipCustomer" class="slip"><PosReceipt :sale="slipSale" :currency="cur" /></div>
+      <div ref="slipCashier" class="slip"><PosReceipt :sale="slipSale" :currency="cur" copy-label="CASHIER COPY" /></div>
+      <div ref="slipKitchen" class="slip"><KitchenTicket :sale="slipSale" /></div>
+    </div>
+
+    <!-- Printers of this till -->
+    <Dialog v-model:visible="printersDlg" header="Printers on this till" modal :style="{ width: '520px' }" :breakpoints="{ '560px': '96vw' }" @hide="focusSearch">
+      <div class="form">
+        <Message v-if="qzState === 'on'" severity="success" :closable="false" size="small">QZ Tray is running: slips print straight to the printers below, without a print window.</Message>
+        <Message v-else-if="qzState === 'connecting'" severity="info" :closable="false" size="small">Looking for QZ Tray on this computer…</Message>
+        <Message v-else severity="warn" :closable="false" size="small">
+          QZ Tray is not running on this computer. Install it from qz.io/download and start it, then press Check again.
+          Until then slips use the browser's printing (the default printer).
+        </Message>
+        <div class="field"><label for="pr-receipt">Receipt printer (customer receipt, cashier copy)</label>
+          <Select input-id="pr-receipt" v-model="tillPrinters.receipt" :options="printerOptions" option-label="l" option-value="v" /></div>
+        <div class="field"><label for="pr-kitchen">Kitchen printer (kitchen ticket)</label>
+          <Select input-id="pr-kitchen" v-model="tillPrinters.kitchen" :options="printerOptions" option-label="l" option-value="v" />
+          <span class="hint">Leave on the receipt printer's choice if the kitchen has no printer of its own.</span></div>
+        <div class="small muted">This store prints after each sale: <b>{{ storeSlips.length ? storeSlips.map((k) => ({ customer: 'customer receipt', cashier: 'cashier copy', kitchen: 'kitchen ticket' })[k]).join(', ') : 'nothing' }}</b>{{ (store as any)?.printAuto ? ', automatically' : ', when Print is pressed' }}. Change it in Stores → edit → Printing.</div>
+        <div class="row" style="flex-wrap: wrap; gap: 6px">
+          <Button label="Check again" icon="pi pi-refresh" text size="small" @click="openPrinters" />
+          <span style="flex: 1" />
+          <Button label="Test receipt" icon="pi pi-print" severity="secondary" outlined size="small" :loading="printing" @click="testPrint('customer')" />
+          <Button label="Test kitchen" icon="pi pi-print" severity="secondary" outlined size="small" :loading="printing" @click="testPrint('kitchen')" />
+          <Button label="Save" icon="pi pi-check" size="small" @click="savePrinterChoice" />
+        </div>
+      </div>
+    </Dialog>
 
     <!-- Member -->
     <Dialog v-model:visible="custDlg" header="Loyalty member" modal :style="{ width: '420px' }" @show="newCust.show = false">
@@ -1039,6 +1135,7 @@ async function logout() {
           <Message severity="info" :closable="false" size="small">No member found. Register a new one:</Message>
           <div class="field"><label>Name *</label><InputText v-model="newCust.name" required autofocus /></div>
           <div class="field"><label>Phone</label><InputText v-model="newCust.phone" /></div>
+          <div class="field"><label for="new-card">Member card</label><InputText id="new-card" v-model="newCust.card" maxlength="30" placeholder="Tap the card on the reader, or leave empty" @keydown.enter.prevent /><span class="hint">Empty = a card number is made for the member.</span></div>
           <div class="row" style="justify-content: flex-end">
             <Button label="Back" text severity="secondary" @click="newCust.show = false" />
             <Button type="submit" label="Register member" icon="pi pi-user-plus" />
@@ -1358,6 +1455,9 @@ kbd { font: inherit; font-size: 11px; font-weight: 700; border: 1px solid var(--
 .wallet-box { background: color-mix(in srgb, var(--p-primary-color) 10%, var(--surface)); border-radius: 12px; padding: 12px 14px; }
 .held { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 #print-receipt { display: none; }
+.slips-offscreen { position: fixed; left: -10000px; top: 0; width: 72mm; background: #fff; }
+.slips-offscreen .slip { width: 72mm; background: #fff; color: #000; padding: 2mm 0; }
+.slips-offscreen .slip :deep(.pr) { color: #000; max-width: none; }
 /* Smaller laptops: tool buttons show icons only (the name is in the tooltip) */
 @media (max-width: 1280px) {
   .tools :deep(.p-button-label) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

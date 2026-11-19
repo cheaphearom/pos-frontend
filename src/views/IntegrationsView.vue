@@ -99,6 +99,23 @@ async function retry(d: any) {
   try { await api.post(`/webhooks/deliveries/${d.id}/retry`); notify.success('Retry queued'); setTimeout(() => openDeliveries(deliveriesFor.value), 1500); } catch (e) { notify.error(e); }
 }
 
+// The docs are for super admins only: the server first sets a 1-hour docs cookie in this browser.
+const openingDocs = ref(false);
+const openDocs = async () => {
+  const win = window.open('about:blank', '_blank'); // opened now, before the wait, so it is not blocked as a pop-up
+  openingDocs.value = true;
+  try {
+    await api.post('/auth/docs-session', {});
+    if (win) win.location.href = '/docs';
+    else window.location.href = '/docs';
+  } catch (e) {
+    win?.close();
+    notify.error(e);
+  } finally {
+    openingDocs.value = false;
+  }
+};
+
 const copy = async (text: string) => {
   try { await navigator.clipboard.writeText(text); notify.success('Copied'); } catch { /* clipboard blocked */ }
 };
@@ -114,7 +131,8 @@ onMounted(async () => {
 <template>
   <div class="page">
     <div class="page-head">
-      <div><h1>Integrations</h1><div class="sub">Connect accounting, e-commerce or ERP systems · API docs at <a href="/docs" target="_blank">/docs</a> on the API server</div></div>
+      <div><h1>Integrations</h1><div class="sub">Connect accounting, e-commerce or ERP systems</div></div>
+      <Button label="Open API docs" icon="pi pi-book" severity="secondary" outlined :loading="openingDocs" @click="openDocs" />
     </div>
     <SelectButton v-model="tab" :options="[{ l: 'API keys', v: 'keys' }, { l: 'Webhooks', v: 'hooks' }]" option-label="l" option-value="v" :allow-empty="false" style="margin-bottom: 14px" />
 
