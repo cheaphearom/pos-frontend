@@ -11,6 +11,8 @@ export interface DisplayLine {
   price: number;
   total: number;
   promo?: string | null;
+  /** Drink options, e.g. "L, Oat milk" (older POS windows put them in the name) */
+  options?: string | null;
 }
 
 export interface PaymentProgress {
@@ -32,7 +34,7 @@ export const slidesKey = (storeId: string) => `pos.slides:${storeId}`;
 
 export interface DisplayState {
   mode: 'idle' | 'cart' | 'pay' | 'done';
-  store: { name: string; currency: string; khrRate?: number | null };
+  store: { name: string; currency: string; khrRate?: number | null; taxPercent?: number };
   cashier?: string;
   lines: DisplayLine[];
   totals: {

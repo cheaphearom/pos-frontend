@@ -179,11 +179,13 @@ onBeforeUnmount(() => {
         <div ref="listEl" class="list">
           <TransitionGroup name="item">
             <div v-for="(l, i) in lines" :key="i + l.name" class="line" :class="{ last: i === lines.length - 1 }">
-              <div class="ln-name">
-                {{ l.name }}
-                <div class="ln-sub">{{ qty(l.quantity) }} {{ l.unit }} × {{ money(l.price) }}</div>
+              <div class="ln-main">
+                <div class="ln-name">{{ l.name }}</div>
+                <div v-if="l.options" class="ln-opts">{{ l.options }}</div>
+                <div class="ln-sub">{{ money(l.price) }} / {{ l.unit }}</div>
                 <div v-if="l.promo" class="ln-promo"><i class="pi pi-tag" /> {{ l.promo }}</div>
               </div>
+              <div class="ln-qty" :aria-label="`Quantity ${qty(l.quantity)}`">{{ qty(l.quantity) }}</div>
               <div class="ln-total">{{ money(l.total) }}</div>
             </div>
           </TransitionGroup>
@@ -191,18 +193,15 @@ onBeforeUnmount(() => {
 
         <div class="summary">
           <div class="rows">
-            <div class="r"><span>Subtotal · {{ qty(t?.items) }} item{{ t?.items === 1 ? '' : 's' }}</span><span>{{ money(t?.subtotal ?? 0) }}</span></div>
+            <div class="r"><span>Subtotal <span class="sub">({{ qty(t?.items) }} item{{ t?.items === 1 ? '' : 's' }})</span></span><span>{{ money(t?.subtotal ?? 0) }}</span></div>
             <div v-if="t?.promotions" class="r save"><span><i class="pi pi-tag" /> Promotions</span><span>−{{ money(t.promotions) }}</span></div>
             <div v-if="otherDiscount" class="r save"><span><i class="pi pi-percentage" /> Discount</span><span>−{{ money(otherDiscount) }}</span></div>
             <div v-if="state?.coupon" class="r save"><span><i class="pi pi-ticket" /> Coupon <b class="code">{{ state.coupon.code }}</b> <span class="sub">{{ state.coupon.name }}</span></span><span>−{{ money(state.coupon.amount) }}</span></div>
             <div v-if="t?.points" class="r save"><span><i class="pi pi-star" /> Points</span><span>−{{ money(t.points) }}</span></div>
-            <div class="r"><span>Tax</span><span>{{ money(t?.tax ?? 0) }}</span></div>
+            <div class="r"><span>{{ state?.store.taxPercent ? `Tax ${state.store.taxPercent}%` : 'Tax' }}</span><span>{{ money(t?.tax ?? 0) }}</span></div>
           </div>
-          <div class="total">
-            <span>Total</span>
-            <b>{{ money(t?.total ?? 0) }}</b>
-            <span v-if="state?.store.khrRate && t?.total" class="khr">{{ formatKhr(usdToKhrUp(t.total, state.store.khrRate)) }}</span>
-          </div>
+          <div class="total"><span>Total</span><b>{{ money(t?.total ?? 0) }}</b></div>
+          <div v-if="state?.store.khrRate && t?.total" class="khr-total"><span>in riel ({{ state.store.khrRate.toLocaleString() }})</span><b>{{ formatKhr(usdToKhrUp(t.total, state.store.khrRate)) }}</b></div>
           <div v-if="state?.voucher && !pay?.lines?.length" class="r gift"><span><i class="pi pi-gift" /> Gift voucher <b class="code">{{ state.voucher.code }}</b></span><span>{{ money(state.voucher.balance) }} to spend</span></div>
           <div v-if="pay" class="paying">
             <div v-for="(x, i) in pay.lines ?? []" :key="i" class="r"><span>{{ x.label }}</span><span>−{{ money(x.amount) }}</span></div>
@@ -296,21 +295,26 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; color: var(--text); }
 
 /* sale */
 .sale { height: 100%; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
-.items { display: flex; flex-direction: column; min-height: 0; padding: 3vh 2.5vw 2.5vh; }
-.items-head { display: flex; justify-content: space-between; align-items: center; gap: 1em; padding-bottom: 1.5vh; border-bottom: 2px solid var(--line); }
+.items { display: flex; flex-direction: column; min-height: 0; padding: 3vh 0 0; }
+.items-head { display: flex; justify-content: space-between; align-items: center; gap: 1em; padding: 0 2.5vw 1.5vh; border-bottom: 2px solid var(--line); }
 .items-head b { color: var(--accent); }
 .member { color: var(--badge); background: var(--hl); border-radius: 999px; padding: .25em .8em; font-size: .8em; font-weight: 600; }
 .member i { color: var(--caramel); }
 .list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
-.line { display: flex; justify-content: space-between; gap: 1em; padding: 1.4vh .7em; border-bottom: 1px solid var(--line); }
-.line.last { background: var(--hl); border-radius: 12px; border-bottom-color: transparent; box-shadow: inset 4px 0 0 var(--caramel); }
-.ln-name { font-weight: 600; min-width: 0; }
-.ln-sub { color: var(--muted); font-weight: 400; font-size: .8em; }
-.ln-promo { color: var(--save); font-size: .8em; font-weight: 600; }
-.ln-total { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* summary under the items */
-.summary { margin-top: 1.6vh; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 2vh 1.6vw; display: grid; gap: 1.4vh; }
-.rows { display: grid; gap: .8vh; font-size: .9em; }
+/* item rows, as on the cashier's screen: name and price per unit, quantity box, line total */
+.line { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(4.5em, auto); gap: 1em; align-items: center; padding: 1.3vh 2.5vw; border-bottom: 1px solid var(--line); border-left: 5px solid transparent; }
+.line.last { background: var(--hl); border-left-color: var(--caramel); }
+.ln-main { min-width: 0; }
+.ln-name { font-weight: 700; line-height: 1.25; }
+.ln-opts { color: var(--muted); font-size: .8em; }
+.ln-sub { color: var(--muted); font-weight: 400; font-size: .78em; }
+.ln-promo { color: var(--save); font-size: .78em; font-weight: 600; }
+.ln-qty { min-width: 2.2em; height: 2.2em; padding: 0 .5em; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); display: grid; place-items: center;
+  font-weight: 800; font-variant-numeric: tabular-nums; }
+.ln-total { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* summary along the bottom, as on the cashier's screen */
+.summary { background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgba(60, 35, 15, .05); padding: 2vh 2.5vw 2.4vh; display: grid; gap: 1vh; }
+.rows { display: grid; gap: .6vh; font-size: .85em; }
 .r { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; font-variant-numeric: tabular-nums; }
 .r > span:first-child { min-width: 0; }
 .r > span:last-child { white-space: nowrap; }
@@ -318,10 +322,12 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; color: var(--text); }
 .r .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; letter-spacing: .04em; }
 .r .sub { color: var(--muted); font-size: .85em; font-weight: 400; }
 .r.save, .saved { color: var(--save); }
-.total { display: flex; align-items: baseline; flex-wrap: wrap; gap: .2em .8em; border-top: 2px solid var(--line); padding-top: 1.4vh; }
-.total > span:first-child { color: var(--muted); flex: 1; }
-.total b { font-size: 2.6em; line-height: 1.05; font-variant-numeric: tabular-nums; color: var(--accent); }
-.total .khr { flex-basis: 100%; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.total { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; border-top: 1px dashed var(--line); padding-top: 1.2vh; font-weight: 800; }
+.total span { font-size: 1.5em; }
+.total b { font-size: 2.3em; line-height: 1.05; font-variant-numeric: tabular-nums; color: var(--accent); }
+.khr-total { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; margin-top: -.6vh; color: var(--muted); font-variant-numeric: tabular-nums; }
+.khr-total span { font-size: .75em; font-weight: 600; }
+.khr-total b { font-size: 1.1em; color: var(--text); }
 .r.gift { background: var(--hl); color: var(--badge); border-radius: 12px; padding: 1vh 1vw; font-weight: 600; }
 .saved { display: inline-flex; align-items: center; gap: .5em; justify-self: start; font-weight: 600; font-size: .9em;
   background: color-mix(in srgb, var(--save) 12%, transparent); border-radius: 999px; padding: .3em .9em; }
