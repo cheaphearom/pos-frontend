@@ -728,11 +728,11 @@ const discountParts = computed(() => {
 const displayState = computed<DisplayState>(() => {
   const t = totals.value;
   const base = {
-    store: { name: store.value?.name ?? '', currency: cur.value, khrRate: khrRate.value },
+    store: { name: store.value?.name ?? '', currency: cur.value, khrRate: khrRate.value, taxPercent: Math.round(taxRate.value * 10000) / 100 },
     cashier: auth.user?.fullName,
     customer: cart.customer ? { name: cart.customer.name, points: cart.customer.points } : null,
     lines: cart.lines.map((l, i) => ({
-      name: l.modifiers?.length ? `${localName(l)} (${optionsText(l.modifiers)})` : localName(l), quantity: l.quantity, unit: l.unit, price: Number(l.price),
+      name: localName(l), options: l.modifiers?.length ? optionsText(l.modifiers) : null, quantity: l.quantity, unit: l.unit, price: Number(l.price),
       total: t?.lines[i]?.total ?? 0, promo: promos.value[i]?.discount ? `${promos.value[i].name} −${m(promos.value[i].discount)}` : null,
     })),
     totals: { subtotal: t?.subtotal ?? 0, discount: t?.discountTotal ?? 0, tax: t?.taxTotal ?? 0, points: pointsDiscount.value, total: amountDue.value, items: itemCount.value, ...discountParts.value },
