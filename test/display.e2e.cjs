@@ -43,7 +43,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   ok(await disp.getByText('Scan to pay').count() === 1, 'KHQR appears big on the customer display');
   await (OUT ? disp.screenshot({ path: OUT + '42-display-khqr.png' }) : null);
   await pos.getByRole('button', { name: 'Customer has paid' }).click();
-  await pos.waitForSelector('text=Sale complete'); await disp.waitForTimeout(600);
+  await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete')); await disp.waitForTimeout(600);
   ok(await disp.getByText('Thank you!').count() === 1, 'display says thank you after payment');
   await pos.keyboard.press('Enter');
 
@@ -51,7 +51,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await s.fill('SKU-0017'); await s.press('Enter');
   await pos.keyboard.press('F9'); await pos.waitForSelector('.pay');
   await pos.locator('.quick button').last().click();
-  await pos.waitForSelector('text=Sale complete'); await disp.waitForTimeout(600);
+  await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete')); await disp.waitForTimeout(600);
   const change = (await disp.locator('.change b').textContent().catch(() => '')).trim();
   ok(!!change && change !== '$0.00', 'display shows change to give: ' + change);
   await (OUT ? disp.screenshot({ path: OUT + '43-display-thanks.png' }) : null);

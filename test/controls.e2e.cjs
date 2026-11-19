@@ -36,7 +36,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   ok((await pos.locator('.p-toast-message', { hasText: 'Approved by Sokha Chan' }).count()) === 1, 'manager approved');
   await pos.waitForSelector('.pay');
   await pos.locator('.quick button').last().click();
-  await pos.waitForSelector('text=Sale complete'); await pos.waitForTimeout(500);
+  await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete')); await pos.waitForTimeout(500);
   const receiptNo = /(PP01-\d{8})/.exec(await pos.locator('.receipt-box').textContent())?.[1];
   ok(!!receiptNo, 'sale with 20% discount completed: ' + receiptNo);
   await pos.keyboard.press('Escape');
@@ -54,7 +54,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await pos.goto(W + '/pos'); await pos.waitForSelector('.tile'); await pos.waitForTimeout(800);
   await s.fill('885000000001'); await s.press('Enter'); await pos.waitForTimeout(300);
   await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').last().click();
-  await pos.waitForSelector('text=Sale complete'); await pos.waitForTimeout(400);
+  await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete')); await pos.waitForTimeout(400);
   const voidNo = /(PP01-\d{8})/.exec(await pos.locator('.receipt-box').textContent())?.[1];
   await pos.goto(W + `/sales?receipt=${voidNo}`); await pos.waitForSelector('.receipt'); await pos.waitForTimeout(500);
   await pos.getByRole('button', { name: 'Void', exact: true }).click(); await pos.waitForTimeout(300);

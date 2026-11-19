@@ -28,7 +28,7 @@ const fmt = (n) => '$' + Number(n).toFixed(2);
   const get = async (p) => (await fetch(API + p, { headers: { Authorization: 'Bearer ' + tok } })).json();
   const scan = async (c) => { await s.fill(c); await s.press('Enter'); await pos.waitForTimeout(700); };
   const total = async () => (await pos.locator('.r.total .num').textContent()).trim();
-  const payCash = async () => { await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').first().click(); await pos.waitForSelector('text=Sale complete', { timeout: 10000 }); };
+  const payCash = async () => { await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').first().click(); await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete', { timeout: 10000 })); };
   const lastSale = async () => get('/sales/' + (await get('/sales?limit=1')).data[0].id);
 
   // 1. members-only coupon
@@ -63,7 +63,7 @@ const fmt = (n) => '$' + Number(n).toFixed(2);
   await pos.locator('.method', { hasText: 'Voucher' }).first().click(); await pos.waitForTimeout(300);
   await shot(pos, '62-pos-voucher-pay');
   await pos.getByRole('button', { name: 'Use voucher' }).click();
-  await pos.waitForSelector('text=Sale complete', { timeout: 10000 }); await pos.keyboard.press('Enter');
+  await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete', { timeout: 10000 })); await pos.keyboard.press('Enter');
   ok((await get('/vouchers/lookup?code=GVDEMO10A')).balance === '3.5', 'voucher paid $6.50, $3.50 left');
 
   // 4. free voucher + cash for the rest
@@ -73,7 +73,7 @@ const fmt = (n) => '$' + Number(n).toFixed(2);
   await pos.getByRole('button', { name: 'Use voucher' }).click(); await pos.waitForTimeout(300);
   await pos.locator('.method', { hasText: 'Cash $' }).click(); await pos.locator('.quick button').first().click();
   await pos.getByRole('button', { name: 'Complete sale' }).click();
-  await pos.waitForSelector('text=Sale complete', { timeout: 10000 });
+  await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete', { timeout: 10000 }));
   sale = await lastSale();
   ok(sale.payments.map((p) => `${p.method}:${p.amount}`).join(',') === 'VOUCHER:2,CASH:4.5', 'free $2 voucher + cash: ' + sale.payments.map((p) => `${p.method}:${p.amount}`).join(','));
   await pos.keyboard.press('Enter');

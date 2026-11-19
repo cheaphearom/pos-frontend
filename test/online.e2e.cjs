@@ -72,7 +72,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await pos.getByRole('button', { name: /^Online \(1\)/ }).click(); await pos.waitForTimeout(500);
   await pos.getByRole('button', { name: 'Take payment' }).click(); await pos.waitForTimeout(800);
   ok((await pos.locator('.line').count()) === 1 && (await pos.locator('.ln-name').first().textContent()).includes('Chocolate Muffin'), 'POS loaded the online order into the cart');
-  await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').first().click(); await pos.waitForSelector('text=Sale complete');
+  await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').first().click(); await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete'));
   await phone2.waitForSelector('.q', { timeout: 10000 });
   ok(/^A\d{3}$/.test((await phone2.locator('.q').textContent()).trim()), 'after paying at the POS the phone shows the order number');
   await pos.keyboard.press('Enter');

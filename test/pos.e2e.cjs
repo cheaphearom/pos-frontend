@@ -59,7 +59,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await page.waitForSelector('.pay');
   await shot('21-pos-payment');
   await page.locator('.quick button').last().click();
-  await page.waitForSelector('text=Sale complete');
+  await page.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => page.waitForSelector('text=Sale complete'));
   await page.waitForTimeout(500);
   await shot('22-pos-receipt');
   const rec = await page.locator('.receipt-box').textContent();
@@ -86,7 +86,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   const offTotal = await total();
   await page.keyboard.press('F9'); await page.waitForSelector('.pay');
   await page.locator('.quick button').first().click(); // exact cash
-  await page.waitForSelector('text=Sale complete');
+  await page.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => page.waitForSelector('text=Sale complete'));
   ok((await page.locator('.receipt-box').textContent()).includes('OFF-'), 'offline receipt number shown');
   await shot('23-pos-offline-receipt');
   await page.keyboard.press('Enter');

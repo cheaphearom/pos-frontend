@@ -36,7 +36,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await pos.locator('.pay input[type=password]').fill('1234');
   await shot(pos, '50-pos-wallet-pay');
   await pos.getByRole('button', { name: 'Pay from card' }).click();
-  await pos.waitForSelector('text=Sale complete', { timeout: 10000 });
+  await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete', { timeout: 10000 }));
   const rec = await pos.locator('.receipt-box').textContent();
   ok(rec.includes('Wallet card'), 'receipt shows the wallet payment');
   await shot(pos, '51-pos-wallet-receipt');
@@ -71,7 +71,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await pos.locator('.quick button').first().click();
   await shot(pos, '53b-pos-split');
   await pos.getByRole('button', { name: 'Complete sale' }).click();
-  await pos.waitForSelector('text=Sale complete', { timeout: 10000 });
+  await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete', { timeout: 10000 }));
   const latest = (await get('/sales?limit=1')).data[0];
   const sale = await get('/sales/' + latest.id);
   ok(sale.payments.map((p) => `${p.method}:${p.amount}`).join(',') === 'WALLET:5,CASH:1.5', 'split saved: ' + sale.payments.map((p) => `${p.method}:${p.amount}`).join(','));

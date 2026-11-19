@@ -34,7 +34,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await page.locator('.method', { hasText: 'Cash ៛' }).click(); await page.waitForTimeout(200);
   await shot('k1-pay-riel');
   await page.locator('.quick.khr button', { hasText: '៛20,000' }).click();
-  await page.waitForSelector('text=Sale complete'); await page.waitForTimeout(500);
+  await page.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => page.waitForSelector('text=Sale complete')); await page.waitForTimeout(500);
   const rec = (await page.locator('.receipt-box').textContent()).replace(/\s+/g, ' ');
   ok(rec.includes('Cash ៛20,000') && rec.includes('$1.00 + ៛1,700') && rec.includes('Rate 4,100'), 'receipt: Cash ៛20,000, change $1.00 + ៛1,700, rate');
   ok((await text('[data-test=change-big]')).includes('$1.00 + ៛1,700'), 'big change box: $1.00 + ៛1,700');
@@ -46,7 +46,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await page.keyboard.press('F9'); await page.waitForSelector('.pay');
   await page.locator('.change-mode').getByText('All ៛').click();
   await page.locator('.quick button', { hasText: '$5.00' }).click();
-  await page.waitForSelector('text=Sale complete'); await page.waitForTimeout(500);
+  await page.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => page.waitForSelector('text=Sale complete')); await page.waitForTimeout(500);
   ok((await page.locator('.receipt-box').textContent()).replace(/\s+/g, ' ').includes('Change៛6,300'), 'change all in riel: ៛6,300');
   await page.keyboard.press('Escape'); await page.waitForTimeout(300);
 
@@ -60,7 +60,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await page.locator('.quick.khr button').first().click(); await page.waitForTimeout(400);
   ok((await text('.paid')).includes('Cash ៛4,100') && (await text('.change')).includes('$0.00'), 'payments list shows the riel; no change');
   await page.getByRole('button', { name: 'Complete sale' }).click();
-  await page.waitForSelector('text=Sale complete'); await page.waitForTimeout(400);
+  await page.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => page.waitForSelector('text=Sale complete')); await page.waitForTimeout(400);
   await page.keyboard.press('Escape');
 
   // Shifts page: riel drawer = 50,000 + 20,000 + 4,100 - 1,700 - 6,300 = 66,100
