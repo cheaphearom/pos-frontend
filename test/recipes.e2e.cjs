@@ -59,7 +59,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await pos.locator('.tile', { hasText: 'Cappuccino' }).click(); await pos.waitForTimeout(300);
   await pos.locator('.choice', { hasText: 'Extra shot' }).click();
   await pos.getByRole('button', { name: /^Add \$/ }).click();
-  await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').first().click(); await pos.waitForSelector('text=Sale complete');
+  await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').first().click(); await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete'));
   const after = await beansStock();
   ok(Math.round((before - after) * 1000) / 1000 === 27, `Cappuccino + extra shot used ${Math.round((before - after) * 1000) / 1000} g beans (18 + 9)`);
 

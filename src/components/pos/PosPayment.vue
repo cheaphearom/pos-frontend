@@ -138,8 +138,8 @@ function khqrPaid() {
   stopKhqr();
   payments.value.push({ method: 'KHQR', amount: k.amount, reference: k.md5 });
   notify.success('KHQR payment received', money(k.amount, props.currency));
-  if (done.value) finish();
-  else amount.value = remaining.value;
+  amount.value = remaining.value;
+  afterAdd();
 }
 watch(method, (m) => m !== 'KHQR' && stopKhqr());
 watch(visible, (v) => !v && stopKhqr());
@@ -173,7 +173,7 @@ function addWallet() {
   reference.value = '';
   wPin.value = '';
   amount.value = remaining.value;
-  if (done.value) finish();
+  afterAdd();
 }
 
 // ───── Gift voucher ─────
@@ -195,7 +195,7 @@ function addVoucher() {
   if (nonCash.value + a > props.amountDue + 1e-9) return notify.error('A voucher cannot pay more than the amount due (no change on vouchers)');
   payments.value.push({ method: 'VOUCHER', amount: a, reference: vinfo.value.code });
   amount.value = remaining.value;
-  if (done.value) finish();
+  afterAdd();
 }
 
 watch(visible, (v) => {
@@ -228,8 +228,7 @@ function add(value?: number) {
     if (riel <= 0) return;
     payments.value.push({ method: 'CASH', amount: khrToUsd(riel, rate.value), currency: 'KHR', tendered: riel, rate: rate.value });
     amount.value = remainingKhr.value;
-    if (done.value && payments.value.length === 1) finish();
-    else focus();
+    afterAdd();
     return;
   }
   const a = r2(value ?? amount.value ?? 0);
@@ -238,10 +237,14 @@ function add(value?: number) {
   payments.value.push({ method: method.value, amount: a, reference: reference.value || undefined });
   reference.value = '';
   amount.value = method.value === 'CASH_KHR' ? remainingKhr.value : remaining.value;
-  if (done.value && method.value === 'CASH' && payments.value.length === 1) {
-    // Single cash payment: finish straight away, like a real till.
-    finish();
-  } else focus();
+  afterAdd();
+}
+
+/** Paid in full: wait on "Complete sale" so the cashier checks the change first (Enter completes). Otherwise keep taking payment. */
+const completeBtn = ref<any>(null);
+function afterAdd() {
+  if (done.value) nextTick(() => (completeBtn.value?.$el as HTMLElement | undefined)?.focus());
+  else focus();
 }
 
 const nonCashError = computed(
@@ -413,7 +416,7 @@ watch(
           </template>
           <div v-else class="big num">{{ money(change, currency) }}</div>
         </div>
-        <Button label="Complete sale" icon="pi pi-check-circle" size="large" :loading="busy" autofocus @click="finish" />
+        <Button ref="completeBtn" label="Complete sale (Enter)" icon="pi pi-check-circle" size="large" :loading="busy" autofocus data-test="complete-sale" @click="finish" />
       </div>
     </div>
   </Dialog>

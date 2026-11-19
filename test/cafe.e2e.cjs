@@ -36,7 +36,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await shot(pos, '81-pos-cafe-cart');
   const shown = (await pos.locator('.r.total .num').textContent()).trim();
   await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').last().click();
-  await pos.waitForSelector('text=Sale complete', { timeout: 10000 });
+  await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete', { timeout: 10000 }));
   const rec = await pos.locator('.receipt-box').textContent();
   const q = /A\d{3}/.exec(rec)?.[0];
   ok(!!q && rec.includes('Dine-in · Table 5') && rec.includes('Oat milk +0.60'), `receipt shows order ${q}, dine-in table 5 and options`);
@@ -65,7 +65,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   // A second POS order arrives on the barista screen by itself (polling)
   await pos.bringToFront();
   await pos.locator('.tile', { hasText: 'Americano' }).click(); await pos.waitForTimeout(300); await pos.getByRole('button', { name: /^Add \$/ }).click();
-  await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').first().click(); await pos.waitForSelector('text=Sale complete');
+  await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').first().click(); await pos.locator('[data-test=complete-sale]').click({ timeout: 3000 }).catch(() => {}).then(() => pos.waitForSelector('text=Sale complete'));
   const q2 = /A\d{3}/.exec(await pos.locator('.receipt-box').textContent())?.[0];
   await kds.waitForTimeout(4000);
   ok(await kds.locator('.col.new .ticket', { hasText: q2 }).count() === 1, `new order ${q2} appears on the barista screen automatically`);
