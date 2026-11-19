@@ -64,15 +64,16 @@ function buildUrl(path: string, query?: Query) {
   return `${BASE}${path}${s ? `?${s}` : ''}`;
 }
 
-async function request<T>(method: string, path: string, opts: { query?: Query; body?: unknown } = {}, retried = false): Promise<T> {
+async function request<T>(method: string, path: string, opts: { query?: Query; body?: unknown; file?: Blob } = {}, retried = false): Promise<T> {
   const headers: Record<string, string> = {};
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (opts.file) headers['Content-Type'] = opts.file.type || 'application/octet-stream';
+  else if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (tokens.access) headers.Authorization = `Bearer ${tokens.access}`;
 
   const res = await fetch(buildUrl(path, opts.query), {
     method,
     headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    body: opts.file ?? (opts.body !== undefined ? JSON.stringify(opts.body) : undefined),
   });
 
   if (res.status === 401 && !retried && !path.startsWith('/auth/')) {
@@ -88,7 +89,7 @@ async function request<T>(method: string, path: string, opts: { query?: Query; b
     const msg = (body as any)?.message;
     // an HTML page (e.g. Cloudflare's "Bad gateway") instead of the POS's own JSON answer
     const page = typeof body === 'string' && body.trimStart().startsWith('<');
-    const fallback = page ? `The server did not answer (error ${res.status}). Check that the POS server and its link are running, then try again.` : res.statusText || `Error ${res.status}`;
+    const fallback = res.status === 413 ? 'The file is too large.' : page ? `The server did not answer (error ${res.status}). Check that the POS server and its link are running, then try again.` : res.statusText || `Error ${res.status}`;
     throw new ApiError(res.status, Array.isArray(msg) ? msg.join('; ') : msg || fallback, body);
   }
   return body as T;
@@ -104,6 +105,8 @@ export const api = {
   put: <T = any>(path: string, body?: unknown) => request<T>('PUT', path, { body }),
   patch: <T = any>(path: string, body?: unknown) => request<T>('PATCH', path, { body }),
   del: <T = any>(path: string) => request<T>('DELETE', path),
+  /** Sends a file as the request body (e.g. a picture), with optional query values */
+  upload: <T = any>(path: string, file: Blob, query?: Query) => request<T>('POST', path, { file, query }),
 };
 
 export interface Page<T> {

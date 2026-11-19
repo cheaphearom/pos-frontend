@@ -21,14 +21,29 @@ export interface PaymentProgress {
   /** Dual currency: how the change is given */
   changeUsd?: number;
   changeKhr?: number;
+  /** What has been paid so far, e.g. "Gift voucher GV…" −10 */
+  lines?: { label: string; amount: number }[];
 }
+
+/** A picture uploaded in the admin (Customer display page), shown on the right during a sale. */
+export interface DisplaySlide { id: string; title: string; imageUrl: string; endsAt?: string | null }
+/** Where the POS keeps the store's pictures for the display window (same computer, works offline). */
+export const slidesKey = (storeId: string) => `pos.slides:${storeId}`;
 
 export interface DisplayState {
   mode: 'idle' | 'cart' | 'pay' | 'done';
   store: { name: string; currency: string; khrRate?: number | null };
   cashier?: string;
   lines: DisplayLine[];
-  totals: { subtotal: number; discount: number; tax: number; points: number; total: number; items: number };
+  totals: {
+    subtotal: number; discount: number; tax: number; points: number; total: number; items: number;
+    /** Parts of the discount, for the summary (older POS versions send only the sum) */
+    promotions?: number; lineDiscounts?: number; saleDiscount?: number;
+  };
+  /** Coupon on this sale */
+  coupon?: { code: string; name: string; amount: number } | null;
+  /** Gift voucher scanned for this sale (paid with it in the payment window) */
+  voucher?: { code: string; balance: number } | null;
   customer?: { name: string; points: number } | null;
   /** While paying */
   payment?: PaymentProgress | null;

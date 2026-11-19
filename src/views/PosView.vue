@@ -34,7 +34,7 @@ import { applyPromotions, type PromoRule } from '@shared/promotions';
 import { couponDiscount, type CouponRule } from '@shared/coupons';
 import { enqueue, loadQueue, queue, removeFromQueue, retryQueued, syncingQueue, syncQueue } from '@/pos/queue';
 import { uuid } from '@/pos/uuid';
-import { displayChannel, openDisplayWindow, type DisplayState, type PaymentProgress } from '@/pos/display';
+import { displayChannel, openDisplayWindow, slidesKey, type DisplayState, type PaymentProgress } from '@/pos/display';
 import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
 import { cardShort, dateTime, humanize, money, qty } from '@/utils/format';
@@ -689,6 +689,15 @@ function printX() {
   printElement(document.querySelector('.reg-report'));
 }
 
+/** The discount split for the customer display: promotions, line discounts, the sale discount (the coupon is shown on its own). */
+const discountParts = computed(() => {
+  const t = totals.value;
+  if (!t) return { promotions: 0, lineDiscounts: 0, saleDiscount: 0 };
+  const promotions = r2(cart.lines.reduce((s, _l, i) => s + (promos.value[i]?.discount ?? 0), 0));
+  const lineDiscounts = r2(cart.lines.reduce((s, l, i) => s + lineDiscount(l, i), 0) - promotions);
+  const saleDiscount = Math.max(0, r2(t.discountTotal - promotions - lineDiscounts - coupon.value.discount));
+  return { promotions, lineDiscounts, saleDiscount };
+});
 const displayState = computed<DisplayState>(() => {
   const t = totals.value;
   const base = {
@@ -699,7 +708,9 @@ const displayState = computed<DisplayState>(() => {
       name: l.modifiers?.length ? `${localName(l)} (${optionsText(l.modifiers)})` : localName(l), quantity: l.quantity, unit: l.unit, price: Number(l.price),
       total: t?.lines[i]?.total ?? 0, promo: promos.value[i]?.discount ? `${promos.value[i].name} −${m(promos.value[i].discount)}` : null,
     })),
-    totals: { subtotal: t?.subtotal ?? 0, discount: t?.discountTotal ?? 0, tax: t?.taxTotal ?? 0, points: pointsDiscount.value, total: amountDue.value, items: itemCount.value },
+    totals: { subtotal: t?.subtotal ?? 0, discount: t?.discountTotal ?? 0, tax: t?.taxTotal ?? 0, points: pointsDiscount.value, total: amountDue.value, items: itemCount.value, ...discountParts.value },
+    coupon: cart.coupon && coupon.value.discount ? { code: cart.coupon.code, name: cart.coupon.name, amount: coupon.value.discount } : null,
+    voucher: cart.voucher ? { code: cart.voucher.code, balance: Number(cart.voucher.balance) } : null,
   };
   if (doneInfo.value && !cart.lines.length) return { ...base, mode: 'done', done: doneInfo.value };
   if (payment.value && payProgress.value) return { ...base, mode: 'pay', payment: payProgress.value };
@@ -749,9 +760,16 @@ async function refreshData() {
     api.get('/categories').then((c) => { categories.value = c; localStorage.setItem('pos.categories', JSON.stringify(c)); }),
     api.get('/customers/loyalty-rules').then((r) => { loyalty.value = r; localStorage.setItem('pos.loyalty', JSON.stringify(r)); }),
     loadPromos(),
+    loadSlides(),
     api.get('/modifiers').then((g) => { optionGroups.value = g.filter((x: any) => x.isActive); localStorage.setItem('pos.modifiers', JSON.stringify(optionGroups.value)); }),
     syncNow(),
   ]);
+}
+
+/** Pictures for the customer display, kept on this computer so the display shows them offline too. */
+async function loadSlides() {
+  const r = await api.get('/display-slides/active', { storeId: app.currentStoreId });
+  localStorage.setItem(slidesKey(app.currentStoreId!), JSON.stringify(r));
 }
 
 async function loadPromos() {
@@ -784,6 +802,7 @@ onMounted(async () => {
     if (!online.value) return;
     catalog.sync().catch(() => undefined);
     loadPromos().catch(() => undefined);
+    loadSlides().catch(() => undefined);
   }, 5 * 60_000);
   window.addEventListener('keydown', onKey);
 });

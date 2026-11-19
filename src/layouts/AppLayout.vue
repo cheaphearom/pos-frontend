@@ -70,6 +70,7 @@ const sections: { title: string; items: NavItem[] }[] = [
     { to: '/promotions', label: 'Promotions', icon: 'pi pi-megaphone', roles: ['STORE_MANAGER'] },
     { to: '/coupons', label: 'Coupons', icon: 'pi pi-ticket', roles: ['STORE_MANAGER'] },
     { to: '/vouchers', label: 'Gift vouchers', icon: 'pi pi-gift', roles: ['STORE_MANAGER'] },
+    { to: '/customer-display', label: 'Customer display', icon: 'pi pi-desktop', roles: ['SUPER_ADMIN'] },
   ] },
   { title: 'Purchasing', items: [
     { to: '/purchase-orders', label: 'Purchase orders', icon: 'pi pi-file-edit', roles: ['STORE_MANAGER'] },

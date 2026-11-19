@@ -252,9 +252,17 @@ function finish() {
   if (done.value && !props.busy) emit('pay', payments.value, changeMode.value);
 }
 
+/** How a payment reads on the customer display */
+function payLabel(p: PayLine) {
+  if (p.currency === 'KHR') return `Cash ${formatKhr(p.tendered!)}`;
+  if (p.method === 'VOUCHER') return `Gift voucher${p.reference ? ' ' + p.reference : ''}`;
+  if (p.method === 'WALLET') return 'Wallet card';
+  if (p.method === 'CASH') return props.khrRate ? 'Cash $' : 'Cash';
+  return humanize(p.method);
+}
 // Tell the POS (and so the customer display) what is happening in this dialog.
 watch(
-  () => [visible.value, paid.value, remaining.value, change.value, khqr.value?.md5, khqr.value?.status, changeMode.value],
+  () => [visible.value, paid.value, remaining.value, change.value, khqr.value?.md5, khqr.value?.status, changeMode.value, payments.value.length],
   () => {
     if (!visible.value) return emit('progress', null);
     const k = khqr.value;
@@ -262,6 +270,7 @@ watch(
       paid: paid.value, remaining: remaining.value, change: change.value,
       khqr: k ? { qr: k.qr, amount: k.amount, expiresAt: k.expiresAt, status: k.status } : null,
       changeKhr: rate.value ? changeSplit.value.khr : undefined, changeUsd: rate.value ? changeSplit.value.usd : undefined,
+      lines: payments.value.map((p) => ({ label: payLabel(p), amount: p.amount })),
     });
   },
   { immediate: true },
