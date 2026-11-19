@@ -6,7 +6,8 @@ import { dateTime, humanize, money, qty } from '@/utils/format';
 import { optionsText } from '@/utils/modifiers';
 import { formatKhr, usdToKhrUp } from '@shared/cash';
 
-const props = defineProps<{ sale: any; currency: string }>();
+/** copyLabel: e.g. "CASHIER COPY", printed at the top of a copy kept by the store */
+const props = defineProps<{ sale: any; currency: string; copyLabel?: string }>();
 const m = (v: any) => money(v, props.currency);
 /** Riel rate printed on the receipt: the one used for riel cash, else the store's */
 const khrRate = (sale: any): number | null => Number(sale.payments?.find((p: any) => p.currency === 'KHR')?.rate ?? sale.store?.khrRate ?? 0) || null;
@@ -15,6 +16,7 @@ const changeText = (sale: any) => (Number(sale.changeKhr) ? [Number(sale.changeU
 
 <template>
   <div class="pr">
+    <div v-if="copyLabel" class="copy-label">*** {{ copyLabel }} ***</div>
     <div class="c">
       <div class="store">{{ sale.store?.name }}</div>
       <div v-if="sale.store?.address">{{ sale.store.address }}</div>
@@ -58,6 +60,7 @@ const changeText = (sale: any) => (Number(sale.changeKhr) ? [Number(sale.changeU
 <style scoped>
 .pr { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.45; color: var(--text); max-width: 320px; margin: 0 auto; }
 .c { text-align: center; }
+.copy-label { text-align: center; font-weight: 900; letter-spacing: .06em; border: 1px solid currentColor; padding: 2px 0; margin-bottom: 6px; }
 .store { font-weight: 700; font-size: 15px; }
 .sep { border-top: 1px dashed currentColor; opacity: .5; margin: 6px 0; }
 .row2 { display: flex; justify-content: space-between; gap: 10px; }

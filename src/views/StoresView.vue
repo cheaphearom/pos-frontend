@@ -14,7 +14,7 @@ const rows = ref<Store[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
 const saving = ref(false);
-const empty = () => ({ id: '', code: '', name: '', externalId: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true, khrOn: true, khrRate: 4100 as number | null, cashOutNeedsApproval: true, copyProductsFrom: null as string | null });
+const empty = () => ({ id: '', code: '', name: '', externalId: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, printAuto: false, printCustomer: true, printCashierCopy: false, printKitchen: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true, khrOn: true, khrRate: 4100 as number | null, cashOutNeedsApproval: true, copyProductsFrom: null as string | null });
 const form = reactive(empty());
 
 // ── Cards: search and filters
@@ -48,6 +48,7 @@ async function save() {
       currency: form.currency.toUpperCase(), taxRate: Number((form.taxPercent / 100).toFixed(4)),
       khqrAccountId: form.khqrAccountId || null, khqrMerchantName: form.khqrMerchantName || null, khqrCity: form.khqrCity || null,
       khqrMerchantId: form.khqrMerchantId || null, khqrBank: form.khqrBank || null, hasKitchen: !!form.hasKitchen, onlineOrdering: !!form.onlineOrdering,
+      printAuto: !!form.printAuto, printCustomer: !!form.printCustomer, printCashierCopy: !!form.printCashierCopy, printKitchen: !!form.printKitchen,
       cashierMaxDiscountPercent: Number(form.cashierMaxDiscountPercent ?? 0), refundNeedsApproval: !!form.refundNeedsApproval, voidNeedsApproval: !!form.voidNeedsApproval,
       khrRate: form.khrOn && form.khrRate ? Math.round(form.khrRate) : null, cashOutNeedsApproval: !!form.cashOutNeedsApproval,
     };
@@ -253,6 +254,14 @@ onMounted(load);
           Order page: <a :href="`/order/${form.code}`" target="_blank">{{ origin }}/order/{{ form.code }}</a>
           <Button v-if="form.id" label="Print table QR codes" icon="pi pi-qrcode" size="small" text @click="openQr" />
         </div>
+        <h3 style="margin: 8px 0 0">Printing after each sale</h3>
+        <label class="row"><ToggleSwitch v-model="form.printAuto" /> Print automatically after payment (no Print button)</label>
+        <div class="row" style="flex-wrap: wrap; gap: 6px 18px">
+          <label class="row"><Checkbox v-model="form.printCustomer" binary /> Customer receipt</label>
+          <label class="row"><Checkbox v-model="form.printCashierCopy" binary /> Cashier copy</label>
+          <label class="row"><Checkbox v-model="form.printKitchen" binary /> Kitchen ticket (no prices)</label>
+        </div>
+        <span class="hint">Each till chooses its receipt and kitchen printers on the POS (Printers). Without QZ Tray on the till, slips use the browser's printing.</span>
         <h3 style="margin: 8px 0 0">Riel cash (USD / KHR)</h3>
         <div class="form-2">
           <label class="row" style="align-self: center"><ToggleSwitch v-model="form.khrOn" /> Take cash in riel and give change in riel</label>
