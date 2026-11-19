@@ -234,6 +234,33 @@ const selected = ref(-1);
 const focusSearch = () => nextTick(() => searchEl.value?.focus());
 // On-screen keyboard for tills without a keyboard: types into the search box
 const touch = useTouchKeyboard();
+
+// ───────────── Takeaway / Dine-in (café stores) ─────────────
+const tableDlg = ref(false);
+const tableText = ref('');
+const tableInput = ref<HTMLInputElement | null>(null);
+function setTakeaway() {
+  cart.orderType = 'TAKEAWAY';
+  cart.tableNo = '';
+  focusSearch();
+}
+/** Dine-in asks for the table at once (tap again to change it). */
+function openTable() {
+  tableText.value = cart.orderType === 'DINE_IN' ? cart.tableNo ?? '' : '';
+  tableDlg.value = true;
+  nextTick(() => tableInput.value?.focus());
+}
+function tableKey(k: string) {
+  if (k === 'back') tableText.value = tableText.value.slice(0, -1);
+  else if (k === 'clear') tableText.value = '';
+  else if (tableText.value.length < 20) tableText.value += k;
+  tableInput.value?.focus();
+}
+function confirmTable() {
+  cart.orderType = 'DINE_IN';
+  cart.tableNo = tableText.value.trim();
+  tableDlg.value = false;
+}
 const kbOpen = ref(true);
 // Big mode: the whole POS (and its pop-up windows) larger, still fitting the screen
 const big = useBigMode();
@@ -779,7 +806,7 @@ async function loadPromos() {
 }
 
 function onKey(e: KeyboardEvent) {
-  const dialogOpen = onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value || cashDlg.value || xDlg.value || cashApprDlg.value || approvalDlg.value;
+  const dialogOpen = tableDlg.value || onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value || cashDlg.value || xDlg.value || cashApprDlg.value || approvalDlg.value;
   if (e.key === 'F9' || (e.key === 'Enter' && e.ctrlKey)) { e.preventDefault(); if (!dialogOpen) openPay(); }
   else if (e.key === 'F2') { e.preventDefault(); focusSearch(); }
   else if (e.key === 'F4' && !dialogOpen) { e.preventDefault(); custDlg.value = true; }
@@ -897,8 +924,17 @@ async function logout() {
       <!-- Cart -->
       <section class="cart-panel">
         <div v-if="store?.hasKitchen" class="otype">
-          <SelectButton v-model="cart.orderType" :options="[{ l: 'Takeaway', v: 'TAKEAWAY' }, { l: 'Dine-in', v: 'DINE_IN' }]" option-label="l" option-value="v" :allow-empty="false" size="small" />
-          <InputText v-if="cart.orderType === 'DINE_IN'" v-model="cart.tableNo" placeholder="Table" size="small" style="width: 80px" maxlength="20" />
+          <div v-if="cart.orderType === 'PICKUP'" class="ot-pickup"><i class="pi pi-globe" /> Pickup · online order</div>
+          <template v-else>
+            <button type="button" class="ot-btn" :class="{ on: cart.orderType !== 'DINE_IN' }" :aria-pressed="cart.orderType !== 'DINE_IN'" @click="setTakeaway">
+              <i class="pi pi-shopping-bag" /><span>Takeaway</span>
+            </button>
+            <button type="button" class="ot-btn" :class="{ on: cart.orderType === 'DINE_IN' }" :aria-pressed="cart.orderType === 'DINE_IN'" @click="openTable">
+              <i class="pi pi-users" /><span>Dine-in</span>
+              <b v-if="cart.orderType === 'DINE_IN' && cart.tableNo" class="ot-table">Table {{ cart.tableNo }}</b>
+              <i v-else-if="cart.orderType === 'DINE_IN'" class="pi pi-pencil ot-edit" aria-hidden="true" />
+            </button>
+          </template>
         </div>
         <div class="cust">
           <template v-if="cart.customer">
@@ -1061,6 +1097,25 @@ async function logout() {
     </Dialog>
 
     <!-- Held sales -->
+    <Dialog v-model:visible="tableDlg" header="Dine-in · table number" modal :style="{ width: '400px' }" :breakpoints="{ '440px': '96vw' }" @hide="focusSearch">
+      <form class="table-pad" @submit.prevent="confirmTable">
+        <label for="table-no" class="small muted">Table number</label>
+        <input id="table-no" ref="tableInput" v-model="tableText" class="table-input" maxlength="20" autocomplete="off"
+          :inputmode="touch ? 'none' : 'numeric'" placeholder="–" aria-describedby="table-hint" />
+        <span id="table-hint" class="small muted">Tap the numbers, or type with the keyboard.</span>
+        <div class="tkeys">
+          <button v-for="k in ['1', '2', '3', '4', '5', '6', '7', '8', '9']" :key="k" type="button" class="tkey" @click="tableKey(k)">{{ k }}</button>
+          <button type="button" class="tkey muted-key" aria-label="Delete last digit" @click="tableKey('back')"><i class="pi pi-delete-left" /></button>
+          <button type="button" class="tkey" @click="tableKey('0')">0</button>
+          <button type="button" class="tkey muted-key" aria-label="Clear" @click="tableKey('clear')">C</button>
+        </div>
+        <div class="row table-actions">
+          <Button label="No table" severity="secondary" outlined @click="tableText = ''; confirmTable()" />
+          <Button type="submit" :label="tableText.trim() ? `OK · Table ${tableText.trim()}` : 'OK'" icon="pi pi-check" class="table-ok" />
+        </div>
+      </form>
+    </Dialog>
+
     <Dialog v-model:visible="heldDlg" header="Held sales" modal :style="{ width: '460px' }">
       <div v-for="(h, i) in held" :key="h.clientRef" class="held">
         <div>
@@ -1240,7 +1295,30 @@ async function logout() {
 
 /* Cart */
 .cart-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); border-left: 1px solid var(--border); }
-.otype { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.otype { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+/* Takeaway / Dine-in: big, easy to hit and to read at a glance */
+.ot-btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 54px; padding: 8px 10px; border-radius: 12px; cursor: pointer;
+  border: 2px solid var(--border); background: var(--surface); color: var(--text-2); font: inherit; font-size: 17px; font-weight: 700; transition: background .12s, border-color .12s; }
+.ot-btn i { font-size: 18px; }
+.ot-btn:hover { border-color: var(--p-primary-color); }
+.ot-btn.on { background: var(--p-primary-color); border-color: var(--p-primary-color); color: var(--p-primary-contrast-color, #fff); }
+.ot-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--p-primary-color) 45%, transparent); outline-offset: 2px; }
+.ot-table { font-size: 14px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: rgba(255, 255, 255, .22); white-space: nowrap; }
+.ot-edit { font-size: 13px !important; opacity: .8; }
+.ot-pickup { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 54px; border-radius: 12px; font-weight: 700;
+  background: color-mix(in srgb, var(--p-primary-color) 12%, transparent); color: var(--p-primary-color); }
+/* table number popup */
+.table-pad { display: grid; gap: 10px; }
+.table-input { width: 100%; box-sizing: border-box; text-align: center; font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .04em;
+  padding: 8px 12px; border-radius: 12px; border: 2px solid var(--border); background: var(--bg); color: var(--text); }
+.table-input:focus { outline: none; border-color: var(--p-primary-color); }
+.tkeys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tkey { min-height: 62px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 26px; font-weight: 700; cursor: pointer; }
+.tkey:hover { background: var(--bg); }
+.tkey:active { transform: scale(.97); }
+.tkey.muted-key { color: var(--text-2); font-size: 20px; }
+.table-actions { justify-content: space-between; gap: 8px; margin-top: 4px; }
+.table-ok { flex: 1; }
 .cust { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); min-height: 58px; }
 .cust > .pi-user { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--p-primary-color) 14%, transparent); color: var(--p-primary-color); }
 .lines { flex: 1; overflow-y: auto; }

@@ -32,7 +32,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   ok((await pos.locator('.ln-opts').first().textContent()).includes('Large · 50% · Oat milk · Extra shot') && (await pos.locator('.ln-note').count()) === 1, 'cart line shows options and note');
   await pos.locator('.tile', { hasText: 'Iced Lemon Tea' }).click(); await pos.waitForTimeout(300);
   await pos.getByRole('button', { name: /^Add \$/ }).click(); await pos.waitForTimeout(300);
-  await pos.getByText('Dine-in').click(); await pos.locator('input[placeholder="Table"]').fill('5');
+  await pos.getByText('Dine-in').click(); await pos.locator('#table-no').fill('5'); await pos.locator('.table-ok').click();
   await shot(pos, '81-pos-cafe-cart');
   const shown = (await pos.locator('.r.total .num').textContent()).trim();
   await pos.keyboard.press('F9'); await pos.waitForSelector('.pay'); await pos.locator('.quick button').last().click();
@@ -74,7 +74,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   const ad = await ctx.browser().newContext({ viewport: { width: 1366, height: 820 } }).then((c) => c.newPage());
   await ad.goto(W + '/login'); await ad.fill('#email', 'admin@pos.local'); await ad.fill('#password', 'Password@123'); await ad.click('button[type=submit]'); await ad.waitForTimeout(1500);
   await ad.goto(W + '/modifiers'); await ad.waitForTimeout(1000);
-  ok((await ad.locator('.group').count()) === 5, 'drink options page lists 5 option groups');
+  ok((await ad.locator('.og-card').count()) === 5, 'drink options page lists 5 option groups');
   await shot(ad, '85-modifiers');
   console.log('page errors:', errors.length, errors.slice(0, 5));
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');

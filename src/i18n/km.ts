@@ -194,10 +194,14 @@ export const KM_EXACT: Record<string, string> = {
   'No scores yet: the detector scores a new window every 10 seconds once logs arrive.': 'មិនទាន់មានពិន្ទុ៖ ប្រព័ន្ធវាយតម្លៃរៀងរាល់ ១០ វិនាទី នៅពេលមានកំណត់ហេតុ។',
   'Rules': 'ច្បាប់', 'Isolation Forest': 'Isolation Forest', PCA: 'PCA', 'Random Forest': 'Random Forest', 'Loading…': 'កំពុងផ្ទុក…',
   'API check': 'ពិនិត្យ API', 'Heartbeat check': 'ពិនិត្យសញ្ញាជីវិត',
+  'Dine-in · table number': 'ញ៉ាំនៅហាង · លេខតុ', 'Table number': 'លេខតុ', 'No table': 'គ្មានតុ',
+  'Tap the numbers, or type with the keyboard.': 'ចុចលេខ ឬវាយដោយក្តារចុច។', 'Pickup · online order': 'មកយក · កម្ម៉ង់អនឡាញ',
 };
 
 /** For text with numbers or names inside. The first matching pattern wins. */
 export const KM_PATTERNS: [RegExp, string | ((...m: string[]) => string)][] = [
+  [/^Table (\S{1,20})$/, 'តុ $1'],
+  [/^OK · Table (\S{1,20})$/, 'យល់ព្រម · តុ $1'],
   [/^Pay (\$[\d,.]+)$/, 'បង់ $1'],
   [/^Add (\$[\d,.]+)$/, 'បន្ថែម $1'],
   [/^Held \((\d+)\)$/, 'បានផ្អាក ($1)'],
