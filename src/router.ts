@@ -67,6 +67,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'coupons', component: () => import('./views/CouponsView.vue'), meta: { title: 'Coupons', roles: M } },
       { path: 'vouchers', component: () => import('./views/VouchersView.vue'), meta: { title: 'Gift vouchers', roles: M } },
       { path: 'promotions', component: () => import('./views/PromotionsView.vue'), meta: { title: 'Promotions', roles: M } },
+      { path: 'customer-display', component: () => import('./views/DisplaySlidesView.vue'), meta: { title: 'Customer display', roles: A } },
       { path: 'wallet-cards', component: () => import('./views/WalletCardsView.vue'), meta: { title: 'Wallet cards', roles: M } },
       { path: 'customers', component: () => import('./views/CustomersView.vue'), meta: { title: 'Customers' } },
       { path: 'reports', component: () => import('./views/ReportsView.vue'), meta: { title: 'Reports', roles: M } },

@@ -8,7 +8,7 @@ import QRCode from 'qrcode';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { describePromotion, isPromoActive, type PromoRule } from '@shared/promotions';
-import { displayChannel, type DisplayState } from '@/pos/display';
+import { displayChannel, slidesKey, type DisplaySlide, type DisplayState } from '@/pos/display';
 import { qty } from '@/utils/format';
 import { formatKhr, usdToKhrUp } from '@shared/cash';
 import { useDark } from '@/composables/useDark';
@@ -35,8 +35,19 @@ const now = ref(new Date());
 const runningPromos = computed(() => promoData.value.promotions.filter((p) => isPromoActive(p, storeId, now.value, promoData.value.timeZone)));
 const promoIndex = ref(0);
 const currentPromo = computed(() => runningPromos.value[promoIndex.value % Math.max(1, runningPromos.value.length)]);
+// ── Pictures uploaded in the admin (saved by the POS, works offline once the browser has them)
+const slideData = ref(readJson<DisplaySlide[]>(slidesKey(storeId), []));
+const brokenSlides = ref(new Set<string>());
+const slides = computed(() => slideData.value.filter((x) => (!x.endsAt || new Date(x.endsAt) > now.value) && !brokenSlides.value.has(x.id)));
+const slideIndex = ref(0);
+const currentSlide = computed(() => slides.value[slideIndex.value % Math.max(1, slides.value.length)]);
+/** A picture that cannot load (e.g. offline and never shown before) is skipped. */
+function slideFailed(id: string) {
+  brokenSlides.value = new Set([...brokenSlides.value, id]);
+}
 function onStorage(e: StorageEvent) {
   if (e.key === `pos.promos:${storeId}`) promoData.value = readJson(e.key, promoData.value);
+  if (e.key === slidesKey(storeId)) { slideData.value = readJson(e.key, slideData.value); brokenSlides.value = new Set(); }
 }
 
 // ── Messages from the POS
@@ -56,6 +67,13 @@ function changeText(change: number, usd?: number, khr?: number) {
 }
 const t = computed(() => state.value?.totals);
 const saved = computed(() => (t.value?.discount ?? 0) + (t.value?.points ?? 0));
+/** Older POS windows send only the total discount */
+const otherDiscount = computed(() => {
+  const x = t.value; if (!x) return 0;
+  if (x.promotions === undefined) return Math.max(0, x.discount - (state.value?.coupon?.amount ?? 0));
+  return Math.round(((x.lineDiscounts ?? 0) + (x.saleDiscount ?? 0)) * 100) / 100;
+});
+const pay = computed(() => (mode.value === 'pay' ? state.value?.payment ?? null : null));
 
 // Keep the newest item visible
 const listEl = ref<HTMLElement | null>(null);
@@ -74,6 +92,7 @@ const clockText = computed(() => now.value.toLocaleTimeString([], { hour: '2-dig
 const dateText = computed(() => now.value.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }));
 let tick: ReturnType<typeof setInterval> | undefined;
 let rotate: ReturnType<typeof setInterval> | undefined;
+let slideTimer: ReturnType<typeof setInterval> | undefined;
 let heartbeat: ReturnType<typeof setInterval> | undefined;
 const isFullscreen = ref(false);
 async function fullscreen() {
@@ -89,6 +108,7 @@ onMounted(() => {
   channel.send({ type: 'hello' });
   tick = setInterval(() => (now.value = new Date()), 1000);
   rotate = setInterval(() => promoIndex.value++, 6000);
+  slideTimer = setInterval(() => slideIndex.value++, 8000);
   heartbeat = setInterval(() => channel.send({ type: 'ping' }), 4000); // lets the POS know this screen is still open
   window.addEventListener('storage', onStorage);
   window.addEventListener('pagehide', bye);
@@ -98,6 +118,7 @@ onBeforeUnmount(() => {
   bye();
   channel.close();
   clearInterval(tick);
+  clearInterval(slideTimer);
   clearInterval(rotate);
   clearInterval(heartbeat);
   window.removeEventListener('storage', onStorage);
@@ -148,7 +169,7 @@ onBeforeUnmount(() => {
       <div class="come-again">Please come again</div>
     </section>
 
-    <!-- Cart & payment -->
+    <!-- Cart & payment: items and the summary on the left, pictures / promotions / KHQR on the right -->
     <section v-else class="sale">
       <div class="items">
         <div class="items-head">
@@ -167,10 +188,35 @@ onBeforeUnmount(() => {
             </div>
           </TransitionGroup>
         </div>
+
+        <div class="summary">
+          <div class="rows">
+            <div class="r"><span>Subtotal · {{ qty(t?.items) }} item{{ t?.items === 1 ? '' : 's' }}</span><span>{{ money(t?.subtotal ?? 0) }}</span></div>
+            <div v-if="t?.promotions" class="r save"><span><i class="pi pi-tag" /> Promotions</span><span>−{{ money(t.promotions) }}</span></div>
+            <div v-if="otherDiscount" class="r save"><span><i class="pi pi-percentage" /> Discount</span><span>−{{ money(otherDiscount) }}</span></div>
+            <div v-if="state?.coupon" class="r save"><span><i class="pi pi-ticket" /> Coupon <b class="code">{{ state.coupon.code }}</b> <span class="sub">{{ state.coupon.name }}</span></span><span>−{{ money(state.coupon.amount) }}</span></div>
+            <div v-if="t?.points" class="r save"><span><i class="pi pi-star" /> Points</span><span>−{{ money(t.points) }}</span></div>
+            <div class="r"><span>Tax</span><span>{{ money(t?.tax ?? 0) }}</span></div>
+          </div>
+          <div class="total">
+            <span>Total</span>
+            <b>{{ money(t?.total ?? 0) }}</b>
+            <span v-if="state?.store.khrRate && t?.total" class="khr">{{ formatKhr(usdToKhrUp(t.total, state.store.khrRate)) }}</span>
+          </div>
+          <div v-if="state?.voucher && !pay?.lines?.length" class="r gift"><span><i class="pi pi-gift" /> Gift voucher <b class="code">{{ state.voucher.code }}</b></span><span>{{ money(state.voucher.balance) }} to spend</span></div>
+          <div v-if="pay" class="paying">
+            <div v-for="(x, i) in pay.lines ?? []" :key="i" class="r"><span>{{ x.label }}</span><span>−{{ money(x.amount) }}</span></div>
+            <div v-if="!pay.lines?.length && pay.paid" class="r"><span>Paid</span><span>{{ money(pay.paid) }}</span></div>
+            <div v-if="pay.remaining > 0" class="r big"><span>Still to pay</span><span>{{ money(pay.remaining) }}</span></div>
+            <div v-if="pay.change > 0" class="r big change"><span>Your change</span><span>{{ changeText(pay.change, pay.changeUsd, pay.changeKhr) }}</span></div>
+          </div>
+          <div v-if="saved > 0" class="saved"><i class="pi pi-tag" /><span>You save <b>{{ money(saved) }}</b> today</span></div>
+        </div>
       </div>
 
-      <aside class="side">
-        <template v-if="mode === 'pay' && khqr && khqr.status !== 'PAID'">
+      <aside class="media">
+        <!-- KHQR while paying: the customer scans it -->
+        <div v-if="mode === 'pay' && khqr && khqr.status !== 'PAID'" class="pay-qr">
           <div class="scan">Scan to pay</div>
           <div class="khqr-card">
             <div class="khqr-head">KHQR</div>
@@ -178,27 +224,34 @@ onBeforeUnmount(() => {
             <div class="khqr-amount">{{ money(khqr.amount) }}</div>
           </div>
           <div class="small-muted">Use any Cambodian banking app · {{ Math.floor(secondsLeft / 60) }}:{{ String(secondsLeft % 60).padStart(2, '0') }}</div>
-        </template>
-        <template v-else>
-          <div class="rows">
-            <div class="r"><span>Items</span><span>{{ qty(t?.items) }}</span></div>
-            <div class="r"><span>Subtotal</span><span>{{ money(t?.subtotal ?? 0) }}</span></div>
-            <div v-if="t?.discount" class="r save"><span>Discount</span><span>−{{ money(t.discount) }}</span></div>
-            <div class="r"><span>Tax</span><span>{{ money(t?.tax ?? 0) }}</span></div>
-            <div v-if="t?.points" class="r save"><span>Points</span><span>−{{ money(t.points) }}</span></div>
-          </div>
-          <div class="total">
-            <div>Total</div>
-            <b>{{ money(t?.total ?? 0) }}</b>
-            <span v-if="state?.store.khrRate && t?.total" class="khr">{{ formatKhr(usdToKhrUp(t.total, state.store.khrRate)) }}</span>
-          </div>
-          <div v-if="saved > 0" class="saved"><i class="pi pi-tag" /><span>You save <b>{{ money(saved) }}</b> today</span></div>
-          <div v-if="mode === 'pay' && state?.payment" class="paying">
-            <div class="r"><span>Paid</span><span>{{ money(state.payment.paid) }}</span></div>
-            <div v-if="state.payment.remaining > 0" class="r big"><span>Still to pay</span><span>{{ money(state.payment.remaining) }}</span></div>
-            <div v-if="state.payment.change > 0" class="r big"><span>Change</span><span>{{ changeText(state.payment.change, state.payment.changeUsd, state.payment.changeKhr) }}</span></div>
-          </div>
-        </template>
+        </div>
+        <!-- Pictures uploaded in the admin (Customer display page) -->
+        <div v-else-if="currentSlide" class="slides">
+          <Transition name="slide" mode="out-in">
+            <div :key="currentSlide.id" class="slide">
+              <img class="bg" :src="currentSlide.imageUrl" alt="" aria-hidden="true" />
+              <img class="pic" :src="currentSlide.imageUrl" :alt="currentSlide.title" @error="slideFailed(currentSlide.id)" />
+            </div>
+          </Transition>
+          <div v-if="slides.length > 1" class="dots on-pic"><span v-for="(x, i) in slides" :key="x.id" :class="{ on: i === slideIndex % slides.length }" /></div>
+        </div>
+        <!-- No pictures: today's promotions -->
+        <div v-else-if="currentPromo" class="media-promo">
+          <Transition name="fade" mode="out-in">
+            <div :key="currentPromo.id" class="promo-card tall">
+              <div class="promo-tag"><i class="pi pi-tag" /> Today's deal</div>
+              <div class="promo-name">{{ currentPromo.name }}</div>
+              <div class="promo-deal">{{ describePromotion(currentPromo) }}</div>
+              <div v-if="runningPromos.length > 1" class="dots"><span v-for="(p, i) in runningPromos" :key="p.id" :class="{ on: i === promoIndex % runningPromos.length }" /></div>
+            </div>
+          </Transition>
+        </div>
+        <!-- Nothing to show: a welcome card -->
+        <div v-else class="media-welcome">
+          <div class="kh">សូមស្វាគមន៍</div>
+          <h2>{{ storeName ? `Welcome to ${storeName}` : 'Welcome' }}</h2>
+          <div class="pay-with">We accept <b>KHQR</b> · cash · cards</div>
+        </div>
       </aside>
     </section>
   </div>
@@ -242,33 +295,57 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; color: var(--text); }
 .hint { color: var(--muted); font-size: .7em; }
 
 /* sale */
-.sale { height: 100%; display: grid; grid-template-columns: 1.4fr 1fr; }
-.items { display: flex; flex-direction: column; min-height: 0; padding: 3vh 2.5vw; }
+.sale { height: 100%; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.items { display: flex; flex-direction: column; min-height: 0; padding: 3vh 2.5vw 2.5vh; }
 .items-head { display: flex; justify-content: space-between; align-items: center; gap: 1em; padding-bottom: 1.5vh; border-bottom: 2px solid var(--line); }
 .items-head b { color: var(--accent); }
 .member { color: var(--badge); background: var(--hl); border-radius: 999px; padding: .25em .8em; font-size: .8em; font-weight: 600; }
 .member i { color: var(--caramel); }
-.list { flex: 1; overflow-y: auto; scrollbar-width: none; }
-.line { display: flex; justify-content: space-between; gap: 1em; padding: 1.6vh .7em; border-bottom: 1px solid var(--line); }
+.list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.line { display: flex; justify-content: space-between; gap: 1em; padding: 1.4vh .7em; border-bottom: 1px solid var(--line); }
 .line.last { background: var(--hl); border-radius: 12px; border-bottom-color: transparent; box-shadow: inset 4px 0 0 var(--caramel); }
-.ln-name { font-weight: 600; }
+.ln-name { font-weight: 600; min-width: 0; }
 .ln-sub { color: var(--muted); font-weight: 400; font-size: .8em; }
 .ln-promo { color: var(--save); font-size: .8em; font-weight: 600; }
 .ln-total { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.side { background: var(--panel); border-left: 1px solid var(--line); box-shadow: var(--side-shadow); display: flex; flex-direction: column; justify-content: center; gap: 3vh; padding: 4vh 3vw; }
-.rows { display: grid; gap: 1.2vh; }
-.r { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+/* summary under the items */
+.summary { margin-top: 1.6vh; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 2vh 1.6vw; display: grid; gap: 1.4vh; }
+.rows { display: grid; gap: .8vh; font-size: .9em; }
+.r { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; font-variant-numeric: tabular-nums; }
+.r > span:first-child { min-width: 0; }
+.r > span:last-child { white-space: nowrap; }
+.r i { font-size: .85em; margin-right: .3em; }
+.r .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; letter-spacing: .04em; }
+.r .sub { color: var(--muted); font-size: .85em; font-weight: 400; }
 .r.save, .saved { color: var(--save); }
-.total { border-top: 2px solid var(--line); padding-top: 2vh; }
-.total div { color: var(--muted); }
-.total b { display: block; font-size: 3.4em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--accent); }
-.saved { display: inline-flex; align-items: center; gap: .5em; align-self: flex-start; font-weight: 600; font-size: 1em;
-  background: color-mix(in srgb, var(--save) 12%, transparent); border: 1px solid color-mix(in srgb, var(--save) 30%, transparent);
-  border-radius: 999px; padding: .45em 1em; }
+.total { display: flex; align-items: baseline; flex-wrap: wrap; gap: .2em .8em; border-top: 2px solid var(--line); padding-top: 1.4vh; }
+.total > span:first-child { color: var(--muted); flex: 1; }
+.total b { font-size: 2.6em; line-height: 1.05; font-variant-numeric: tabular-nums; color: var(--accent); }
+.total .khr { flex-basis: 100%; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.r.gift { background: var(--hl); color: var(--badge); border-radius: 12px; padding: 1vh 1vw; font-weight: 600; }
+.saved { display: inline-flex; align-items: center; gap: .5em; justify-self: start; font-weight: 600; font-size: .9em;
+  background: color-mix(in srgb, var(--save) 12%, transparent); border-radius: 999px; padding: .3em .9em; }
 .saved i { font-size: .9em; }
 .saved b { font-weight: 800; }
-.paying { display: grid; gap: 1vh; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 2vh 1.5vw; }
-.paying .big { font-size: 1.4em; font-weight: 800; }
+.paying { display: grid; gap: .8vh; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 1.6vh 1.2vw; }
+.paying .big { font-size: 1.3em; font-weight: 800; }
+.paying .change { color: var(--accent); }
+/* right side: pictures, promotions or KHQR */
+.media { position: relative; background: var(--panel); border-left: 1px solid var(--line); box-shadow: var(--side-shadow); min-height: 0; overflow: hidden; display: grid; }
+.pay-qr { display: flex; flex-direction: column; justify-content: center; gap: 3vh; padding: 4vh 3vw; }
+.slides, .slide { position: absolute; inset: 0; }
+.slide .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(28px) brightness(.85); transform: scale(1.15); }
+.slide .pic { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.dots.on-pic { position: absolute; bottom: 2.4vh; inset-inline: 0; }
+.dots.on-pic span { background: rgba(255, 255, 255, .5); box-shadow: 0 0 0 1px rgba(0, 0, 0, .15); }
+.dots.on-pic span.on { background: #fff; }
+.media-promo { display: grid; place-items: center; padding: 4vh 3vw; }
+.promo-card.tall { min-width: 0; width: 100%; padding: 6vh 3vw; text-align: center; }
+.media-welcome { display: grid; place-content: center; justify-items: center; gap: 2vh; text-align: center; padding: 4vh 3vw; }
+.media-welcome h2 { margin: 0; font-size: 2em; line-height: 1.15; }
+.slide-enter-active, .slide-leave-active { transition: opacity .8s ease; }
+.slide-enter-from, .slide-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .slide-enter-active, .slide-leave-active, .fade-enter-active, .fade-leave-active, .item-enter-active { transition: none; } }
 .scan { text-align: center; font-size: 1.6em; font-weight: 800; }
 .khqr-card { background: #fff; border-radius: 22px; overflow: hidden; width: min(100%, 52vh); margin: 0 auto; border: 1px solid var(--line); box-shadow: var(--shadow); }
 .khqr-head { background: #e1232e; color: #fff; text-align: center; font-weight: 900; letter-spacing: .15em; padding: 1.4vh; }
@@ -301,7 +378,7 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; color: var(--text); }
 @media (max-width: 800px) {
   /* Portrait screens: items fill the top, totals stay at the bottom */
   .sale { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
-  .side { padding: 3vh 6vw; gap: 2vh; }
+  .media { min-height: 34vh; border-left: 0; border-top: 1px solid var(--line); }
   .cd { font-size: 18px; }
 }
 </style>
