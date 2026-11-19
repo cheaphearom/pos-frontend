@@ -61,7 +61,7 @@ interface Cart {
   voucher?: { code: string; balance: string } | null;
   orderType?: 'TAKEAWAY' | 'DINE_IN' | 'PICKUP';
   tableNo?: string;
-  onlineOrderId?: string;
+  onlineOrderId?: string | null;
   redeemPoints: number;
   discount: number;
   discountPercent: number;
@@ -71,13 +71,21 @@ interface Cart {
 }
 const CART_KEY = `pos.cart:${app.currentStoreId}`;
 const HELD_KEY = `pos.held:${app.currentStoreId}`;
-const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, wallet: null, coupon: null, voucher: null, orderType: 'TAKEAWAY', tableNo: '', redeemPoints: 0, discount: 0, discountPercent: 0, note: '' });
+const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, wallet: null, coupon: null, voucher: null, orderType: 'TAKEAWAY', tableNo: '', redeemPoints: 0, discount: 0, discountPercent: 0, note: '', onlineOrderId: null, approval: null });
+// Every key of a cart is listed above with its empty value: Object.assign(cart, newCart()) only resets the keys it lists.
 const readJson = <T,>(k: string, d: T): T => {
   try { return JSON.parse(localStorage.getItem(k) ?? '') ?? d; } catch { return d; }
 };
 const cart = reactive<Cart>(readJson(CART_KEY, newCart()));
 const held = ref<Cart[]>(readJson(HELD_KEY, []));
 watch(cart, (c) => localStorage.setItem(CART_KEY, JSON.stringify(c)), { deep: true });
+/** The cart is the online order's only while it holds its items: emptied, it is a normal sale again. */
+function unlinkOnline() {
+  cart.onlineOrderId = null;
+  if (cart.note?.startsWith('Online ·')) cart.note = '';
+}
+// emptied, an online order's cart starts afresh: its member, points, note and table do not carry over to the next sale
+watch(() => cart.lines.length, (n) => { if (!n && cart.onlineOrderId) Object.assign(cart, newCart()); });
 watch(held, (h) => localStorage.setItem(HELD_KEY, JSON.stringify(h)), { deep: true });
 
 // ───────────── Drink options ─────────────
@@ -430,7 +438,7 @@ function hold() {
 const heldDlg = ref(false);
 function recall(i: number) {
   if (cart.lines.length) hold();
-  Object.assign(cart, held.value.splice(i, 1)[0]);
+  Object.assign(cart, newCart(), held.value.splice(i, 1)[0]);
   heldDlg.value = false;
 }
 
@@ -496,7 +504,7 @@ async function complete(payments: PayLine[], changeIn: ChangeMode = 'MIXED') {
       modifiers: l.modifiers?.length ? l.modifiers.map((o) => o.id) : undefined, note: l.note || undefined,
     })),
     ...(store.value?.hasKitchen && { orderType: cart.orderType ?? 'TAKEAWAY', tableNo: cart.orderType === 'DINE_IN' && cart.tableNo ? cart.tableNo : undefined }),
-    onlineOrderId: cart.onlineOrderId,
+    onlineOrderId: cart.onlineOrderId || undefined,
     payments,
     customerId: cart.customer?.id,
     redeemPoints: cart.redeemPoints || undefined,
@@ -526,6 +534,11 @@ async function complete(payments: PayLine[], changeIn: ChangeMode = 'MIXED') {
     Object.assign(cart, newCart());
   } catch (e) {
     if (e instanceof ApiError && e.status === 403 && /approval/i.test(e.message)) cart.approval = null; // expired or used: ask again
+    if (e instanceof ApiError && cart.onlineOrderId && /online order was already paid or cancelled/i.test(e.message)) {
+      unlinkOnline();
+      notify.error('That online order was already paid or cancelled, so this sale is no longer linked to it. Press Complete sale again to finish it as a normal sale.');
+      return;
+    }
     notify.error(e);
   } finally {
     paying.value = false;
@@ -880,6 +893,11 @@ async function logout() {
           </template>
           <Button v-else label="Add member (F4)" icon="pi pi-user-plus" text size="small" @click="custDlg = true" />
         </div>
+        <div v-if="cart.onlineOrderId" class="online-link">
+          <i class="pi pi-globe" />
+          <span>Paying an <b>online order</b>{{ cart.note?.startsWith('Online ·') ? ' · ' + cart.note.slice(9) : '' }}</span>
+          <Button icon="pi pi-times" text rounded size="small" aria-label="Not an online order: unlink" title="Not an online order: unlink" @click="unlinkOnline" />
+        </div>
 
         <div class="lines">
           <div v-for="(l, i) in cart.lines" :key="i" class="line" :class="{ sel: selected === i }" @click="selected = i">
@@ -1217,6 +1235,8 @@ async function logout() {
 .opt-mark { font-size: 11px; color: var(--text-3); margin-left: 6px; }
 .wallet-line { color: var(--p-primary-color); font-weight: 600; }
 .coupon-row { color: var(--p-primary-color); font-weight: 600; }
+.online-link { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 14px; border-bottom: 1px solid var(--border); font-size: 13px; background: color-mix(in srgb, var(--p-primary-color) 10%, transparent); }
+.online-link span { flex: 1; min-width: 0; }
 .qty { display: flex; align-items: center; gap: 4px; }
 .qty button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; display: grid; place-items: center; }
 .qty button:hover { border-color: var(--p-primary-color); color: var(--p-primary-color); }
