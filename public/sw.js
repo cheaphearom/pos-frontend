@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /*
  * Service worker: lets the POS open and run without internet.
  * - App files (/assets/*, hashed names) are cached on first use (cache-first).

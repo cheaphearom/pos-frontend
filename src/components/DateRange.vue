@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Date range picker bound to { from, to } strings (YYYY-MM-DD), with quick presets. */
 import { computed } from 'vue';

@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** End of day: preview today's Z report, run it once all shifts are closed, reprint past ones. */
 import { printElement } from '@/utils/print';

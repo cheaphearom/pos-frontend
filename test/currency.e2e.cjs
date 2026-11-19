@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 // Browser test: USD/KHR dual currency at the POS (riel total, pay in riel, change $ + ៛, all-riel change),
 // receipt, riel drawer on the Shifts page, rate on the Stores page.
 // Needs: fresh seed data (4100 riel = $1), API on :3000, vite preview on :4173, Playwright.

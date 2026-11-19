@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 // Browser test: Khmer interface — switch on the login page, POS in Khmer (menu text, Khmer product and category
 // names, payment, receipt), back to English, customer display follows, online menu and member app in Khmer.
 // Needs: fresh seed data (with Khmer names), API on :3000, vite preview on :4173, Playwright.

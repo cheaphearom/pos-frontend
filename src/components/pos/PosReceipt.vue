@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Receipt layout for screen and 80mm thermal printers. Works for server receipts and offline ones. */
 import { localName } from '@/i18n';

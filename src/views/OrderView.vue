@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Online ordering for customers' phones: /order/PP01 (pickup) or /order/PP01?table=5 (table QR). */
 import { localName } from '@/i18n';

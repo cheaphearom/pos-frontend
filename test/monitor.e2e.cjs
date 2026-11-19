@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 // Browser test: System monitor page (super admins only) — status cards, charts, anomaly scores, alerts, test
 // Telegram button, refresh every 15 s that stops while the tab is hidden, Khmer.
 // Needs: pos-backend demo data, API on :3000 with the ML detector reachable (DETECTOR_URL), vite preview on :4173, Playwright.

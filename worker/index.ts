@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /**
  * Cloudflare Worker in front of the web app: the app's files are served by Cloudflare (assets), and
  * /api, /docs and /health are forwarded to the API server in API_ORIGIN. Same address for both, so the

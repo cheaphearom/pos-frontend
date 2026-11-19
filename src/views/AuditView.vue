@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Audit log: who did what (discounts, refunds, voids, PIN approvals, price and stock changes, logins). */
 import { onMounted, ref, watch } from 'vue';

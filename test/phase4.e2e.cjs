@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 const { chromium } = require('playwright');
 // Browser test: purchasing, promotions (online + offline) and KHQR at the POS.
 // Needs: fresh seed data, API on :3000 (KHQR_MODE=manual), vite preview on :4173, Playwright.

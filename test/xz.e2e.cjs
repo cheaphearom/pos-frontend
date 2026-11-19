@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 // Browser test: cash in / out at the POS (cash out with manager PIN), X report, close the shift, Z report.
 // Needs: fresh seed data (manager.pp PIN 2580, 4100 riel = $1), API on :3000, vite preview on :4173, Playwright.
 const { chromium } = require('playwright');

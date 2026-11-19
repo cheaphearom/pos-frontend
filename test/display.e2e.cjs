@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 const { chromium } = require('playwright');
 // Browser test: customer display (second screen) driven by the POS window.
 // Needs: fresh seed data, API on :3000 (KHQR_MODE=manual), vite preview on :4173, Playwright.

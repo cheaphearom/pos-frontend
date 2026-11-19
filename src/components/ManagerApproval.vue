@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /**
  * Manager approval on the cashier's screen: the manager types their PIN (keypad for touch screens).

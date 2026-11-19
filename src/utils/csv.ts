@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /** Download rows as a CSV file (opens in Excel / Google Sheets). */
 export function downloadCsv(filename: string, columns: { key: string; label: string }[], rows: Record<string, any>[]) {
   const esc = (v: unknown) => {

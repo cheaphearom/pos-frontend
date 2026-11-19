@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /** Calls to the public online-ordering API (no staff login). Sends the member app token when the customer is logged in. */
 const BASE = '/api/v1/public';
 const memberToken = () => { try { return JSON.parse(localStorage.getItem('member.session') ?? 'null')?.token ?? null; } catch { return null; } };

@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Search box that finds products by name, SKU or barcode. Emits the chosen product. */
 import { ref } from 'vue';

@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Bakery production: what to bake today, batches, end-of-day leftovers and waste. */
 import { computed, onMounted, reactive, ref, watch } from 'vue';

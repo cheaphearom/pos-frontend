@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /**
  * Same rules as the API (pos-backend src/sales/pricing.ts) so the POS shows exact totals
  * and can sell offline. Works in integer cents to avoid floating-point errors.

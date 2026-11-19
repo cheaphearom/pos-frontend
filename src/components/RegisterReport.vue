@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** X report (one shift so far) or Z report (a store's business day), laid out for an 80 mm receipt printer. */
 import { computed } from 'vue';

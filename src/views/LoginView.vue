@@ -1,5 +1,7 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 import LangSwitch from '@/components/LangSwitch.vue';
+import { COPYRIGHT } from '@/utils/copyright';
 import TouchKeyboard from '@/components/TouchKeyboard.vue';
 import KeyboardToggle from '@/components/KeyboardToggle.vue';
 import { useDark } from '@/composables/useDark';
@@ -66,7 +68,7 @@ async function submit() {
           <li><i class="pi pi-chart-line" /> Stock and reports for every store</li>
         </ul>
       </div>
-      <div class="brand-foot">© {{ new Date().getFullYear() }} · Point of sale</div>
+      <div class="brand-foot">{{ COPYRIGHT }}</div>
     </aside>
 
     <main class="side">
@@ -99,6 +101,7 @@ async function submit() {
         </div>
         <Button type="submit" label="Sign in" icon="pi pi-arrow-right" icon-pos="right" :loading="loading" class="w-full signin" />
       </form>
+      <p class="copy">{{ COPYRIGHT }}</p>
       <TouchKeyboard v-if="touch && kbOpen" v-model="typed" class="kb" :enter-label="field === 'email' ? 'Next' : 'Sign in'" @enter="kbEnter" @close="kbOpen = false" />
     </main>
   </div>
@@ -122,6 +125,7 @@ async function submit() {
 .brand li { display: flex; align-items: center; gap: 12px; }
 .brand li i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(255, 255, 255, .14); font-size: 15px; }
 .brand-foot { font-size: 13px; opacity: .7; }
+.copy { display: none; margin: 0; font-size: 12px; color: var(--text-2); text-align: center; }
 
 /* Right: form on cream */
 .side { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 32px 24px; }
@@ -141,6 +145,7 @@ p { margin: 4px 0 0; }
 @media (max-width: 860px) {
   .login { grid-template-columns: 1fr; }
   .brand { display: none; }
+  .copy { display: block; }
   .side { justify-content: flex-start; padding-top: 10vh; background: linear-gradient(180deg, color-mix(in srgb, var(--p-primary-color) 14%, var(--bg)) 0, var(--bg) 220px); }
   .box { padding: 26px 22px; }
 }

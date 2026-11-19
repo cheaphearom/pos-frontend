@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /**
  * Vercel Routing Middleware: the same job as worker/index.ts on Cloudflare. Vercel serves the app's files, and
  * /api, /docs and /health are forwarded to the API server in the environment variable API_ORIGIN

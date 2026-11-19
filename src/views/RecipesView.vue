@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Recipes: what each drink uses (beans, milk, cups…), how options change it, and the real cost per cup.
  * Bakery items (made in batches) have a batch recipe instead, used when the batch is baked. */

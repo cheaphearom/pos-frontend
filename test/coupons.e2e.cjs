@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 // Browser test: coupons and gift vouchers at the POS and in admin.
 // Needs: fresh seed data, API on :3000, vite preview on :4173, Playwright.
 const { chromium } = require('playwright');

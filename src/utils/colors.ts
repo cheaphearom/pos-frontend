@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /** Category colours: the same on the cashier tiles, the Categories page and the Products list. */
 export const CATEGORY_COLORS = ['#8b5a33', '#2f7d6b', '#c8893f', '#7a4f9a', '#2c6e9b', '#b2493b', '#5f7d2f', '#9a6a00', '#4f6b7a', '#a14d7a'];
 export const NO_CATEGORY_COLOR = '#9a8b7f';

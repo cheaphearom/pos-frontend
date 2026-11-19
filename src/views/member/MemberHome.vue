@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Member home: points, member QR, wallet cards and orders in progress. */
 import LangSwitch from '@/components/LangSwitch.vue';

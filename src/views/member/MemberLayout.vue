@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
 /** Member app shell for phones: page + bottom tabs. */
 import { memberSession } from '@/online/memberApi';

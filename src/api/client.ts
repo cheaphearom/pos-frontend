@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /**
  * Small fetch wrapper for the POS API.
  * - Adds the access token.

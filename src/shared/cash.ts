@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 /*
  * SHARED WITH THE BACKEND: copy of pos-backend src/sales/cash.ts.
  * Change both files together and run `npm run check:shared`, otherwise offline till totals

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { api } from '@/api/client';

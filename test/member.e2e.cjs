@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Chea Phearom. All rights reserved.
+// Proprietary and confidential: see the LICENSE file.
 // Browser test: member app (phone login, points, wallet, order ahead with the account, history, reorder) + POS member QR.
 // Needs: fresh seed data, API on :3000 (MEMBER_OTP_MODE=dev, the default outside production), vite preview on :4173, Playwright.
 const { chromium, devices } = require('playwright');
