@@ -919,7 +919,7 @@ async function logout() {
     <!-- Top bar -->
     <header class="bar">
       <RouterLink v-if="auth.isManager" to="/" class="back" v-tooltip.bottom="'Back to admin'" aria-label="Back to admin"><i class="pi pi-arrow-left" /></RouterLink>
-      <span class="logo" aria-hidden="true"><i class="pi pi-shopping-bag" /></span>
+      <span class="logo" aria-hidden="true"><img src="/favicon.svg" alt="" /></span>
       <div class="title">
         <b>{{ store?.name }}</b>
         <span class="who"><i class="pi pi-user" /> {{ auth.user?.fullName }}</span>
@@ -1338,7 +1338,8 @@ async function logout() {
 .bar { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); position: relative; z-index: 2; }
 .back { color: var(--text-2); padding: 6px; border-radius: 8px; }
 .back:hover { background: var(--bg); }
-.logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--p-primary-color); color: #fff; font-size: 17px; flex-shrink: 0; }
+.logo { width: 36px; height: 36px; flex-shrink: 0; }
+.logo img { display: block; width: 100%; height: 100%; }
 .title { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .title b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who { font-size: 12px; color: var(--text-2); white-space: nowrap; }

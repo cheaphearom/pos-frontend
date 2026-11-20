@@ -33,7 +33,7 @@ const fullscreen = () => document.documentElement.requestFullscreen().catch(() =
 <template>
   <div class="board" @dblclick="fullscreen">
     <header>
-      <span class="blogo" aria-hidden="true"><i class="pi pi-shopping-bag" /></span>
+      <span class="blogo" aria-hidden="true"><img src="/favicon.svg" alt="" /></span>
       <span class="bname">{{ data?.store ?? 'Orders' }}</span>
       <span class="bclock">{{ clock }}</span>
     </header>
@@ -56,7 +56,8 @@ const fullscreen = () => document.documentElement.requestFullscreen().catch(() =
 .board { height: 100vh; color: #fbf4ec; display: flex; flex-direction: column; font-size: clamp(16px, 1.6vw, 28px); user-select: none;
   background: radial-gradient(circle at 12% 0%, #1e3a8a 0, #0f1a42 55%), #0a1230; }
 header { display: flex; align-items: center; gap: 1vw; padding: 2vh 2.5vw; }
-.blogo { width: 1.9em; height: 1.9em; border-radius: .5em; display: grid; place-items: center; background: linear-gradient(135deg, #1e3a8a, #3b82f6); font-size: 1em; }
+.blogo { width: 1.9em; height: 1.9em; flex-shrink: 0; }
+.blogo img { display: block; width: 100%; height: 100%; }
 .bname { flex: 1; font-size: 1.5em; font-weight: 800; letter-spacing: -.01em; }
 .bclock { font-size: 1.4em; font-weight: 800; font-variant-numeric: tabular-nums; opacity: .85; }
 .cols { flex: 1; display: grid; grid-template-columns: 2fr 3fr; gap: 2vw; padding: 0 2.5vw 2vh; min-height: 0; }

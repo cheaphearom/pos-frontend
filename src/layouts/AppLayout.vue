@@ -104,7 +104,7 @@ async function logout() {
 <template>
   <div class="shell" :class="{ open }">
     <aside class="sidebar">
-      <div class="brand"><span class="logo"><i class="pi pi-shopping-bag" /></span><span>POS Admin<small>{{ app.currentStore?.name }}</small></span></div>
+      <div class="brand"><span class="logo"><img src="/favicon.svg" alt="" /></span><span>POS Admin<small>{{ app.currentStore?.name }}</small></span></div>
       <nav>
         <div v-for="s in visible" :key="s.title" class="nav-section">
           <div class="nav-title">{{ s.title }}</div>
@@ -173,7 +173,8 @@ async function logout() {
 }
 .brand > span:last-child { display: grid; line-height: 1.2; }
 .brand small { font-size: 11.5px; font-weight: 500; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
-.logo { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--sidebar-active), var(--accent-2)); display: grid; place-items: center; flex-shrink: 0; }
+.logo { width: 36px; height: 36px; flex-shrink: 0; }
+.logo img { display: block; width: 100%; height: 100%; }
 .nav-section { margin-bottom: 14px; }
 .nav-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .5; padding: 6px 10px; }
 .nav-item {

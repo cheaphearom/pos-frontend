@@ -1,6 +1,6 @@
 {
-  "name": "POS System",
-  "short_name": "POS",
+  "name": "LOK POS",
+  "short_name": "LOK POS",
   "description": "Multi-store point of sale",
   "start_url": "/pos",
   "display": "standalone",
