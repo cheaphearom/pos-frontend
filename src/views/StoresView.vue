@@ -63,13 +63,15 @@ async function save() {
 interface SyncResult { store: string; items: number; categoriesCreated: number; productsCreated: number; productsUpdated: number; addedToStore: number; storePrices: number; optionsUpdated?: number }
 interface SyncAllRow { store: string; name: string; ok: boolean; items?: number; productsCreated?: number; productsUpdated?: number; optionsUpdated?: number; error?: string }
 interface SyncAllJob { id: string; running: boolean; total: number; done: number; stopped: string | null; results: SyncAllRow[] }
-const remembered = (k: string) => { try { return localStorage.getItem(k) ?? ''; } catch { return ''; } };
+// BROWN details (address, dev_kid, username, group ids, token) are kept in this page's memory only, never in the browser's storage.
+// Remove what older versions saved.
+try { for (const k of ['pos.brown.apiUrl', 'pos.brown.username', 'pos.brown.groupIds', 'pos.brown.devKid']) localStorage.removeItem(k); } catch { /* private window */ }
 const syncDlg = ref(false);
 const syncing = ref(false);
 const syncStore = ref<Store | null>(null);
 const syncResult = ref<SyncResult | null>(null);
 const syncError = ref('');
-const sync = reactive({ mode: 'api' as 'api' | 'paste', brownStoreId: '', apiUrl: remembered('pos.brown.apiUrl'), username: remembered('pos.brown.username'), groupIds: remembered('pos.brown.groupIds'), devKid: remembered('pos.brown.devKid'), accessToken: '', dataEncryption: '', pasted: '' });
+const sync = reactive({ mode: 'api' as 'api' | 'paste', brownStoreId: '', apiUrl: '', username: '', groupIds: '', devKid: '', accessToken: '', dataEncryption: '', pasted: '' });
 const defaultUrl = ref('');
 /** The flat API_V16 bodies need the BROWN username; the Client_API ones do not */
 const isAppApi = computed(() => /_menu_listing/i.test(sync.apiUrl) && !/client_api/i.test(sync.apiUrl));
@@ -124,7 +126,6 @@ async function runSync() {
   syncError.value = '';
   syncResult.value = null;
   if (syncAll.value) {
-    remember();
     syncing.value = true;
     try {
       followAll(await api.post<SyncAllJob>('/stores/brown-sync-all', {
@@ -141,7 +142,6 @@ async function runSync() {
     try { body.response = JSON.parse(sync.pasted); } catch { syncError.value = 'That is not the whole response: it must start with { and end with } (copy it again from Postman).'; return; }
   } else {
     body = { ...body, apiUrl: sync.apiUrl.trim() || undefined, username: isAppApi.value ? sync.username.trim() : undefined, groupIds: sync.groupIds.trim() || undefined, devKid: sync.devKid.trim(), accessToken: sync.accessToken.trim(), dataEncryption: sync.dataEncryption.trim() || undefined };
-    remember();
   }
   syncing.value = true;
   try {
@@ -151,16 +151,6 @@ async function runSync() {
   } catch (e: any) {
     syncError.value = e?.message ?? String(e);
   } finally { syncing.value = false; }
-}
-
-/** The browser remembers the address, dev_kid and username (never the token) */
-function remember() {
-  try {
-    localStorage.setItem('pos.brown.devKid', sync.devKid.trim());
-    localStorage.setItem('pos.brown.apiUrl', sync.apiUrl.trim());
-    localStorage.setItem('pos.brown.groupIds', sync.groupIds.trim());
-    if (isAppApi.value) localStorage.setItem('pos.brown.username', sync.username.trim());
-  } catch { /* private window */ }
 }
 
 // ── Table QR codes (printable)
@@ -300,12 +290,12 @@ onMounted(load);
           <div class="field">
             <label>API URL <span class="hint">(optional)</span></label>
             <InputText v-model="sync.apiUrl" type="url" autocomplete="off" class="mono small" :placeholder="defaultUrl ? `Default: ${defaultUrl}` : 'Leave empty for the default address'" />
-            <span class="hint">Leave empty for the default. The POS server calls this address, so the server must be able to reach it. Remembered in this browser.</span>
+            <span class="hint">Leave empty for the default. The POS server calls this address, so the server must be able to reach it. Not saved: type it each time.</span>
           </div>
           <div class="field">
             <label>BROWN group ids <span class="hint">(optional)</span></label>
             <InputText v-model="sync.groupIds" autocomplete="off" class="mono small" placeholder="Empty = all groups" />
-            <span class="hint">Sent as group_id. To sync only some groups, list their ids with commas, e.g. 420160070859702031 (Beverages). Remembered in this browser.</span>
+            <span class="hint">Sent as group_id. To sync only some groups, list their ids with commas, e.g. 420160070859702031 (Beverages). Not saved: type it each time.</span>
           </div>
           <div v-if="isAppApi" class="field"><label>Username</label><InputText v-model="sync.username" autocomplete="off" /><span class="hint">The BROWN app username used for the access token</span></div>
           <div class="field"><label>dev_kid *</label><InputText v-model="sync.devKid" required inputmode="numeric" autocomplete="off" /></div>
