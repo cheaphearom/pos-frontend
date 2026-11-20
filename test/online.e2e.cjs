@@ -81,7 +81,9 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   const ad = watch(await (await browser.newContext({ viewport: { width: 1366, height: 820 } })).newPage());
   await ad.goto(W + '/login'); await ad.fill('#email', 'admin@pos.local'); await ad.fill('#password', 'Password@123'); await ad.click('button[type=submit]'); await ad.waitForTimeout(1500);
   await ad.goto(W + '/stores'); await ad.waitForTimeout(800);
-  await ad.locator('.p-datatable-tbody tr', { hasText: 'PP01' }).click(); await ad.waitForTimeout(400);
+  // stores are cards (the All tab shows every store)
+  await ad.locator('.p-selectbutton .p-togglebutton', { hasText: /^All/ }).click().catch(() => {}); await ad.waitForTimeout(400);
+  await ad.locator('.st-card', { hasText: 'PP01' }).first().click(); await ad.waitForTimeout(400);
   await ad.getByRole('button', { name: 'Print table QR codes' }).click(); await ad.waitForTimeout(1500);
   ok((await ad.locator('.qr-card').count()) === 13, 'QR sheet: order-ahead + 12 tables');
   await shot(ad, 'a6-table-qr');

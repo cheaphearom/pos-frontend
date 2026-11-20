@@ -71,10 +71,13 @@ interface Cart {
   note: string;
   /** Manager approval for a discount above the cashier limit */
   approval?: { id: string; manager: string; percent: number } | null;
+  /** On hold: when and by whom (shown in the held list) */
+  heldAt?: string | null;
+  heldBy?: string | null;
 }
 const CART_KEY = `pos.cart:${app.currentStoreId}`;
 const HELD_KEY = `pos.held:${app.currentStoreId}`;
-const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, wallet: null, coupon: null, voucher: null, orderType: 'TAKEAWAY', tableNo: '', redeemPoints: 0, discount: 0, discountPercent: 0, note: '', onlineOrderId: null, approval: null });
+const newCart = (): Cart => ({ clientRef: uuid(), startedAt: new Date().toISOString(), lines: [], customer: null, wallet: null, coupon: null, voucher: null, orderType: 'TAKEAWAY', tableNo: '', redeemPoints: 0, discount: 0, discountPercent: 0, note: '', onlineOrderId: null, approval: null, heldAt: null, heldBy: null });
 // Every key of a cart is listed above with its empty value: Object.assign(cart, newCart()) only resets the keys it lists.
 const readJson = <T,>(k: string, d: T): T => {
   try { return JSON.parse(localStorage.getItem(k) ?? '') ?? d; } catch { return d; }
@@ -467,11 +470,34 @@ function saveLine() {
 
 function hold() {
   if (!cart.lines.length) return;
-  held.value.push(JSON.parse(JSON.stringify(cart)));
+  held.value.push({ ...JSON.parse(JSON.stringify(cart)), heldAt: new Date().toISOString(), heldBy: auth.user?.fullName ?? null });
   clearCart();
   notify.success('Sale on hold', 'Recall it from "Held"');
 }
 const heldDlg = ref(false);
+function deleteHeld(i: number) {
+  const h = held.value[i];
+  if (h && confirm(`Delete this held sale (${h.lines.length} item(s))? It cannot be recalled afterwards.`)) held.value.splice(i, 1);
+}
+/** Totals of a held cart, worked out like the cart itself (today's promotions, discounts, coupon, tax, points). */
+function cartSummary(c: Cart) {
+  try {
+    const pr = applyPromotions(c.lines.map((l) => ({ productId: l.productId, categoryId: l.categoryId ?? null, price: l.price, quantity: l.quantity })), promoData.value.promotions, app.currentStoreId!, now.value, promoData.value.timeZone);
+    const ld = c.lines.map((l, i) => { const gross = r2(Number(l.price) * l.quantity); const promo = pr[i]?.discount ?? 0; return r2(promo + Math.min(l.discount || 0, r2(gross - promo))); });
+    const couponOff = c.coupon ? couponDiscount(c.coupon, r2(c.lines.reduce((t, l, i) => t + r2(Number(l.price) * l.quantity) - ld[i], 0))).discount : 0;
+    const t = priceCart(c.lines.map((l, i) => ({ price: l.price, quantity: l.quantity, discount: ld[i], taxable: l.taxable })), taxRate.value, { amount: r2((c.discount || 0) + couponOff) || undefined, percent: c.discountPercent || undefined });
+    const points = c.customer && c.redeemPoints ? pointsValue(c.redeemPoints, loyalty.value.pointValue) : 0;
+    return { subtotal: Number(t.subtotal), discount: Number(t.discountTotal), tax: Number(t.taxTotal), total: r2(Number(t.total) - points), points, lineDiscount: ld, promo: pr };
+  } catch { return null; }
+}
+const heldView = computed(() => held.value.map((h, i) => ({ h, i, sum: cartSummary(h), qty: h.lines.reduce((n, l) => n + l.quantity, 0) })).reverse());
+/** "just now", "12 min ago", "1 h 5 min ago" */
+function ago(iso?: string | null) {
+  if (!iso) return '';
+  const min = Math.max(0, Math.round((now.value.getTime() - new Date(iso).getTime()) / 60_000));
+  return min < 1 ? 'just now' : min < 60 ? `${min} min ago` : `${Math.floor(min / 60)} h ${min % 60} min ago`;
+}
+const hhmm = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
 function recall(i: number) {
   if (cart.lines.length) hold();
   Object.assign(cart, newCart(), held.value.splice(i, 1)[0]);
@@ -683,6 +709,12 @@ async function loadOnline() {
   if (!online.value || !(store.value as any)?.onlineOrdering) return;
   try { onlineOrders.value = await api.get('/online-orders', { storeId: app.currentStoreId }); } catch { /* keep the last list */ }
 }
+const ONLINE_STATUS: Record<string, { label: string; sev: string }> = {
+  PAY_AT_COUNTER: { label: 'Pays at the counter', sev: 'info' }, PENDING_PAYMENT: { label: 'Waiting for KHQR', sev: 'warn' }, FAILED: { label: 'Problem', sev: 'danger' },
+};
+const PAY_BY: Record<string, string> = { COUNTER: 'pays at the counter', KHQR: 'pays by KHQR', WALLET: 'paid by wallet card' };
+const onlineSorted = computed(() => [...onlineOrders.value].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)));
+const onlineCount = (st: string) => onlineOrders.value.filter((o) => o.status === st).length;
 async function confirmOnline(o: any) {
   onlineBusy.value = o.id;
   try {
@@ -1260,15 +1292,56 @@ async function logout() {
       </form>
     </Dialog>
 
-    <Dialog v-model:visible="heldDlg" header="Held sales" modal :style="{ width: '460px' }">
-      <div v-for="(h, i) in held" :key="h.clientRef" class="held">
-        <div>
-          <b>{{ h.lines.length }} item(s)</b> <span v-if="h.customer">· {{ h.customer.name }}</span>
-          <div class="small muted">{{ dateTime(h.startedAt) }} · {{ h.lines.map((l) => l.name).slice(0, 3).join(', ') }}</div>
+    <Dialog v-model:visible="heldDlg" :header="`Held sales (${held.length})`" modal class="list-dlg" :style="{ width: '960px' }" :breakpoints="{ '1000px': '96vw' }">
+      <div v-if="!held.length" class="muted c" style="padding: 24px">No held sales. Use Hold to park a sale and serve the next customer.</div>
+      <p v-else-if="cart.lines.length" class="small muted" style="margin: 0 0 10px">Recall puts the sale now in the cart on hold first.</p>
+      <div v-for="{ h, i, sum, qty: n } in heldView" :key="h.clientRef" class="lcard" data-test="held-card">
+        <div class="lhead">
+          <div class="lwho">
+            <b class="lname">{{ h.customer ? h.customer.name : 'Walk-in customer' }}</b>
+            <span v-if="h.customer?.phone" class="muted small">{{ h.customer.phone }}</span>
+            <Tag v-if="h.customer" :value="`${h.customer.points} pts`" severity="secondary" />
+          </div>
+          <div class="ltags">
+            <span class="lpill" :class="h.orderType === 'DINE_IN' ? 'dine' : 'take'"><i :class="h.orderType === 'DINE_IN' ? 'pi pi-users' : 'pi pi-shopping-bag'" />
+              {{ h.orderType === 'DINE_IN' ? `Dine-in${h.tableNo ? ' · Table ' + h.tableNo : ''}` : h.orderType === 'PICKUP' ? 'Pickup' : 'Takeaway' }}</span>
+            <Tag v-if="h.onlineOrderId" value="Online order" severity="info" />
+          </div>
+          <div class="small muted lmeta">
+            Held {{ hhmm(h.heldAt ?? h.startedAt) }} · {{ ago(h.heldAt ?? h.startedAt) }}<span v-if="h.heldBy"> · by {{ h.heldBy }}</span> · {{ h.lines.length }} line(s), {{ qty(n) }} item(s)
+          </div>
         </div>
-        <div class="row">
-          <Button icon="pi pi-trash" text rounded severity="danger" aria-label="Delete" @click="held.splice(i, 1)" />
-          <Button label="Recall" size="small" @click="recall(i)" />
+        <table class="litems">
+          <tr v-for="(l, j) in h.lines" :key="j">
+            <td class="lq">{{ qty(l.quantity) }} ×</td>
+            <td>
+              <b>{{ localName(l) }}</b><span v-if="l.nameKm && localName(l) !== l.nameKm" class="muted small"> · {{ l.nameKm }}</span>
+              <div v-if="l.modifiers?.length" class="small muted">{{ optionsText(l.modifiers, true) }}</div>
+              <div v-if="l.note" class="small lnote-i">Note: {{ l.note }}</div>
+              <div v-if="sum?.promo[j]?.name" class="small good">★ {{ sum.promo[j].name }}</div>
+            </td>
+            <td class="lr muted small">{{ m(l.price) }}</td>
+            <td class="lr"><span v-if="sum && sum.lineDiscount[j]" class="small neg">−{{ m(sum.lineDiscount[j]) }} </span>{{ m(Number(l.price) * l.quantity - (sum?.lineDiscount[j] ?? 0)) }}</td>
+          </tr>
+        </table>
+        <div v-if="h.note" class="lnote"><i class="pi pi-comment" /> {{ h.note }}</div>
+        <div class="lchips">
+          <Tag v-if="h.coupon" :value="`Coupon ${h.coupon.code}`" severity="secondary" />
+          <Tag v-if="h.voucher" :value="`Voucher ${h.voucher.code}`" severity="secondary" />
+          <Tag v-if="h.wallet" value="Wallet card" severity="secondary" />
+          <Tag v-if="h.redeemPoints" :value="`${h.redeemPoints} points used`" severity="secondary" />
+          <Tag v-if="h.discount || h.discountPercent" :value="`Sale discount ${h.discountPercent ? h.discountPercent + '%' : m(h.discount)}`" severity="secondary" />
+          <Tag v-if="h.approval" :value="`Approved by ${h.approval.manager}`" severity="success" />
+        </div>
+        <div class="lfoot">
+          <div v-if="sum" class="small muted ltot">
+            Subtotal {{ m(sum.subtotal) }}<span v-if="sum.discount"> · Discount −{{ m(sum.discount) }}</span><span v-if="sum.points"> · Points −{{ m(sum.points) }}</span> · Tax {{ m(sum.tax) }}
+          </div>
+          <div class="lbig">Total <b>{{ sum ? m(sum.total) : '—' }}</b></div>
+          <div class="row lact">
+            <Button label="Delete" icon="pi pi-trash" text severity="danger" @click="deleteHeld(i)" />
+            <Button label="Recall" icon="pi pi-replay" @click="recall(i)" />
+          </div>
         </div>
       </div>
     </Dialog>
@@ -1290,18 +1363,56 @@ async function logout() {
     </Dialog>
 
     <!-- Online orders -->
-    <Dialog v-model:visible="onlineDlg" header="Online orders" modal :style="{ width: '620px' }" :breakpoints="{ '680px': '100vw' }">
-      <div v-if="!onlineOrders.length" class="muted c" style="padding: 20px">No online orders waiting. Paid KHQR orders go straight to the barista screen.</div>
-      <div v-for="o in onlineOrders" :key="o.id" class="held">
-        <div style="min-width: 0">
-          <b>{{ o.customerName }}</b> <span class="muted small">{{ o.orderType === 'DINE_IN' ? 'Table ' + o.tableNo : 'Pickup' }} · {{ new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span>
-          <div class="small muted">{{ o.lines.map((l: any) => `${Number(l.quantity)}× ${l.name}`).join(', ') }}</div>
-          <div class="small"><b>{{ m(o.total) }}</b> · <span :class="o.status === 'FAILED' ? 'neg' : ''">{{ o.status === 'PENDING_PAYMENT' ? 'Waiting for KHQR' : o.status === 'PAY_AT_COUNTER' ? 'Pays at the counter' : 'Problem: ' + o.error }}</span></div>
+    <Dialog v-model:visible="onlineDlg" :header="`Online orders (${onlineOrders.length})`" modal class="list-dlg" :style="{ width: '960px' }" :breakpoints="{ '1000px': '96vw' }">
+      <div v-if="!onlineOrders.length" class="muted c" style="padding: 24px">No online orders waiting. Paid KHQR orders go straight to the barista screen.</div>
+      <div v-else class="list-sum small">
+        <span><b>{{ onlineCount('PAY_AT_COUNTER') }}</b> pay at the counter</span>
+        <span><b>{{ onlineCount('PENDING_PAYMENT') }}</b> waiting for KHQR</span>
+        <span v-if="onlineCount('FAILED')" class="neg"><b>{{ onlineCount('FAILED') }}</b> with a problem</span>
+        <span class="muted">Oldest first</span>
+      </div>
+      <div v-for="o in onlineSorted" :key="o.id" class="lcard" :class="{ bad: o.status === 'FAILED' }" data-test="online-card">
+        <div class="lhead">
+          <div class="lwho">
+            <b class="lname">{{ o.customerName }}</b>
+            <span v-if="o.phone" class="muted small"><i class="pi pi-phone" style="font-size: 11px" /> {{ o.phone }}</span>
+            <Tag v-if="o.member" value="Member" severity="info" />
+          </div>
+          <div class="ltags">
+            <span class="lpill" :class="o.orderType === 'DINE_IN' ? 'dine' : 'take'"><i :class="o.orderType === 'DINE_IN' ? 'pi pi-users' : 'pi pi-shopping-bag'" />
+              {{ o.orderType === 'DINE_IN' ? `Dine-in${o.tableNo ? ' · Table ' + o.tableNo : ''}` : 'Pickup' }}</span>
+            <Tag :value="ONLINE_STATUS[o.status]?.label ?? o.status" :severity="ONLINE_STATUS[o.status]?.sev ?? 'secondary'" />
+          </div>
+          <div class="small muted lmeta">
+            Ordered {{ hhmm(o.createdAt) }} · {{ ago(o.createdAt) }} · {{ PAY_BY[o.payMethod] ?? o.payMethod }}
+            <span v-if="o.status === 'PENDING_PAYMENT' && o.expiresAt"> · KHQR expires {{ hhmm(o.expiresAt) }}</span>
+          </div>
         </div>
-        <div class="row" style="flex-shrink: 0">
-          <Button icon="pi pi-times" text rounded severity="danger" aria-label="Cancel order" @click="cancelOnline(o)" />
-          <Button v-if="o.status === 'PAY_AT_COUNTER'" label="Take payment" size="small" @click="takeOnline(o)" />
-          <Button v-else label="Payment received" size="small" severity="success" :loading="onlineBusy === o.id" v-tooltip.left="'Check the KHQR payment arrived in your bank app first'" @click="confirmOnline(o)" />
+        <table class="litems">
+          <tr v-for="(l, j) in o.lines" :key="j">
+            <td class="lq">{{ qty(Number(l.quantity)) }} ×</td>
+            <td>
+              <b>{{ localName(l) }}</b><span v-if="l.nameKm && localName(l) !== l.nameKm" class="muted small"> · {{ l.nameKm }}</span>
+              <div v-if="l.modifiers?.length" class="small muted">{{ optionsText(l.modifiers, true) }}</div>
+              <div v-if="l.note" class="small lnote-i">Note: {{ l.note }}</div>
+              <div v-if="l.promotion" class="small good">★ Promotion</div>
+            </td>
+            <td class="lr muted small">{{ l.unitPrice !== undefined ? m(l.unitPrice) : '' }}</td>
+            <td class="lr"><span v-if="l.promotion" class="small neg">−{{ m(l.promotion.discount) }} </span>{{ l.unitPrice !== undefined ? m(Number(l.unitPrice) * Number(l.quantity) - Number(l.promotion?.discount ?? 0)) : '' }}</td>
+          </tr>
+        </table>
+        <div v-if="o.note" class="lnote"><i class="pi pi-comment" /> {{ o.note }}</div>
+        <div v-if="o.status === 'FAILED' && o.error" class="lnote bad-note"><i class="pi pi-exclamation-triangle" /> {{ o.error }}</div>
+        <div class="lfoot">
+          <div v-if="o.totals" class="small muted ltot">
+            Subtotal {{ m(o.totals.subtotal) }}<span v-if="Number(o.totals.discountTotal)"> · Discount −{{ m(o.totals.discountTotal) }}</span><span v-if="o.couponCode"> · Coupon {{ o.couponCode }}</span><span v-if="o.redeemPoints"> · {{ o.redeemPoints }} points used</span> · Tax {{ m(o.totals.taxTotal) }}
+          </div>
+          <div class="lbig">To pay <b>{{ m(o.total) }}</b></div>
+          <div class="row lact">
+            <Button label="Cancel order" icon="pi pi-times" text severity="danger" @click="cancelOnline(o)" />
+            <Button v-if="o.status === 'PAY_AT_COUNTER'" label="Take payment" icon="pi pi-wallet" @click="takeOnline(o)" />
+            <Button v-else label="Payment received" icon="pi pi-check" severity="success" :loading="onlineBusy === o.id" v-tooltip.left="'Check the KHQR payment arrived in your bank app first'" @click="confirmOnline(o)" />
+          </div>
         </div>
       </div>
     </Dialog>
@@ -1502,6 +1613,33 @@ kbd { font: inherit; font-size: 11px; font-weight: 700; border: 1px solid var(--
 .change-big b { font-size: 30px; display: block; }
 .wallet-box { background: color-mix(in srgb, var(--p-primary-color) 10%, var(--surface)); border-radius: 12px; padding: 12px 14px; }
 .held { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+/* Held sales and online orders: one card each, with every item and the totals */
+.list-sum { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 0 2px 10px; }
+.lcard { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; background: var(--surface); box-shadow: var(--shadow); }
+.lcard.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--border)); }
+.lhead { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+.lwho { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.lname { font-size: 17px; }
+.ltags { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.lmeta { grid-column: 1 / -1; }
+.lpill { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 999px; }
+.lpill.dine { background: color-mix(in srgb, var(--p-primary-color) 14%, var(--surface)); color: var(--p-primary-color); }
+.lpill.take { background: color-mix(in srgb, var(--text-2) 12%, var(--surface)); color: var(--text-2); }
+.litems { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+.litems td { padding: 7px 6px; border-top: 1px dashed var(--border); vertical-align: top; }
+.litems .lq { width: 48px; font-weight: 800; white-space: nowrap; }
+.litems .lr { text-align: right; white-space: nowrap; width: 1%; }
+.lnote-i { color: var(--warn); font-weight: 600; }
+.good { color: var(--good); }
+.lnote { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--warn) 10%, var(--surface)); font-size: 13px; }
+.lnote.bad-note { background: color-mix(in srgb, var(--bad) 10%, var(--surface)); color: var(--bad); }
+.lchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.lchips:empty { display: none; }
+.lfoot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ltot { flex: 1; min-width: 220px; }
+.lbig { font-size: 14px; color: var(--text-2); }
+.lbig b { font-size: 22px; color: var(--text); margin-left: 6px; }
+.lact { gap: 6px; }
 #print-receipt { display: none; }
 .slips-offscreen { position: fixed; left: -10000px; top: 0; width: 72mm; background: #fff; }
 .slips-offscreen .slip { width: 72mm; background: #fff; color: #000; padding: 2mm 0; }
