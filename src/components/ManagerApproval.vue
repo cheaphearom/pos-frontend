@@ -7,7 +7,7 @@
 import { ref, watch } from 'vue';
 import { api } from '@/api/client';
 
-const props = defineProps<{ storeId: string | null; action: 'DISCOUNT' | 'REFUND' | 'VOID' | 'CASH_OUT'; percent?: number; amount?: number; saleId?: string; reason?: string; message: string }>();
+const props = defineProps<{ storeId: string | null; action: 'DISCOUNT' | 'REFUND' | 'VOID' | 'CASH_OUT' | 'DISCARD_OFFLINE'; percent?: number; amount?: number; saleId?: string; reason?: string; message: string }>();
 const visible = defineModel<boolean>('visible', { required: true });
 const emit = defineEmits<{ approved: [{ approvalId: string; manager: string; percent?: number }] }>();
 

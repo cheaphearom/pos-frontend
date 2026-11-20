@@ -18,6 +18,21 @@ const trend = ref<any>(null);
 const recent = ref<any[]>([]);
 const shift = ref<any>(null);
 const loading = ref(true);
+/** Offline sales check: per till, numbers that never arrived (managers) */
+const tills = ref<any[]>([]);
+const tillProblems = computed(() => tills.value.filter((t) => t.status !== 'ok'));
+const TILL_STATUS: Record<string, { label: string; sev: string }> = {
+  problem: { label: 'Missing sales', sev: 'danger' }, check: { label: 'Check', sev: 'warn' }, waiting: { label: 'Waiting to upload', sev: 'info' }, ok: { label: 'OK', sev: 'success' },
+};
+function tillNote(t: any) {
+  const parts: string[] = [];
+  if (t.missingCount) parts.push(`${t.missingCount} offline sale number(s) never arrived: ${t.missingReceipts.slice(0, 5).join(', ')}${t.missingCount > 5 ? '…' : ''}`);
+  if (t.usedTwice.length) parts.push(`number(s) used twice: ${t.usedTwice.join(', ')}`);
+  if (t.counterBackAt) parts.push(`its numbering went back on ${dateTime(t.counterBackAt)} (browser data cleared or changed)`);
+  if (t.stale) parts.push(`not seen since ${dateTime(t.lastSeenAt)} with ${t.waiting} sale(s) waiting`);
+  else if (t.waiting) parts.push(`${t.waiting} sale(s) waiting to upload (${m(t.waitingTotal)})`);
+  return parts.join(' · ');
+}
 
 const storeParam = computed(() => (scope.value === 'store' ? app.currentStoreId ?? undefined : undefined));
 const cur = computed(() => app.currentStore?.currency ?? 'USD');
@@ -33,6 +48,7 @@ async function load() {
       ]);
       dash.value = d;
       trend.value = t;
+      tills.value = await api.get<any[]>('/tills', { storeId: storeParam.value }).catch(() => []);
     }
     if (app.currentStoreId) {
       const [s, sh] = await Promise.all([
@@ -92,6 +108,22 @@ watch(scope, load);
         <RouterLink to="/inventory?lowStock=1" style="text-decoration: none; color: inherit">
           <StatCard label="Low-stock items" icon="pi pi-exclamation-triangle" :value="num(dash.lowStockItems)" previous-label="" />
         </RouterLink>
+      </div>
+
+      <div class="card mt" data-test="till-check">
+        <div class="row" style="justify-content: space-between; align-items: baseline">
+          <h3 style="margin: 0">Offline sales check</h3>
+          <span class="small muted">{{ tills.length }} till(s) · offline receipts are numbered per till (OFF-code-0001…)</span>
+        </div>
+        <p v-if="!tillProblems.length" class="muted" style="margin-bottom: 0">
+          <i class="pi pi-check-circle" style="color: var(--good)" /> Every offline sale number has arrived, is waiting on its till, or was deleted with a manager PIN.
+        </p>
+        <DataTable v-else :value="tillProblems" size="small" class="mt">
+          <Column header="Till"><template #body="{ data }"><b class="mono">{{ data.code }}</b><div class="small muted">{{ data.store.code }} · {{ data.lastUserName }}</div></template></Column>
+          <Column header="Status"><template #body="{ data }"><Tag :value="TILL_STATUS[data.status].label" :severity="TILL_STATUS[data.status].sev" /></template></Column>
+          <Column header="Offline numbers" class="right"><template #body="{ data }">{{ data.issued }} used · {{ data.received }} arrived · {{ data.deleted }} deleted</template></Column>
+          <Column header="What to check"><template #body="{ data }"><span class="small">{{ tillNote(data) }}</span></template></Column>
+        </DataTable>
       </div>
 
       <div class="grid grid-2 mt">

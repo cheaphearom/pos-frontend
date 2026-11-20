@@ -34,7 +34,8 @@ import { isNetworkError, online } from '@/pos/network';
 import { PricingError, priceCart, pointsValue } from '@/pos/pricing';
 import { applyPromotions, type PromoRule } from '@shared/promotions';
 import { couponDiscount, type CouponRule } from '@shared/coupons';
-import { enqueue, loadQueue, queue, removeFromQueue, retryQueued, syncingQueue, syncQueue } from '@/pos/queue';
+import { enqueue, loadQueue, queue, removeFromQueue, reportNow, retryQueued, syncingQueue, syncQueue } from '@/pos/queue';
+import { nextOfflineSeq, offlineReceiptNo, tillCode, tillId } from '@/pos/till';
 import { uuid } from '@/pos/uuid';
 import { displayChannel, openDisplayWindow, slidesKey, type DisplayState, type PaymentProgress } from '@/pos/display';
 import { useApp } from '@/stores/app';
@@ -589,9 +590,12 @@ async function saveOffline(body: any, payments: { method: string; amount: number
   if (payments.some((p: any) => p.method === 'VOUCHER' || p.method === 'WALLET')) throw new Error('Vouchers and wallet cards need a connection.');
   const t = totals.value!;
   const paid = payments.reduce((s, p) => s + p.amount, 0);
+  // Numbered per till (OFF-7K2F-0001…), so a sale that never uploads shows up as a missing number.
+  const till = await tillId();
+  const seq = await nextOfflineSeq();
   const local = {
     offline: true,
-    receiptNo: 'OFF-' + body.clientRef.slice(0, 8).toUpperCase(),
+    receiptNo: offlineReceiptNo(tillCode(till), seq),
     createdAt: new Date().toISOString(),
     store: store.value,
     cashier: { fullName: auth.user?.fullName },
@@ -603,7 +607,7 @@ async function saveOffline(body: any, payments: { method: string; amount: number
     changeDue: Math.round((paid - t.total) * 100) / 100,
     ...((c) => ({ changeUsd: c.usd, changeKhr: c.khr }))(splitChange(Math.round((paid - t.total) * 100) / 100, khrRate.value, body.changeIn)),
   };
-  await enqueue({ clientRef: body.clientRef, body: { ...body, offlineCreatedAt: local.createdAt }, createdAt: local.createdAt, attempts: 0, receipt: local });
+  await enqueue({ clientRef: body.clientRef, body: { ...body, offlineCreatedAt: local.createdAt, tillId: till, offlineSeq: seq }, createdAt: local.createdAt, attempts: 0, receipt: local, tillId: till, seq });
   return local;
 }
 
@@ -837,8 +841,34 @@ async function syncNow() {
   if (r.sent) notify.success(`${r.sent} offline sale(s) uploaded`);
   if (r.failed) notify.error(`${r.failed} sale(s) were rejected. Open the queue to see why.`);
 }
+// Deleting a waiting offline sale needs a manager PIN and the internet, and is recorded on the server.
+const discardDlg = ref(false);
+const discardItem = ref<any>(null);
+const discardReason = ref('');
 function discardQueued(ref: string) {
-  if (confirm('Delete this offline sale? It will not be recorded.')) removeFromQueue(ref);
+  if (!online.value) return notify.error('Deleting an offline sale needs the internet, so it can be recorded. Try again when online.');
+  discardItem.value = queue.value.find((q) => q.clientRef === ref) ?? null;
+  discardReason.value = '';
+  if (discardItem.value) discardDlg.value = true;
+}
+const discardApprDlg = ref(false);
+function askDiscardPin() {
+  if (discardReason.value.trim().length < 3) return notify.error('Write why this sale is deleted');
+  discardDlg.value = false;
+  discardApprDlg.value = true;
+}
+async function doDiscard(approvalId: string) {
+  const q = discardItem.value;
+  if (!q) return;
+  try {
+    await api.post('/tills/discard', {
+      tillId: q.tillId ?? (await tillId()), storeId: q.body.storeId, clientRef: q.clientRef, receiptNo: q.receipt.receiptNo,
+      offlineSeq: q.seq, total: Math.round(Number(q.receipt.total) * 100) / 100, reason: discardReason.value.trim(), approvalId,
+    });
+    await removeFromQueue(q.clientRef);
+    reportNow();
+    notify.success('Offline sale deleted', `${q.receipt.receiptNo} · recorded with the manager's approval`);
+  } catch (e) { notify.error(e); }
 }
 
 // ───────────── Startup & keyboard ─────────────
@@ -870,7 +900,7 @@ async function loadPromos() {
 }
 
 function onKey(e: KeyboardEvent) {
-  const dialogOpen = tableDlg.value || onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value || cashDlg.value || xDlg.value || cashApprDlg.value || approvalDlg.value;
+  const dialogOpen = discardDlg.value || discardApprDlg.value || tableDlg.value || onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value || cashDlg.value || xDlg.value || cashApprDlg.value || approvalDlg.value;
   if (e.key === 'F9' || (e.key === 'Enter' && e.ctrlKey)) { e.preventDefault(); if (!dialogOpen) openPay(); }
   else if (e.key === 'F2') { e.preventDefault(); focusSearch(); }
   else if (e.key === 'F4' && !dialogOpen) { e.preventDefault(); custDlg.value = true; }
@@ -881,6 +911,7 @@ function onKey(e: KeyboardEvent) {
 watch(online, (v) => v && refreshData());
 onMounted(async () => {
   await loadQueue();
+  reportNow(); // this till's offline numbers, for the managers' check
   const hadLocal = await catalog.loadLocal();
   focusSearch();
   if (online.value) {
@@ -1167,6 +1198,22 @@ async function logout() {
       <RegisterReport v-if="xReport" :report="xReport" />
       <div class="row mt no-print" style="justify-content: flex-end"><Button label="Print" icon="pi pi-print" @click="printX" /></div>
     </Dialog>
+    <Dialog v-model:visible="discardDlg" header="Delete offline sale" modal :style="{ width: '420px' }" :breakpoints="{ '480px': '96vw' }">
+      <form v-if="discardItem" class="form" @submit.prevent="askDiscardPin">
+        <Message severity="warn" :closable="false" size="small">
+          {{ discardItem.receipt.receiptNo }} · {{ m(discardItem.receipt.total) }} will not be recorded as a sale. A manager must approve, and the deletion is recorded.
+        </Message>
+        <div class="field"><label for="discard-reason">Why?</label>
+          <InputText id="discard-reason" v-model="discardReason" maxlength="200" autofocus placeholder="e.g. customer did not pay, test sale" /></div>
+        <div class="row" style="justify-content: flex-end">
+          <Button label="Cancel" text severity="secondary" @click="discardDlg = false" />
+          <Button type="submit" label="Manager PIN" icon="pi pi-lock" severity="danger" />
+        </div>
+      </form>
+    </Dialog>
+    <ManagerApproval v-model:visible="discardApprDlg" :store-id="discardItem?.body.storeId ?? app.currentStoreId" action="DISCARD_OFFLINE"
+      :amount="discardItem ? Math.round(Number(discardItem.receipt.total) * 100) / 100 || undefined : undefined" :reason="discardReason"
+      :message="`Delete offline sale ${discardItem?.receipt.receiptNo} (${m(discardItem?.receipt.total ?? 0)}): ${discardReason}`" @approved="(a) => doDiscard(a.approvalId)" />
     <ManagerApproval v-model:visible="approvalDlg" :store-id="app.currentStoreId" action="DISCOUNT" :percent="manualPercent"
       :message="`Discount of ${manualPercent}% (${m(manualAmount)}) is above the cashier limit of ${discountLimit}%.`" @approved="onApproved" />
     <Dialog v-model:visible="discDlg" header="Discount on whole sale" modal :style="{ width: '380px' }">

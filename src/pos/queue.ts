@@ -4,6 +4,7 @@ import { ref } from 'vue';
 import { api, ApiError } from '@/api/client';
 import { idb } from './idb';
 import { isNetworkError, online } from './network';
+import { reportTill } from './till';
 
 /** A sale made while offline (or whose upload failed), waiting to be sent. */
 export interface QueuedSale {
@@ -13,6 +14,8 @@ export interface QueuedSale {
   attempts: number;
   error?: string; // set when the server rejected it (needs a manager)
   receipt: Record<string, any>; // what was printed, for showing in the list
+  tillId?: string; // the till that made it
+  seq?: number; // its offline number on that till (OFF-<till>-0001)
 }
 
 const KEY = 'sales-queue';
@@ -72,7 +75,16 @@ export async function syncQueue(): Promise<{ sent: number; failed: number }> {
   } finally {
     syncingQueue.value = false;
   }
+  await reportNow();
   return { sent, failed };
+}
+
+/** Tell the server this till's offline numbers and what still waits here (see till.ts). */
+export async function reportNow() {
+  await loadQueue();
+  let storeId: string | null = null;
+  try { storeId = localStorage.getItem('pos.currentStoreId'); } catch { /* private window */ }
+  await reportTill(storeId, queue.value.map((q) => ({ seq: q.seq, tillId: q.tillId, total: Number(q.receipt?.total ?? 0) })));
 }
 
 /** Try again later for one that was rejected (e.g. after fixing a product). */
@@ -86,5 +98,7 @@ export async function retryQueued(clientRef: string) {
 }
 
 // Upload automatically when the connection comes back, and every 30 seconds.
+// Also report to the server every 5 minutes, so a till that keeps sales waiting is noticed.
 window.addEventListener('online', () => setTimeout(syncQueue, 1500));
 setInterval(() => queue.value.length && syncQueue(), 30_000);
+setInterval(() => reportNow(), 5 * 60_000);
