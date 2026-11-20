@@ -2,11 +2,12 @@
 // Proprietary and confidential: see the LICENSE file.
 /*
  * Service worker: lets the POS open and run without internet.
- * - App files (/assets/*, hashed names) are cached on first use (cache-first).
- * - Pages: network first, fall back to the cached app shell when offline.
+ * - App files (/assets/*, hashed names) are cached on first use (cache-first): a new build has new names.
+ * - Everything else (pages, logos, manifest): network first, so a change shows on a normal refresh;
+ *   the cached copy is used only when offline.
  * - API calls (/api) are never cached; the POS keeps its own offline data in IndexedDB.
  */
-const CACHE = 'pos-shell-v1';
+const CACHE = 'pos-shell-v2'; // new name: browsers drop the old cache (which kept old logos)
 const SHELL = ['/', '/index.html', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -38,17 +39,34 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // Hashed build files never change: cache first.
+  if (url.pathname.startsWith('/assets/')) {
+    e.respondWith(
+      caches.match(req).then(
+        (hit) =>
+          hit ||
+          fetch(req).then((res) => {
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(CACHE).then((c) => c.put(req, copy));
+            }
+            return res;
+          }),
+      ),
+    );
+    return;
+  }
+
+  // Other files (logos, manifest…) keep their names when they change: network first, cache when offline.
   e.respondWith(
-    caches.match(req).then(
-      (hit) =>
-        hit ||
-        fetch(req).then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return res;
-        }),
-    ),
+    fetch(req)
+      .then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req).then((hit) => hit || Response.error())),
   );
 });
