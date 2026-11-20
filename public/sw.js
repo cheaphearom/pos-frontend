@@ -2,16 +2,27 @@
 // Proprietary and confidential: see the LICENSE file.
 /*
  * Service worker: lets the POS open and run without internet.
- * - App files (/assets/*, hashed names) are cached on first use (cache-first): a new build has new names.
+ * - App files (/assets/*, hashed names): ALL of them are downloaded when a new version installs (the build writes
+ *   the list below), so every screen opens offline, even one not used since the update. Cache-first after that.
  * - Everything else (pages, logos, manifest): network first, so a change shows on a normal refresh;
  *   the cached copy is used only when offline.
+ * - Cached files are found by address only (ignoreVary): servers mark them "Vary" (Origin, Accept-Encoding),
+ *   which would otherwise make a saved file not match the page's request.
  * - API calls (/api) are never cached; the POS keeps its own offline data in IndexedDB.
  */
-const CACHE = 'pos-shell-v2'; // new name: browsers drop the old cache (which kept old logos)
-const SHELL = ['/', '/index.html', '/favicon.svg', '/manifest.webmanifest'];
+// Both filled in by the build (vite.config.ts, pos-sw-precache); a new build = a new cache, old ones are deleted.
+const BUILD = 'dev';
+const ASSETS = [];
+const CACHE = 'pos-shell-' + BUILD;
+const SHELL = ['/', '/index.html', '/favicon.svg', '/favicon_logo.svg', '/manifest.webmanifest'];
 
+// The new version takes over only once every file is saved, so the till is never left half-updated offline.
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll([...SHELL, ...ASSETS].map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -34,7 +45,7 @@ self.addEventListener('fetch', (e) => {
           caches.open(CACHE).then((c) => c.put('/index.html', copy));
           return res;
         })
-        .catch(() => caches.match('/index.html')),
+        .catch(() => caches.match('/index.html', { ignoreVary: true })),
     );
     return;
   }
@@ -42,7 +53,7 @@ self.addEventListener('fetch', (e) => {
   // Hashed build files never change: cache first.
   if (url.pathname.startsWith('/assets/')) {
     e.respondWith(
-      caches.match(req).then(
+      caches.match(req, { ignoreVary: true }).then(
         (hit) =>
           hit ||
           fetch(req).then((res) => {
@@ -67,6 +78,6 @@ self.addEventListener('fetch', (e) => {
         }
         return res;
       })
-      .catch(() => caches.match(req).then((hit) => hit || Response.error())),
+      .catch(() => caches.match(req, { ignoreVary: true }).then((hit) => hit || Response.error())),
   );
 });

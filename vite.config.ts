@@ -1,8 +1,34 @@
 // Copyright (c) 2026 Chea Phearom. All rights reserved.
 // Proprietary and confidential: see the LICENSE file.
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
+
+/**
+ * Writes every built file (/assets/…) and a build id into dist/sw.js, so the offline cache saves the whole app when a
+ * new version installs: after an update, every screen opens offline, not only the ones already used.
+ */
+function swPrecache(): Plugin {
+  let files: string[] = [];
+  let outDir = 'dist';
+  return {
+    name: 'pos-sw-precache',
+    apply: 'build',
+    configResolved(c) { outDir = c.build.outDir; },
+    generateBundle(_o, bundle) { files = Object.keys(bundle).filter((f) => f.startsWith('assets/')).map((f) => '/' + f).sort(); },
+    closeBundle() {
+      const p = join(outDir, 'sw.js');
+      const sw = readFileSync(p, 'utf8');
+      const build = createHash('sha256').update(files.join('\n')).digest('hex').slice(0, 12);
+      const out = sw.replace("const BUILD = 'dev';", `const BUILD = '${build}';`).replace('const ASSETS = [];', `const ASSETS = ${JSON.stringify(files)};`);
+      if (out === sw) throw new Error('sw.js: BUILD / ASSETS placeholders not found');
+      writeFileSync(p, out);
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -10,7 +36,7 @@ export default defineConfig(({ mode }) => {
   // and any domains listed in VITE_ALLOWED_HOSTS (comma separated), e.g. pos.yourcafe.com
   const allowedHosts = ['.trycloudflare.com', ...(env.VITE_ALLOWED_HOSTS ?? '').split(',').map((h) => h.trim()).filter(Boolean)];
   return {
-    plugins: [vue()],
+    plugins: [vue(), swPrecache()],
     resolve: {
       alias: {
         '@': '/src',
