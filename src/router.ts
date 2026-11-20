@@ -111,3 +111,32 @@ setMemberLoggedOutHandler(() => {
   const at = router.currentRoute.value;
   if (at.meta.member) router.replace({ path: '/m/login', query: { next: at.fullPath } });
 });
+
+/*
+ * After an update, a tab that was already open asks for the old version's page files, which the server no longer
+ * has: the click would do nothing. Load the page fresh instead (cart, held and offline sales are kept on this computer).
+ * At most once per page every 20 seconds, so a real network problem never makes it reload in a loop.
+ */
+const STALE_KEY = 'pos.staleReload';
+const isChunkError = (e: unknown) =>
+  /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|Unable to preload CSS|Loading (CSS )?chunk .* failed/i.test(String((e as Error)?.message ?? e));
+function reloadInto(path: string) {
+  try {
+    const last = JSON.parse(sessionStorage.getItem(STALE_KEY) ?? 'null');
+    if (last && last.path === path && Date.now() - last.at < 20_000) return false;
+    sessionStorage.setItem(STALE_KEY, JSON.stringify({ path, at: Date.now() }));
+  } catch { /* private window: reload anyway */ }
+  window.location.assign(path);
+  return true;
+}
+/** The page being opened right now (the files fail before the address changes). */
+let opening: string | null = null;
+router.beforeEach((to) => { opening = to.fullPath; });
+router.afterEach(() => { opening = null; });
+router.onError((err, to) => {
+  if (isChunkError(err)) reloadInto(to.fullPath);
+});
+// A page's stylesheet or script that Vite loads ahead of time, missing for the same reason.
+window.addEventListener('vite:preloadError', (e) => {
+  if (reloadInto(opening ?? router.currentRoute.value.fullPath)) e.preventDefault();
+});
