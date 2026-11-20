@@ -51,6 +51,6 @@ h2 { margin: 0 0 4px; }
 .row-o { display: flex; justify-content: space-between; gap: 10px; color: var(--text); text-decoration: none; padding: 14px; }
 .oinfo, .oright { display: grid; gap: 2px; }
 .oright { text-align: right; align-content: start; }
-.pts { color: #a0673f; font-weight: 700; }
+.pts { color: #1d4ed8; font-weight: 700; }
 .center { text-align: center; padding: 24px; }
 </style>

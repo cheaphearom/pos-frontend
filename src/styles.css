@@ -1,34 +1,34 @@
 /* Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. */
 :root {
   /* Warm coffee theme: cream background, espresso sidebar, roasted-brown accent */
-  --bg: #f6f1ea;
-  --surface: #fffdf9;
-  --border: #e8dfd4;
-  --text: #2b211b;
-  --text-2: #6b5d52;
-  --text-3: #9a8b7f;
-  --sidebar: #1c1c1f; /* neutral dark charcoal */
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+  --sidebar: #0f1b3d; /* deep navy */
   --sidebar-text: #e4e4e7;
-  --sidebar-active: #8b5a33;
-  --series-1: #8b5a33;
-  --accent-2: #c8893f; /* caramel, for highlights */
+  --sidebar-active: #2563eb;
+  --series-1: #1e3a8a;
+  --accent-2: #3b82f6; /* bright blue, for highlights */
   --good: #2f7d32;
   --bad: #c0392b;
   --warn: #b26a00;
   --radius: 12px;
-  --shadow: 0 1px 2px rgba(60, 35, 15, .06), 0 2px 8px rgba(60, 35, 15, .05);
+  --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 2px 8px rgba(15, 23, 42, .05);
   font-family: Inter, 'Kantumruy Pro', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Khmer', 'Khmer OS', sans-serif;
   color: var(--text);
 }
 .app-dark {
-  --bg: #17120e;
-  --surface: #211a15;
-  --border: #3a2f27;
-  --text: #f3ece4;
-  --text-2: #c9bbad;
-  --text-3: #998a7c;
-  --sidebar: #0e0e10;
-  --series-1: #c9a07c;
+  --bg: #0b1120;
+  --surface: #111827;
+  --border: #1f2a44;
+  --text: #e5e7eb;
+  --text-2: #9ca3af;
+  --text-3: #6b7280;
+  --sidebar: #0a1230;
+  --series-1: #60a5fa;
   --good: #5cb85f;
   --bad: #f07060;
   --warn: #e0a040;
@@ -102,7 +102,7 @@ a { color: var(--p-primary-color); }
 .p-dialog .p-dialog-header { padding-bottom: 8px; }
 /* Info tags in the brand colour instead of PrimeVue blue */
 .p-tag.p-tag-info { background: color-mix(in srgb, var(--p-primary-color) 14%, transparent); color: var(--p-primary-color); }
-.app-dark .p-tag.p-tag-info { color: #e3c3a3; }
+.app-dark .p-tag.p-tag-info { color: #93c5fd; }
 
 /* POS big mode (cashier's choice): the POS screen and its pop-up windows are zoomed; the screen keeps fitting
    the window because its size is divided by the zoom. */

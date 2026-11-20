@@ -141,7 +141,7 @@ onBeforeUnmount(() => clearInterval(poll));
 header h2 { margin: 2px 0 0; font-size: 24px; }
 .mhead { position: relative; }
 .mlang { position: absolute; right: 0; top: 0; }
-.points { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 18px; border-radius: 18px; color: #fff; background: linear-gradient(135deg, #5b3a29, #a0673f); }
+.points { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 18px; border-radius: 18px; color: #fff; background: linear-gradient(135deg, #1e3a8a, #3b82f6); }
 .plabel { font-size: 13px; opacity: .85; }
 .pnum { font-size: 40px; font-weight: 900; line-height: 1.1; }
 .pworth { font-size: 13px; opacity: .9; }
@@ -156,7 +156,7 @@ header h2 { margin: 2px 0 0; font-size: 24px; }
 .ainfo { display: grid; }
 .cta { display: flex; align-items: center; gap: 10px; justify-content: center; padding: 16px; border-radius: 14px; background: var(--p-primary-color); color: #fff; font-weight: 800; font-size: 17px; text-decoration: none; }
 .cta .small { font-weight: 500; opacity: .85; }
-.wcard { border-radius: 14px; padding: 14px; color: #fff; background: linear-gradient(135deg, #2b1d14, #5c3b22); margin-top: 10px; }
+.wcard { border-radius: 14px; padding: 14px; color: #fff; background: linear-gradient(135deg, #0f1a42, #1e3a8a); margin-top: 10px; }
 .wcard.blocked { filter: grayscale(.8); }
 .wtop { display: flex; justify-content: space-between; font-size: 14px; letter-spacing: .08em; opacity: .9; }
 .tag { background: rgba(255, 255, 255, .2); border-radius: 6px; padding: 0 6px; font-size: 11px; }

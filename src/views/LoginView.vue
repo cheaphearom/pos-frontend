@@ -116,11 +116,11 @@ async function submit() {
   background:
     radial-gradient(circle at 85% 15%, rgba(255, 220, 170, .22) 0, transparent 40%),
     radial-gradient(circle at 10% 90%, rgba(0, 0, 0, .25) 0, transparent 45%),
-    linear-gradient(150deg, #a8703f 0%, #8b5a33 45%, #4a2f1c 100%);
+    linear-gradient(150deg, #2f5fd0 0%, #1e3a8a 45%, #0f1f4f 100%);
 }
 .brand-top { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: .14em; }
 .brand-mid h2 { font-size: clamp(30px, 3.4vw, 46px); line-height: 1.1; margin: 8px 0 26px; font-weight: 800; }
-.brand .kh { font-size: 22px; font-weight: 700; color: #ffd9a8; font-family: 'Khmer UI', 'Noto Sans Khmer', 'Kantumruy Pro', sans-serif; }
+.brand .kh { font-size: 22px; font-weight: 700; color: #bfdbfe; font-family: 'Khmer UI', 'Noto Sans Khmer', 'Kantumruy Pro', sans-serif; }
 .brand ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; font-size: 16px; }
 .brand li { display: flex; align-items: center; gap: 12px; }
 .brand li i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(255, 255, 255, .14); font-size: 15px; }
@@ -133,10 +133,10 @@ async function submit() {
 .tools { display: flex; align-items: center; gap: 4px; }
 :deep(.active) { border-color: var(--p-primary-color) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-primary-color) 22%, transparent) !important; }
 .box { width: 100%; max-width: 400px; display: grid; gap: 16px; padding: 34px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border);
-  box-shadow: 0 2px 6px rgba(60, 35, 15, .05), 0 18px 40px rgba(60, 35, 15, .08); }
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .05), 0 18px 40px rgba(15, 23, 42, .08); }
 .top { display: flex; justify-content: space-between; align-items: center; }
 .logo { width: 44px; height: 44px; border-radius: 12px; background: rgba(255, 255, 255, .18); color: #fff; display: grid; place-items: center; font-size: 19px; }
-.logo.small { background: linear-gradient(135deg, #8b5a33, #c8893f); box-shadow: 0 6px 16px rgba(139, 90, 51, .3); }
+.logo.small { background: linear-gradient(135deg, #1e3a8a, #3b82f6); box-shadow: 0 6px 16px rgba(30, 58, 138, .3); }
 h1 { margin: 0; font-size: 26px; }
 p { margin: 4px 0 0; }
 .signin { padding: 12px; font-size: 16px; font-weight: 700; margin-top: 4px; }

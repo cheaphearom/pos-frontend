@@ -4,8 +4,8 @@
   "description": "Multi-store point of sale",
   "start_url": "/pos",
   "display": "standalone",
-  "background_color": "#2b1d14",
-  "theme_color": "#8b5a33",
+  "background_color": "#0f1a42",
+  "theme_color": "#1e3a8a",
   "icons": [
     { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]

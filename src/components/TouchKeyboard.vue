@@ -57,7 +57,7 @@ const clear = () => emit('update:modelValue', '');
 
 <style scoped>
 .tk { display: grid; gap: 6px; padding: 10px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border);
-  box-shadow: 0 8px 30px rgba(60, 35, 15, .14); user-select: none; touch-action: manipulation; }
+  box-shadow: 0 8px 30px rgba(15, 23, 42, .14); user-select: none; touch-action: manipulation; }
 .row { display: flex; gap: 6px; justify-content: center; }
 .k { flex: 1 1 0; min-width: 0; max-width: 64px; height: 50px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text);
   font: inherit; font-size: 19px; font-weight: 600; cursor: pointer; display: grid; place-items: center; transition: background .08s, transform .08s; }

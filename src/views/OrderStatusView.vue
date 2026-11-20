@@ -119,7 +119,7 @@ onBeforeUnmount(() => { clearInterval(poll); clearInterval(tick); });
 <style scoped>
 .sbar { display: flex; align-items: center; gap: 10px; }
 .sbar b { flex: 1; font-size: 17px; }
-.slogo { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #3d2616, #8b5a33 70%, #c8893f); }
+.slogo { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #0f1a42, #1e3a8a 70%, #3b82f6); }
 .status { max-width: 520px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; min-height: 100vh; background: var(--bg); align-content: start; }
 .center { text-align: center; }
 h2 { margin: 6px 0; }

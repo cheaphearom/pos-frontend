@@ -15,20 +15,20 @@ import { router } from './router';
 import './styles.css';
 import { startTranslator } from './i18n';
 
-// Warm coffee brand: roasted-bean brown on cream, warm greys (stone) for borders and inputs.
+// LOK blue brand: deep blue #1E3A8A with bright blue #3B82F6, cool greys (slate) for borders and inputs.
 const stone = {
-  0: '#ffffff', 50: '#faf8f5', 100: '#f4f0eb', 200: '#e8e1d8', 300: '#d5cbbf', 400: '#a99c8f',
-  500: '#7d7064', 600: '#5c5148', 700: '#463d36', 800: '#2e2722', 900: '#1f1a16', 950: '#120f0c',
+  0: '#ffffff', 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8',
+  500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617',
 };
 const Theme = definePreset(Aura, {
   semantic: {
     primary: {
-      50: '#f8f2ec', 100: '#efe1d3', 200: '#dfc3a8', 300: '#c9a07c', 400: '#ab7a50',
-      500: '#8b5a33', 600: '#774b2a', 700: '#623d23', 800: '#4e301c', 900: '#3d2616', 950: '#2a1a0f',
+      50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#3b82f6',
+      500: '#1e3a8a', 600: '#1a3278', 700: '#172a66', 800: '#132254', 900: '#0f1a42', 950: '#0a1230',
     },
     colorScheme: {
       light: { surface: stone },
-      // Same roasted brown in dark mode, so white text on buttons stays readable
+      // Same deep blue in dark mode, so white text on buttons stays readable
       dark: { surface: stone, primary: { color: '{primary.500}', contrastColor: '#ffffff', hoverColor: '{primary.400}', activeColor: '{primary.300}' } },
     },
   },

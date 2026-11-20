@@ -101,8 +101,8 @@ function onCode() {
 <style scoped>
 .login { display: grid; gap: 16px; padding: 20px 16px 32px; max-width: 480px; margin: 0 auto; min-height: 100vh; align-content: start; background: var(--bg); }
 .hero { text-align: center; }
-.mlogo { width: 64px; height: 64px; border-radius: 20px; display: inline-grid; place-items: center; background: linear-gradient(135deg, #3d2616, #8b5a33 70%, #c8893f); box-shadow: 0 8px 20px rgba(60, 35, 15, .25); }
-.mlogo i { font-size: 28px; color: #ffd27a; }
+.mlogo { width: 64px; height: 64px; border-radius: 20px; display: inline-grid; place-items: center; background: linear-gradient(135deg, #0f1a42, #1e3a8a 70%, #3b82f6); box-shadow: 0 8px 20px rgba(15, 23, 42, .25); }
+.mlogo i { font-size: 28px; color: #93c5fd; }
 .hero h1 { margin: 8px 0 4px; }
 .hero p { color: var(--text-2); margin: 0; }
 .card { display: grid; gap: 10px; }
