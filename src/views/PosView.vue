@@ -919,7 +919,7 @@ async function logout() {
     <!-- Top bar -->
     <header class="bar">
       <RouterLink v-if="auth.isManager" to="/" class="back" v-tooltip.bottom="'Back to admin'" aria-label="Back to admin"><i class="pi pi-arrow-left" /></RouterLink>
-      <span class="logo" aria-hidden="true"><i class="pi pi-shopping-bag" /></span>
+      <span class="logo" aria-hidden="true"><img src="/favicon.svg" alt="" /></span>
       <div class="title">
         <b>{{ store?.name }}</b>
         <span class="who"><i class="pi pi-user" /> {{ auth.user?.fullName }}</span>
@@ -1338,7 +1338,8 @@ async function logout() {
 .bar { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); position: relative; z-index: 2; }
 .back { color: var(--text-2); padding: 6px; border-radius: 8px; }
 .back:hover { background: var(--bg); }
-.logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--p-primary-color); color: #fff; font-size: 17px; flex-shrink: 0; }
+.logo { width: 36px; height: 36px; flex-shrink: 0; }
+.logo img { display: block; width: 100%; height: 100%; }
 .title { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .title b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who { font-size: 12px; color: var(--text-2); white-space: nowrap; }
@@ -1375,8 +1376,8 @@ async function logout() {
 .chip:hover { border-color: var(--p-primary-color); }
 .chip.on { background: var(--p-primary-color); border-color: var(--p-primary-color); color: #fff; }
 .tiles { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 10px; grid-auto-rows: max-content; align-content: start; padding: 2px; }
-.tile { --cat: #9a8b7f; position: relative; text-align: left; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--cat); border-radius: 14px; padding: 12px; min-height: 128px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; font: inherit; color: var(--text); box-shadow: var(--shadow); transition: border-color .1s, transform .05s, box-shadow .15s; }
-.tile:hover { border-color: var(--cat); box-shadow: 0 4px 14px rgba(60, 35, 15, .12); }
+.tile { --cat: #94a3b8; position: relative; text-align: left; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--cat); border-radius: 14px; padding: 12px; min-height: 128px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; font: inherit; color: var(--text); box-shadow: var(--shadow); transition: border-color .1s, transform .05s, box-shadow .15s; }
+.tile:hover { border-color: var(--cat); box-shadow: 0 4px 14px rgba(15, 23, 42, .12); }
 .tile:active { transform: scale(.97); }
 .tile:focus-visible { outline: 3px solid color-mix(in srgb, var(--p-primary-color) 45%, transparent); outline-offset: 2px; }
 .tile.out { opacity: .6; }
@@ -1439,7 +1440,7 @@ async function logout() {
 .ln-edit:hover { background: var(--bg); }
 .qty span { min-width: 32px; text-align: center; font-weight: 700; cursor: pointer; font-size: 15px; }
 .ln-total { text-align: right; font-weight: 700; }
-.sum { border-top: 1px solid var(--border); padding: 12px 14px 10px; display: grid; gap: 6px; background: var(--surface); box-shadow: 0 -4px 12px rgba(60, 35, 15, .04); }
+.sum { border-top: 1px solid var(--border); padding: 12px 14px 10px; display: grid; gap: 6px; background: var(--surface); box-shadow: 0 -4px 12px rgba(15, 23, 42, .04); }
 .r { display: flex; justify-content: space-between; align-items: center; }
 .r.total { font-size: 26px; font-weight: 800; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border); }
 .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 6px; }

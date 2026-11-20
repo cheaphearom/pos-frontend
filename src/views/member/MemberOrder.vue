@@ -81,6 +81,6 @@ onMounted(async () => {
 .bad { color: var(--bad); }
 .note { color: #b45309; }
 .grand { font-weight: 800; font-size: 18px; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
-.earned { margin-top: 10px; color: #a0673f; font-weight: 700; }
+.earned { margin-top: 10px; color: #1d4ed8; font-weight: 700; }
 .again { padding: 14px; }
 </style>

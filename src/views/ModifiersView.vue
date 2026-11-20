@@ -125,7 +125,7 @@ onMounted(load);
 .og-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; align-items: start; }
 .og-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; overflow: hidden; transition: transform .15s ease, box-shadow .15s ease; }
 .og-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--c); }
-.og-card:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(60, 35, 15, .12); }
+.og-card:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(15, 23, 42, .12); }
 .og-card header { display: flex; align-items: center; gap: 12px; }
 .ico { flex-shrink: 0; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; color: #fff; background: var(--c); box-shadow: 0 4px 12px color-mix(in srgb, var(--c) 35%, transparent); }
 .t { min-width: 0; flex: 1; }

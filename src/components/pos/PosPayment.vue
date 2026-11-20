@@ -424,7 +424,7 @@ watch(
 
 <style scoped>
 .pay { display: grid; gap: 16px; }
-.due { text-align: center; background: linear-gradient(135deg, var(--p-primary-color), color-mix(in srgb, var(--p-primary-color) 70%, #c8893f)); color: #fff; border-radius: 16px; padding: 14px 12px; }
+.due { text-align: center; background: linear-gradient(135deg, var(--p-primary-color), color-mix(in srgb, var(--p-primary-color) 70%, #3b82f6)); color: #fff; border-radius: 16px; padding: 14px 12px; }
 .due .muted { color: rgba(255, 255, 255, .8); }
 .due .khr-due { color: rgba(255, 255, 255, .9); }
 .due .khr-due .muted { color: rgba(255, 255, 255, .75); }

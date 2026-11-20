@@ -33,7 +33,7 @@ const fullscreen = () => document.documentElement.requestFullscreen().catch(() =
 <template>
   <div class="board" @dblclick="fullscreen">
     <header>
-      <span class="blogo" aria-hidden="true"><i class="pi pi-shopping-bag" /></span>
+      <span class="blogo" aria-hidden="true"><img src="/favicon.svg" alt="" /></span>
       <span class="bname">{{ data?.store ?? 'Orders' }}</span>
       <span class="bclock">{{ clock }}</span>
     </header>
@@ -54,9 +54,10 @@ const fullscreen = () => document.documentElement.requestFullscreen().catch(() =
 
 <style scoped>
 .board { height: 100vh; color: #fbf4ec; display: flex; flex-direction: column; font-size: clamp(16px, 1.6vw, 28px); user-select: none;
-  background: radial-gradient(circle at 12% 0%, #6b4426 0, #2b1d14 55%), #1c130d; }
+  background: radial-gradient(circle at 12% 0%, #1e3a8a 0, #0f1a42 55%), #0a1230; }
 header { display: flex; align-items: center; gap: 1vw; padding: 2vh 2.5vw; }
-.blogo { width: 1.9em; height: 1.9em; border-radius: .5em; display: grid; place-items: center; background: linear-gradient(135deg, #8b5a33, #c8893f); font-size: 1em; }
+.blogo { width: 1.9em; height: 1.9em; flex-shrink: 0; }
+.blogo img { display: block; width: 100%; height: 100%; }
 .bname { flex: 1; font-size: 1.5em; font-weight: 800; letter-spacing: -.01em; }
 .bclock { font-size: 1.4em; font-weight: 800; font-variant-numeric: tabular-nums; opacity: .85; }
 .cols { flex: 1; display: grid; grid-template-columns: 2fr 3fr; gap: 2vw; padding: 0 2.5vw 2vh; min-height: 0; }
@@ -64,9 +65,9 @@ section { border-radius: 28px; padding: 2.4vh 2vw; display: flex; flex-direction
 .prep { background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); }
 .ready { background: linear-gradient(160deg, #1f5f34, #14462a); box-shadow: 0 1vh 4vh rgba(0, 0, 0, .35); }
 h2 { margin: 0 0 2.4vh; font-size: 1.3em; text-align: center; display: flex; gap: .5em; justify-content: center; align-items: center; }
-.prep h2 { color: #e8c9a6; }
+.prep h2 { color: #bfdbfe; }
 .nums { display: flex; flex-wrap: wrap; gap: 1.4vw; justify-content: center; align-content: flex-start; overflow: hidden; }
-.nums span { font-size: 2.4em; font-weight: 900; font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, .08); color: #f1e2d2; border-radius: 18px; padding: .1em .45em; }
+.nums span { font-size: 2.4em; font-weight: 900; font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, .08); color: #e0ecff; border-radius: 18px; padding: .1em .45em; }
 .ready .nums span { font-size: 3.2em; background: #fbf4ec; color: #14462a; box-shadow: 0 .6vh 2vh rgba(0, 0, 0, .25); }
 .err { text-align: center; padding: 10vh; color: #f6b2a8; }
 footer { text-align: center; color: rgba(251, 244, 236, .35); font-size: .5em; padding: 1vh; }

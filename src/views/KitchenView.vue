@@ -166,10 +166,10 @@ onBeforeUnmount(() => {
 .todo b { font-size: 20px; color: var(--text); }
 .clock { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; padding: 0 6px; }
 .cols { flex: 1; min-height: 0; display: grid; gap: 12px; padding: 12px; overflow-x: auto; }
-.col { --c: #8b5a33; display: flex; flex-direction: column; min-height: 0; background: color-mix(in srgb, var(--c) 6%, var(--bg)); border-radius: 16px; border: 1px solid var(--border); overflow: hidden; }
+.col { --c: #1e3a8a; display: flex; flex-direction: column; min-height: 0; background: color-mix(in srgb, var(--c) 6%, var(--bg)); border-radius: 16px; border: 1px solid var(--border); overflow: hidden; }
 .col.preparing { --c: #d18b00; }
 .col.ready { --c: #2f7d32; }
-.col.completed { --c: #7d7064; }
+.col.completed { --c: #64748b; }
 .col h2 { margin: 0; padding: 12px 16px; font-size: 18px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; color: #fff; background: var(--c); }
 .count { background: rgba(255, 255, 255, .25); border-radius: 999px; min-width: 34px; text-align: center; font-size: 16px; line-height: 28px; padding: 0 8px; }
 .list { flex: 1; overflow-y: auto; padding: 10px; display: grid; gap: 10px; align-content: start; }

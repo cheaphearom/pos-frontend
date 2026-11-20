@@ -35,7 +35,7 @@ const css = (name: string) => getComputedStyle(document.documentElement).getProp
 function render() {
   chart?.destroy();
   if (!canvas.value) return;
-  const series = css('--series-1') || '#8b5a33';
+  const series = css('--series-1') || '#1e3a8a';
   const text2 = css('--text-2');
   const grid = css('--border');
   const valueAxis = {

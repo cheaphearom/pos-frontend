@@ -258,9 +258,9 @@ onBeforeUnmount(() => {
 <style scoped>
 .cd {
   /* Light café: cream background, white cards, espresso text, coffee and caramel accents */
-  --bg: #f6f1ea; --panel: #fffdf9; --text: #2b211b; --muted: #7d6d60; --accent: #8b5a33; --caramel: #c8893f;
-  --save: #2f7d32; --line: #e8dfd4; --shadow: 0 2px 6px rgba(60, 35, 15, .06), 0 12px 32px rgba(60, 35, 15, .08);
-  --top: #fbf7f1; --hl: #fbf0dd; --badge: #9a6416; --side-shadow: -8px 0 30px rgba(60, 35, 15, .05);
+  --bg: #f4f6fb; --panel: #ffffff; --text: #0f172a; --muted: #64748b; --accent: #1e3a8a; --caramel: #3b82f6;
+  --save: #2f7d32; --line: #e2e8f0; --shadow: 0 2px 6px rgba(15, 23, 42, .06), 0 12px 32px rgba(15, 23, 42, .08);
+  --top: #f8fafc; --hl: #dbeafe; --badge: #1d4ed8; --side-shadow: -8px 0 30px rgba(15, 23, 42, .05);
   height: 100vh; overflow: hidden; background: linear-gradient(180deg, var(--top) 0%, var(--bg) 100%); color: var(--text);
   font-size: clamp(16px, 1.6vw, 26px); position: relative; user-select: none;
 }
@@ -268,12 +268,12 @@ onBeforeUnmount(() => {
 .fs:hover { opacity: 1; }
 /* Night: deep espresso, warm caramel accents (when the POS is in dark mode) */
 .cd.night {
-  --bg: #15100c; --panel: #201813; --text: #f5ede4; --muted: #b9a999; --accent: #e3ad72; --caramel: #e3ad72;
-  --save: #6cc070; --line: #352a22; --shadow: 0 14px 40px rgba(0, 0, 0, .45);
-  --top: #1d1611; --hl: rgba(227, 173, 114, .14); --badge: #f2c58a; --side-shadow: none;
+  --bg: #0b1120; --panel: #111827; --text: #e5e7eb; --muted: #9ca3af; --accent: #60a5fa; --caramel: #60a5fa;
+  --save: #6cc070; --line: #1f2a44; --shadow: 0 14px 40px rgba(0, 0, 0, .45);
+  --top: #0f172a; --hl: rgba(227, 173, 114, .14); --badge: #93c5fd; --side-shadow: none;
 }
 .cd.night .khqr-card { border-color: transparent; }
-.cd.night .check { color: #15100c; }
+.cd.night .check { color: #0b1120; }
 .warn { position: absolute; top: 0; inset-inline: 0; background: #c0392b; color: #fff; padding: 10px; text-align: center; font-size: 16px; }
 .kh { font-size: 1.6em; color: var(--accent); font-weight: 700; font-family: 'Khmer UI', 'Noto Sans Khmer', 'Leelawadee UI', 'Khmer OS', 'Kantumruy Pro', sans-serif; }
 h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; color: var(--text); }
@@ -282,7 +282,7 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; color: var(--text); }
 .idle { height: 100%; display: grid; grid-template-rows: 1fr auto auto auto; justify-items: center; align-items: center; text-align: center; padding: 4vh 4vw; gap: 3vh; }
 .clock { font-size: 4.5em; font-weight: 300; font-variant-numeric: tabular-nums; margin-top: .3em; color: var(--accent); }
 .date { color: var(--muted); }
-.promo-card { background: linear-gradient(135deg, #8b5a33, #c8893f); color: #fffaf3; border-radius: 24px; padding: 3vh 4vw; min-width: min(80vw, 900px); box-shadow: 0 18px 40px rgba(139, 90, 51, .28); }
+.promo-card { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: #ffffff; border-radius: 24px; padding: 3vh 4vw; min-width: min(80vw, 900px); box-shadow: 0 18px 40px rgba(30, 58, 138, .28); }
 .promo-tag { text-transform: uppercase; letter-spacing: .12em; font-size: .7em; opacity: .85; }
 .promo-name { font-size: 2em; font-weight: 800; margin: .2em 0; }
 .promo-deal { font-size: 1.3em; }
@@ -311,7 +311,7 @@ h1 { margin: .1em 0; font-size: 2.6em; line-height: 1.1; color: var(--text); }
 .ln-promo { color: var(--save); font-size: .78em; font-weight: 600; }
 .ln-total { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* summary along the bottom, as on the cashier's screen */
-.summary { background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgba(60, 35, 15, .05); padding: 2vh 2.5vw 2.4vh; display: grid; gap: 1vh; }
+.summary { background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgba(15, 23, 42, .05); padding: 2vh 2.5vw 2.4vh; display: grid; gap: 1vh; }
 .rows { display: grid; gap: .6vh; font-size: .85em; }
 .r { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; font-variant-numeric: tabular-nums; }
 .r > span:first-child { min-width: 0; }

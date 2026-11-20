@@ -144,8 +144,8 @@ onMounted(async () => {
   } catch (e) { loadError.value = (e as Error).message; }
 });
 /** Same category colours as the POS tiles */
-const TILE_COLORS = ['#8b5a33', '#2f7d6b', '#c8893f', '#7a4f9a', '#2c6e9b', '#b2493b', '#5f7d2f', '#9a6a00'];
-const catColor = (id?: string | null) => { const i = (menu.value?.categories ?? []).findIndex((c: any) => c.id === id); return i < 0 ? '#9a8b7f' : TILE_COLORS[i % TILE_COLORS.length]; };
+const TILE_COLORS = ['#1e3a8a', '#2f7d6b', '#3b82f6', '#7a4f9a', '#2c6e9b', '#b2493b', '#5f7d2f', '#9a6a00'];
+const catColor = (id?: string | null) => { const i = (menu.value?.categories ?? []).findIndex((c: any) => c.id === id); return i < 0 ? '#94a3b8' : TILE_COLORS[i % TILE_COLORS.length]; };
 const initials = (name: string) => name.split(/\s+/).filter((w) => /^[\p{L}]/u.test(w)).slice(0, 2).map((w) => [...w][0]).join('').toUpperCase() || '•';
 const recent = myOrders.list().filter((o) => o.store === code && Date.now() - new Date(o.at).getTime() < 6 * 3600_000);
 </script>
@@ -156,7 +156,7 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
     <template v-else-if="menu">
       <header class="top">
         <div class="hero-row">
-          <span class="hlogo" aria-hidden="true"><i class="pi pi-shopping-bag" /></span>
+          <span class="hlogo" aria-hidden="true"><img src="/favicon.svg" alt="" /></span>
           <div class="links">
           <LangSwitch />
           <RouterLink v-if="recent.length" :to="`/order/status/${recent[0].token}`" class="mine"><i class="pi pi-receipt" /> My order</RouterLink>
@@ -252,9 +252,10 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
 
 <style scoped>
 .shop { min-height: 100vh; background: var(--bg); padding-bottom: 90px; max-width: 720px; margin: 0 auto; }
-.top { padding: 16px 16px 18px; color: #fff; background: linear-gradient(140deg, #3d2616, #8b5a33 70%, #c8893f); border-radius: 0 0 22px 22px; }
+.top { padding: 16px 16px 18px; color: #fff; background: linear-gradient(140deg, #0f1a42, #1e3a8a 70%, #3b82f6); border-radius: 0 0 22px 22px; }
 .hero-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
-.hlogo { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(255, 255, 255, .16); font-size: 17px; }
+.hlogo { width: 38px; height: 38px; flex-shrink: 0; }
+.hlogo img { display: block; width: 100%; height: 100%; }
 .sname { font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
 .small { font-size: 13px; color: var(--text-2); }
 .top .small { color: rgba(255, 255, 255, .85); }
@@ -274,7 +275,7 @@ const recent = myOrders.list().filter((o) => o.store === code && Date.now() - ne
 .item:active { transform: scale(.985); }
 .item img, .ph { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; }
 .ph::before { content: attr(data-ini); }
-.ph { --cat: #9a8b7f; display: grid; place-items: center; background: color-mix(in srgb, var(--cat) 15%, var(--surface)); color: var(--cat); font-size: 22px; font-weight: 800; }
+.ph { --cat: #94a3b8; display: grid; place-items: center; background: color-mix(in srgb, var(--cat) 15%, var(--surface)); color: var(--cat); font-size: 22px; font-weight: 800; }
 .item.out { opacity: .5; }
 .info { display: grid; gap: 4px; }
 .desc { font-size: 13px; color: var(--text-2); }

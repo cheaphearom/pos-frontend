@@ -59,7 +59,7 @@ onBeforeUnmount(() => { clearInterval(poll); clearInterval(tick); });
 <template>
   <div class="status">
     <header class="sbar">
-      <span class="slogo" aria-hidden="true"><i class="pi pi-shopping-bag" /></span>
+      <span class="slogo" aria-hidden="true"><img src="/favicon.svg" alt="" /></span>
       <b>Your order</b>
       <LangSwitch />
     </header>
@@ -119,7 +119,8 @@ onBeforeUnmount(() => { clearInterval(poll); clearInterval(tick); });
 <style scoped>
 .sbar { display: flex; align-items: center; gap: 10px; }
 .sbar b { flex: 1; font-size: 17px; }
-.slogo { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #3d2616, #8b5a33 70%, #c8893f); }
+.slogo { width: 36px; height: 36px; flex-shrink: 0; }
+.slogo img { display: block; width: 100%; height: 100%; }
 .status { max-width: 520px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; min-height: 100vh; background: var(--bg); align-content: start; }
 .center { text-align: center; }
 h2 { margin: 6px 0; }
