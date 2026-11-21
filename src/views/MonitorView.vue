@@ -34,8 +34,10 @@ let timer: ReturnType<typeof setInterval> | undefined;
 
 const METHOD = {
   rules: 'Rules', isolation_forest: 'Isolation Forest', pca: 'PCA', random_forest: 'Random Forest',
-  // the detector's system checks: the API's /health, and the heartbeat lines in its logs
-  pos_api_check: 'API check', heartbeat_check: 'Heartbeat check',
+  // the detector's system checks: the API's /health, the heartbeat lines in its logs, the public address,
+  // the server's disk and memory, and the database backups
+  pos_api_check: 'API check', heartbeat_check: 'Heartbeat check', public_url_check: 'Public address check',
+  disk_check: 'Disk check', memory_check: 'Memory check', backup_check: 'Backup check',
 } as Record<string, string>;
 const methodLabel = (m: string) => METHOD[m] ?? m;
 const LEVEL = { ok: 'OK', warn: 'Warning', fail: 'Down' } as Record<Level, string>;
