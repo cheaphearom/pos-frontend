@@ -20,7 +20,7 @@ const auth = useAuth();
 const route = useRoute();
 const notify = useNotify();
 const list = usePagedList('/sales', {
-  storeId: app.currentStoreId, search: (route.query.receipt as string) ?? '', status: null, from: null, to: null,
+  storeId: app.currentStoreId, search: (route.query.receipt as string) ?? '', status: null, from: null, to: null, offline: false,
   ...(auth.role === 'CASHIER' && { cashierId: auth.user?.id }),
 });
 const cur = computed(() => app.currentStore?.currency ?? 'USD');
@@ -123,14 +123,15 @@ onMounted(() => {
     </div>
     <div class="card">
       <div class="toolbar">
-        <IconField><InputIcon class="pi pi-search" /><InputText v-model="list.filters.search" placeholder="Receipt number" /></IconField>
+        <IconField><InputIcon class="pi pi-search" /><InputText v-model="list.filters.search" placeholder="Receipt no. or OFF-7K2F-0002" v-tooltip.bottom="'A receipt number, or the number on an offline receipt: OFF-7K2F-0002 (one sale), OFF-7K2F (one till), OFF (all offline)'" /></IconField>
         <Select v-model="list.filters.status" :options="statuses" option-label="l" option-value="v" placeholder="All statuses" show-clear />
         <DateRange v-model:from="list.filters.from" v-model:to="list.filters.to" />
+        <label class="row small"><ToggleSwitch v-model="list.filters.offline" data-test="offline-only" /> Offline sales only</label>
       </div>
       <DataTable :value="list.rows.value" lazy paginator :rows="list.page.rows" :first="list.page.first" :total-records="list.total.value"
         :rows-per-page-options="[25, 50, 100]" :loading="list.loading.value" size="small" @page="list.onPage" @row-click="open($event.data.id)" :row-class="() => 'clickable'">
         <template #empty><span class="muted">No sales found</span></template>
-        <Column header="Receipt"><template #body="{ data }"><span class="mono">{{ data.receiptNo }}</span></template></Column>
+        <Column header="Receipt"><template #body="{ data }"><span class="mono">{{ data.receiptNo }}</span><div v-if="data.offlineNo" class="small mono off-no" v-tooltip.right="'Made offline: number on the till\'s receipt'"><i class="pi pi-wifi" /> {{ data.offlineNo }}</div></template></Column>
         <Column header="Time"><template #body="{ data }">{{ dateTime(data.createdAt) }}</template></Column>
         <Column header="Cashier"><template #body="{ data }">{{ data.cashier?.fullName ?? data.channel }}</template></Column>
         <Column header="Customer"><template #body="{ data }">{{ data.customer?.name ?? '—' }}</template></Column>
@@ -147,6 +148,7 @@ onMounted(() => {
           <div class="small muted">{{ sale.store.address }}<br />{{ sale.store.phone }}</div>
           <div v-if="sale.queueNo" class="small mt"><b>Order {{ sale.queueNo }}</b> · {{ sale.orderType === 'DINE_IN' ? 'Dine-in' + (sale.tableNo ? ' table ' + sale.tableNo : '') : humanize(sale.orderType) }} · {{ humanize(sale.kitchenStatus) }}</div>
           <div class="small mt">Receipt <span class="mono">{{ sale.receiptNo }}</span> · {{ dateTime(sale.createdAt) }}</div>
+          <div v-if="sale.offlineNo" class="small off-no">Made offline · till receipt <span class="mono">{{ sale.offlineNo }}</span></div>
           <div class="small">Cashier: {{ sale.cashier?.fullName ?? sale.channel }}</div>
           <div class="small" v-if="sale.customer">Member: {{ sale.customer.name }} ({{ sale.customer.code }})</div>
           <Tag class="mt no-print" :value="humanize(sale.status)" :severity="statusSeverity[sale.status]" />
@@ -227,6 +229,8 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.off-no { color: var(--warn); font-weight: 600; }
+.off-no .pi { font-size: 11px; }
 .receipt { display: grid; gap: 14px; }
 .r-head { text-align: center; }
 .r-items, .r-totals { width: 100%; border-collapse: collapse; }
