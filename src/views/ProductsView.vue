@@ -87,7 +87,9 @@ const saving = ref(false);
 // ── Bulk price change: tick products, choose the change, preview old → new, apply
 const selected = ref<Product[]>([]);
 const bulkDlg = ref(false);
-const bulk = reactive({ scope: 'ALL' as 'ALL' | 'STORE', type: 'PERCENT' as 'PERCENT' | 'AMOUNT' | 'SET', value: null as number | null, round: null as number | null, busy: false });
+const bulk = reactive({ scope: 'ALL' as 'ALL' | 'STORE', type: 'PERCENT' as 'PERCENT' | 'AMOUNT' | 'SET', value: null as number | null, round: null as number | null, busy: false, when: 'NOW' as 'NOW' | 'LATER', runAt: null as Date | null });
+const fmtWhen = (d: Date | string | null) => (d ? new Date(d).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+const minRunAt = computed(() => new Date(Date.now() + 2 * 60_000));
 const bulkPreview = ref<any>(null);
 /** The settings the preview was made with: Apply only applies what was previewed */
 const bulkKey = computed(() => JSON.stringify([bulk.scope, bulk.type, bulk.value, bulk.round, app.currentStoreId, selected.value.map((p) => p.id)]));
@@ -113,6 +115,7 @@ async function previewBulk() {
 }
 async function applyBulk() {
   if (previewKey.value !== bulkKey.value) return previewBulk();
+  if (bulk.when === 'LATER') return scheduleBulk();
   bulk.busy = true;
   try {
     const r = await api.post('/products/bulk-price', bulkBody());
@@ -122,6 +125,35 @@ async function applyBulk() {
     list.load();
   } catch (e) { notify.error(e); } finally { bulk.busy = false; }
 }
+async function scheduleBulk() {
+  if (!bulk.runAt) return notify.error('Choose the date and time');
+  if (bulk.runAt.getTime() < Date.now() + 60_000) return notify.error('Choose a time at least 1 minute from now, or use Now');
+  bulk.busy = true;
+  try {
+    await api.post('/products/bulk-price/schedule', { ...bulkBody(), runAt: bulk.runAt.toISOString() });
+    notify.success('Price change scheduled', `${fmtWhen(bulk.runAt)}: ${bulkPreview.value?.changed ?? ''} product(s). See "Scheduled prices".`);
+    bulkDlg.value = false;
+    selected.value = [];
+    loadSchedules();
+  } catch (e) { notify.error(e); } finally { bulk.busy = false; }
+}
+
+// ── Scheduled price changes: list, cancel
+const schedDlg = ref(false);
+const schedules = ref<any[]>([]);
+const pendingSchedules = computed(() => schedules.value.filter((x) => x.status === 'PENDING' || x.status === 'RUNNING').length);
+async function loadSchedules() {
+  if (!auth.isAdmin) return;
+  try { schedules.value = await api.get('/products/price-schedules'); } catch { /* the list stays as it was */ }
+}
+async function cancelSchedule(x: any) {
+  if (!confirm(`Cancel the price change "${x.label}" planned for ${fmtWhen(x.runAt)}?`)) return;
+  try { await api.post(`/products/price-schedules/${x.id}/cancel`); notify.success('Scheduled price change cancelled'); loadSchedules(); } catch (e) { notify.error(e); }
+}
+const SCHED_STATUS: Record<string, { label: string; sev: string }> = {
+  PENDING: { label: 'Waiting', sev: 'info' }, RUNNING: { label: 'Applying…', sev: 'warn' }, DONE: { label: 'Applied', sev: 'success' },
+  FAILED: { label: 'Failed', sev: 'danger' }, CANCELLED: { label: 'Cancelled', sev: 'secondary' },
+};
 const changeHint = computed(() => (bulk.type === 'PERCENT' ? '10 = 10% more · -5 = 5% less' : bulk.type === 'AMOUNT' ? '0.25 = $0.25 more · -0.10 = $0.10 less' : 'The new price. Drinks with sizes: the smallest size gets this price, the others keep their difference.'));
 const priceText = (v: number | null | undefined) => (v === null || v === undefined ? '—' : money(v, cur.value));
 /** A row click opens the product, but not when the tick box was clicked */
@@ -298,6 +330,7 @@ const margin = (p: Product) => {
 
 onMounted(async () => {
   list.load();
+  loadSchedules();
   [categories.value, modifierGroups.value] = await Promise.all([api.get('/categories'), api.get('/modifiers').then((g) => g.filter((x: any) => x.isActive))]);
 });
 </script>
@@ -311,6 +344,7 @@ onMounted(async () => {
       </div>
       <div class="actions">
         <Button v-if="auth.isAdmin" label="New ingredient" icon="pi pi-plus" severity="secondary" @click="openNew(true)" />
+        <Button v-if="auth.isAdmin && schedules.length" :label="pendingSchedules ? `Scheduled prices (${pendingSchedules})` : 'Scheduled prices'" icon="pi pi-calendar-clock" severity="secondary" text data-test="sched-open" @click="loadSchedules(); schedDlg = true" />
         <Button v-if="auth.isAdmin && selected.length" :label="`Change prices (${selected.length})`" icon="pi pi-percentage" severity="secondary" data-test="bulk-open" @click="openBulk" />
         <Button v-if="auth.isAdmin" label="New product" icon="pi pi-plus" @click="openNew()" />
       </div>
@@ -386,6 +420,24 @@ onMounted(async () => {
       </DataTable>
     </div>
 
+    <Dialog v-model:visible="schedDlg" header="Scheduled price changes" modal :style="{ width: '760px' }" :breakpoints="{ '820px': '96vw' }">
+      <p class="muted" style="margin-top: 0">Planned with Change prices → When: Later. The server applies each one at its time; tills get the new prices within 5 minutes after that.</p>
+      <div v-if="!schedules.length" class="muted c" style="padding: 20px">Nothing scheduled.</div>
+      <div v-for="x in schedules" :key="x.id" class="sched" :class="x.status.toLowerCase()" data-test="sched-row">
+        <div class="sched-h">
+          <div><b>{{ fmtWhen(x.runAt) }}</b> <Tag :value="SCHED_STATUS[x.status]?.label ?? x.status" :severity="SCHED_STATUS[x.status]?.sev ?? 'secondary'" /></div>
+          <Button v-if="x.status === 'PENDING'" label="Cancel" icon="pi pi-times" text severity="danger" size="small" @click="cancelSchedule(x)" />
+        </div>
+        <div><b>{{ x.label }}</b> · {{ x.productCount }} product(s)</div>
+        <div class="small muted">{{ x.products.join(', ') }}<span v-if="x.moreProducts"> and {{ x.moreProducts }} more</span></div>
+        <div class="small muted">Planned by {{ x.createdByName }} on {{ fmtWhen(x.createdAt) }}
+          <span v-if="x.status === 'DONE'"> · applied {{ fmtWhen(x.appliedAt) }}: {{ x.result?.changed }} changed<span v-if="x.result?.skipped">, {{ x.result.skipped }} skipped</span></span>
+          <span v-if="x.status === 'CANCELLED'"> · cancelled by {{ x.cancelledBy }}</span>
+        </div>
+        <div v-if="x.status === 'FAILED'" class="small neg">Could not be applied: {{ x.error }}</div>
+      </div>
+    </Dialog>
+
     <Dialog v-model:visible="bulkDlg" header="Change prices" modal :style="{ width: '820px' }" :breakpoints="{ '880px': '96vw' }">
       <div class="form">
         <p class="muted" style="margin: 0">{{ selected.length }} product(s) ticked. Check the preview, then Apply. Tills get the new prices within 5 minutes.</p>
@@ -404,6 +456,13 @@ onMounted(async () => {
         </div>
         <div class="field"><label>Round the new prices</label>
           <SelectButton v-model="bulk.round" :options="[{ l: 'No', v: null }, { l: '$0.05', v: 0.05 }, { l: '$0.10', v: 0.1 }, { l: '$0.25', v: 0.25 }]" option-label="l" option-value="v" :allow-empty="false" />
+        </div>
+        <div class="field"><label>When</label>
+          <div class="row" style="gap: 10px; flex-wrap: wrap">
+            <SelectButton v-model="bulk.when" :options="[{ l: 'Now', v: 'NOW' }, { l: 'Later', v: 'LATER' }]" option-label="l" option-value="v" :allow-empty="false" data-test="bulk-when" />
+            <DatePicker v-if="bulk.when === 'LATER'" v-model="bulk.runAt" show-time hour-format="24" :min-date="minRunAt" :step-minute="5" show-icon placeholder="Date and time" data-test="bulk-runat" />
+          </div>
+          <span v-if="bulk.when === 'LATER'" class="hint">The server applies it at that time by itself. % and $ changes are worked out from the prices at that moment. You can cancel it until then under "Scheduled prices".</span>
         </div>
         <div class="row" style="justify-content: flex-end"><Button label="Preview" icon="pi pi-eye" severity="secondary" :loading="bulk.busy && !bulkPreview" data-test="bulk-preview" @click="previewBulk" /></div>
 
@@ -429,7 +488,7 @@ onMounted(async () => {
         </div>
         <div class="row" style="justify-content: flex-end">
           <Button label="Cancel" text severity="secondary" @click="bulkDlg = false" />
-          <Button label="Apply new prices" icon="pi pi-check" :disabled="!bulkPreview || !bulkPreview.changed || previewKey !== bulkKey" :loading="bulk.busy && !!bulkPreview" data-test="bulk-apply" @click="applyBulk" />
+          <Button :label="bulk.when === 'LATER' ? (bulk.runAt ? `Schedule for ${fmtWhen(bulk.runAt)}` : 'Schedule') : 'Apply new prices'" :icon="bulk.when === 'LATER' ? 'pi pi-calendar-plus' : 'pi pi-check'" :disabled="!bulkPreview || !bulkPreview.changed || previewKey !== bulkKey || (bulk.when === 'LATER' && !bulk.runAt)" :loading="bulk.busy && !!bulkPreview" data-test="bulk-apply" @click="applyBulk" />
         </div>
       </div>
     </Dialog>
@@ -522,6 +581,10 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.sched { border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; display: grid; gap: 3px; }
+.sched.cancelled, .sched.done { opacity: .75; }
+.sched.failed { border-color: color-mix(in srgb, var(--bad) 45%, var(--border)); }
+.sched-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .bulk-prev { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; max-height: 46vh; overflow: auto; }
 .bulk-prev table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
 .bulk-prev th { text-align: left; font-size: 12px; color: var(--text-2); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
