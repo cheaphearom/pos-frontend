@@ -7,6 +7,7 @@ import { useNotify } from '@/composables/useNotify';
 import { usePagedList } from '@/composables/usePagedList';
 import { useApp } from '@/stores/app';
 import { useAuth } from '@/stores/auth';
+import PriceHistoryDialog from '@/components/PriceHistoryDialog.vue';
 import { money, qty } from '@/utils/format';
 import { categoryColor, initials } from '@/utils/colors';
 
@@ -83,6 +84,13 @@ watch(() => [pack.size, pack.price], applyPack);
 const modifierGroups = ref<any[]>([]);
 const dialog = ref(false);
 const saving = ref(false);
+// Price history: all products, or one
+const histDlg = ref(false);
+const histFor = ref<{ id: string; name: string } | null>(null);
+function openHistory(p?: { id: string; name: string } | null) {
+  histFor.value = p ?? null;
+  histDlg.value = true;
+}
 
 // ── Bulk price change: tick products, choose the change, preview old → new, apply
 const selected = ref<Product[]>([]);
@@ -344,6 +352,7 @@ onMounted(async () => {
       </div>
       <div class="actions">
         <Button v-if="auth.isAdmin" label="New ingredient" icon="pi pi-plus" severity="secondary" @click="openNew(true)" />
+        <Button v-if="auth.isManager" label="Price history" icon="pi pi-history" severity="secondary" text data-test="hist-open" @click="openHistory()" />
         <Button v-if="auth.isAdmin && schedules.length" :label="pendingSchedules ? `Scheduled prices (${pendingSchedules})` : 'Scheduled prices'" icon="pi pi-calendar-clock" severity="secondary" text data-test="sched-open" @click="loadSchedules(); schedDlg = true" />
         <Button v-if="auth.isAdmin && selected.length" :label="`Change prices (${selected.length})`" icon="pi pi-percentage" severity="secondary" data-test="bulk-open" @click="openBulk" />
         <Button v-if="auth.isAdmin" label="New product" icon="pi pi-plus" @click="openNew()" />
@@ -404,9 +413,10 @@ onMounted(async () => {
           </template>
         </Column>
         <Column header="Tax" class="right"><template #body="{ data }"><i :class="data.taxable ? 'pi pi-check' : 'pi pi-minus muted'" /></template></Column>
-        <Column v-if="auth.isAdmin" header="" class="right" style="width: 1%">
+        <Column v-if="auth.isManager" header="" class="right" style="width: 1%; white-space: nowrap">
           <template #body="{ data }">
-            <Button icon="pi pi-copy" text rounded size="small" severity="secondary" aria-label="Duplicate" v-tooltip.left="'Duplicate'" data-test="dup-row" @click.stop="duplicateRow(data)" />
+            <Button icon="pi pi-history" text rounded size="small" severity="secondary" aria-label="Price history" v-tooltip.left="'Price history'" data-test="hist-row" @click.stop="openHistory(data)" />
+            <Button v-if="auth.isAdmin" icon="pi pi-copy" text rounded size="small" severity="secondary" aria-label="Duplicate" v-tooltip.left="'Duplicate'" data-test="dup-row" @click.stop="duplicateRow(data)" />
           </template>
         </Column>
         <Column :header="`Sold in ${app.currentStore?.code ?? ''}`" class="right">
@@ -419,6 +429,8 @@ onMounted(async () => {
         </Column>
       </DataTable>
     </div>
+
+    <PriceHistoryDialog v-model:visible="histDlg" :product-id="histFor?.id" :product-name="histFor?.name" />
 
     <Dialog v-model:visible="schedDlg" header="Scheduled price changes" modal :style="{ width: '760px' }" :breakpoints="{ '820px': '96vw' }">
       <p class="muted" style="margin-top: 0">Planned with Change prices → When: Later. The server applies each one at its time; tills get the new prices within 5 minutes after that.</p>
@@ -571,6 +583,7 @@ onMounted(async () => {
           <p class="hint" style="grid-column: 1 / -1; margin: 0">Baking a batch (Production page) uses the ingredients and adds the pieces to stock; selling takes pieces from stock.</p>
         </div>
         <div class="row" style="justify-content: flex-end">
+          <Button v-if="form.id" label="Price history" icon="pi pi-history" severity="secondary" text @click="openHistory({ id: form.id, name: form.name })" />
           <Button v-if="form.id" label="Duplicate" icon="pi pi-copy" severity="secondary" outlined style="margin-right: auto" v-tooltip.top="'New product filled from this one'" data-test="duplicate" @click="duplicate" />
           <Button label="Cancel" severity="secondary" text @click="dialog = false" />
           <Button type="submit" label="Save" icon="pi pi-check" :loading="saving" />
