@@ -85,18 +85,105 @@ const dialog = ref(false);
 const saving = ref(false);
 const form = reactive(empty());
 
+// ── Photo: uploaded to this server (resized here first), or a web link
+const photo = reactive({ file: null as Blob | null, preview: '', remove: false, link: false, busy: false, original: '' });
+const fileInput = ref<HTMLInputElement | null>(null);
+/** An uploaded photo (kept on this server), as opposed to a link to another website */
+const ownPhoto = (url?: string | null) => !!url && /^\/api\/v1\/products\/[0-9a-f-]{36}\/image/i.test(url);
+const photoShown = computed(() => (photo.remove ? '' : photo.preview || form.imageUrl));
+function resetPhoto(original = '') {
+  if (photo.preview.startsWith('blob:')) URL.revokeObjectURL(photo.preview);
+  Object.assign(photo, { file: null, preview: '', remove: false, link: false, busy: false, original });
+}
+/** Longest side 800 px, WebP (JPEG where WebP is not available): a few dozen KB instead of a phone's 3-5 MB. */
+async function resizeImage(file: Blob, max = 800): Promise<Blob> {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(bmp.width * scale));
+  c.height = Math.max(1, Math.round(bmp.height * scale));
+  const ctx = c.getContext('2d')!;
+  ctx.drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close?.();
+  const toBlob = (type: string, q: number) => new Promise<Blob | null>((r) => c.toBlob(r, type, q));
+  const webp = await toBlob('image/webp', 0.85);
+  if (webp && webp.type === 'image/webp') return webp;
+  ctx.globalCompositeOperation = 'destination-over'; // JPEG has no transparency: white behind
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  const jpg = await toBlob('image/jpeg', 0.85);
+  if (!jpg) throw new Error('resize failed');
+  return jpg;
+}
+async function choosePhoto(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const f = input.files?.[0];
+  input.value = '';
+  if (!f) return;
+  if (!f.type.startsWith('image/')) return notify.error('Choose a picture (JPG, PNG or WebP)');
+  photo.busy = true;
+  try {
+    const small = await resizeImage(f);
+    if (small.size > 2 * 1024 * 1024) return notify.error('This photo is still larger than 2 MB after resizing; choose a smaller one');
+    if (photo.preview.startsWith('blob:')) URL.revokeObjectURL(photo.preview);
+    Object.assign(photo, { file: small, preview: URL.createObjectURL(small), remove: false, link: false });
+  } catch {
+    notify.error('This picture could not be read. Use a JPG, PNG or WebP photo.');
+  } finally {
+    photo.busy = false;
+  }
+}
+function removePhoto() {
+  if (photo.preview.startsWith('blob:')) URL.revokeObjectURL(photo.preview);
+  Object.assign(photo, { file: null, preview: '', remove: true });
+  form.imageUrl = '';
+}
+function typedLink() {
+  if (photo.preview.startsWith('blob:')) URL.revokeObjectURL(photo.preview);
+  Object.assign(photo, { file: null, preview: '', remove: false });
+}
+
+// ── Duplicate: a new product filled from the one being edited
+const dupFrom = ref('');
+async function duplicate() {
+  if (loadingStores.value) return notify.error('Still loading the stores of this product; try again in a moment');
+  const src = { ...form };
+  let file = photo.file;
+  if (!file && !photo.remove && ownPhoto(src.imageUrl)) {
+    try { const r = await fetch(src.imageUrl); if (r.ok) file = await r.blob(); } catch { /* copy without the photo */ }
+  }
+  Object.assign(form, {
+    ...src, id: '', isActive: true, barcode: '',
+    sku: `${src.sku}-COPY`.slice(0, 50), name: `${src.name} (copy)`.slice(0, 200), nameKm: src.nameKm,
+    imageUrl: ownPhoto(src.imageUrl) ? '' : src.imageUrl,
+  });
+  // every store row counts as new, so its sells / price / size prices are saved for the copy
+  storeRows.value = storeRows.value.map((r) => ({ ...r, was: undefined, wasSizes: undefined }));
+  resetPhoto();
+  if (file) Object.assign(photo, { file, preview: URL.createObjectURL(file) });
+  dupFrom.value = src.name;
+}
+async function duplicateRow(p: Product) {
+  await edit(p);
+  await duplicate();
+}
+
 function openNew(ingredient = false) {
   Object.assign(form, empty(), ingredient ? { isIngredient: true, unit: 'g', taxable: false } : {});
   Object.assign(pack, { size: null, price: null });
   initStores([], true);
   sizes.value = [];
+  resetPhoto();
+  dupFrom.value = '';
   dialog.value = true;
 }
 async function edit(p: Product) {
   storeRows.value = [];
   sizes.value = [];
   loadingStores.value = true;
-  Promise.all([api.get<any>(`/products/${p.id}`), api.get<any>(`/products/${p.id}/size-prices`).catch(() => null)])
+  resetPhoto((p as any).imageUrl ?? '');
+  dupFrom.value = '';
+  const loaded = Promise.all([api.get<any>(`/products/${p.id}`), api.get<any>(`/products/${p.id}/size-prices`).catch(() => null)])
     .then(([d, sp]) => { initStores(d.inventory ?? [], false); initSizes(sp); })
     .catch((e) => notify.error(e))
     .finally(() => (loadingStores.value = false));
@@ -109,6 +196,7 @@ async function edit(p: Product) {
   });
   Object.assign(pack, { size: null, price: null });
   dialog.value = true;
+  return loaded;
 }
 
 async function save() {
@@ -122,7 +210,8 @@ async function save() {
   try {
     // Only the form's own fields: the edited product also carries createdAt, category, price, stock...
     const { id, ...body } = Object.fromEntries(Object.keys(empty()).map((k) => [k, (form as any)[k]])) as ReturnType<typeof empty>;
-    const payload = { ...body, barcode: body.barcode || undefined, description: body.description || undefined, nameKm: body.nameKm.trim() || null, categoryId: body.categoryId || undefined, imageUrl: body.imageUrl || null };
+    const payload = { ...body, barcode: body.barcode || undefined, description: body.description || undefined, nameKm: body.nameKm.trim() || null, categoryId: body.categoryId || undefined, imageUrl: photo.file ? undefined : body.imageUrl || null };
+    let pid = id;
     if (id) {
       await api.patch(`/products/${id}`, payload);
       for (const r of storeRows.value.filter(storesChanged)) {
@@ -134,8 +223,17 @@ async function save() {
         await api.put(`/products/${id}/size-prices`, { stores: changed.map((r) => ({ storeId: r.storeId, prices: sizes.value.map((o) => ({ optionId: o.id, price: r.sizes![o.id] })) })) });
       }
     } else {
-      await api.post('/products', { ...payload, isActive: undefined, stores: storeRows.value.filter((r) => r.sells).map((r) => ({ storeId: r.storeId, price: r.price })) });
+      const created = await api.post<{ id: string }>('/products', { ...payload, isActive: undefined, stores: storeRows.value.filter((r) => r.sells).map((r) => ({ storeId: r.storeId, price: r.price })) });
+      pid = created.id;
+      // a copy of a drink with sizes: its size prices too
+      const withSizes = sized.value ? storeRows.value.filter((r) => r.sells && sizes.value.some((o) => r.sizes?.[o.id] != null)) : [];
+      if (withSizes.length) {
+        await api.put(`/products/${pid}/size-prices`, { stores: withSizes.map((r) => ({ storeId: r.storeId, prices: sizes.value.map((o) => ({ optionId: o.id, price: r.sizes![o.id] ?? null })) })) });
+      }
     }
+    // the photo: upload the new one, or remove the uploaded one
+    if (photo.file) await api.upload(`/products/${pid}/image`, photo.file);
+    else if (photo.remove && id && ownPhoto(photo.original)) await api.del(`/products/${id}/image`);
     notify.success(id ? 'Product updated' : 'Product created', form.name);
     dialog.value = false;
     list.load();
@@ -224,6 +322,11 @@ onMounted(async () => {
           </template>
         </Column>
         <Column header="Tax" class="right"><template #body="{ data }"><i :class="data.taxable ? 'pi pi-check' : 'pi pi-minus muted'" /></template></Column>
+        <Column v-if="auth.isAdmin" header="" class="right" style="width: 1%">
+          <template #body="{ data }">
+            <Button icon="pi pi-copy" text rounded size="small" severity="secondary" aria-label="Duplicate" v-tooltip.left="'Duplicate'" data-test="dup-row" @click.stop="duplicateRow(data)" />
+          </template>
+        </Column>
         <Column :header="`Sold in ${app.currentStore?.code ?? ''}`" class="right">
           <template #body="{ data }">
             <span @click.stop>
@@ -235,8 +338,11 @@ onMounted(async () => {
       </DataTable>
     </div>
 
-    <Dialog v-model:visible="dialog" :header="form.id ? 'Edit product' : 'New product'" modal :style="{ width: '640px' }" :breakpoints="{ '720px': '95vw' }">
+    <Dialog v-model:visible="dialog" :header="form.id ? 'Edit product' : dupFrom ? `New product: copy of ${dupFrom}` : 'New product'" modal :style="{ width: '640px' }" :breakpoints="{ '720px': '95vw' }">
       <form class="form" @submit.prevent="save">
+        <Message v-if="dupFrom && !form.id" severity="info" :closable="false" size="small">
+          Copied from <b>{{ dupFrom }}</b>: check the name, SKU and barcode, then Save. Stores, prices, size prices, options and photo are copied; the recipe is not.
+        </Message>
         <div class="form-2">
           <div class="field"><label>SKU *</label><InputText v-model="form.sku" required /></div>
           <div class="field"><label>Barcode</label><InputText v-model="form.barcode" placeholder="Scan or type" /></div>
@@ -275,7 +381,27 @@ onMounted(async () => {
           <label>Drink options <span class="hint">(customer chooses at the POS, in this order)</span></label>
           <MultiSelect v-model="form.modifierGroupIds" :options="modifierGroups" option-label="name" option-value="id" display="chip" placeholder="None" />
         </div>
-        <div v-if="!form.isIngredient" class="field"><label>Photo URL <span class="hint">(shown on the POS tile)</span></label><InputText v-model="form.imageUrl" placeholder="https://…/latte.jpg" /></div>
+        <div v-if="!form.isIngredient" class="field">
+          <label>Photo <span class="hint">(POS tile and online menu)</span></label>
+          <div class="photo-row">
+            <div class="photo-box">
+              <img v-if="photoShown && !badImg.has(photoShown)" :src="photoShown" alt="" @error="badImg.add(photoShown)" />
+              <span v-else class="ini" :style="{ '--c': catColor(form.categoryId) }">{{ initials(form.name || '?') }}</span>
+            </div>
+            <div class="photo-act">
+              <input ref="fileInput" type="file" accept="image/*" hidden data-test="photo-file" @change="choosePhoto" />
+              <div class="row" style="gap: 6px; flex-wrap: wrap">
+                <Button :label="photoShown ? 'Change photo' : 'Upload photo'" icon="pi pi-upload" size="small" severity="secondary" :loading="photo.busy" @click="fileInput?.click()" />
+                <Button v-if="photoShown" label="Remove" icon="pi pi-trash" size="small" text severity="danger" @click="removePhoto" />
+                <Button :label="photo.link ? 'Hide link' : 'Use a link instead'" size="small" text severity="secondary" @click="photo.link = !photo.link" />
+              </div>
+              <span class="hint">JPG, PNG or WebP, from the computer or the phone's camera. Made smaller (800 px) before upload.
+                <b v-if="photo.file"> New photo ready ({{ Math.max(1, Math.round(photo.file.size / 1024)) }} KB): saved with Save.</b>
+                <b v-else-if="photo.remove && photo.original"> Photo removed when you Save.</b></span>
+              <InputText v-if="photo.link" v-model="form.imageUrl" placeholder="https://…/latte.jpg" @input="typedLink" />
+            </div>
+          </div>
+        </div>
         <div class="row" style="gap: 24px; flex-wrap: wrap">
           <label class="row"><ToggleSwitch v-model="form.isIngredient" /> Ingredient (used in recipes, not sold)</label>
           <label class="row"><ToggleSwitch v-model="form.taxable" /> Taxable</label>
@@ -290,6 +416,7 @@ onMounted(async () => {
           <p class="hint" style="grid-column: 1 / -1; margin: 0">Baking a batch (Production page) uses the ingredients and adds the pieces to stock; selling takes pieces from stock.</p>
         </div>
         <div class="row" style="justify-content: flex-end">
+          <Button v-if="form.id" label="Duplicate" icon="pi pi-copy" severity="secondary" outlined style="margin-right: auto" v-tooltip.top="'New product filled from this one'" data-test="duplicate" @click="duplicate" />
           <Button label="Cancel" severity="secondary" text @click="dialog = false" />
           <Button type="submit" label="Save" icon="pi pi-check" :loading="saving" />
         </div>
@@ -309,6 +436,11 @@ onMounted(async () => {
 .prod.off { opacity: .6; }
 .thumb { width: 42px; height: 42px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: var(--bg); }
 .thumb.ini { display: grid; place-items: center; color: #fff; font-weight: 800; font-size: .85rem; background: var(--c); }
+.photo-row { display: flex; gap: 14px; align-items: flex-start; }
+.photo-box { width: 96px; height: 96px; border-radius: 14px; overflow: hidden; flex-shrink: 0; border: 1px solid var(--border); background: var(--bg); }
+.photo-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-box .ini { width: 100%; height: 100%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 1.6rem; background: var(--c); }
+.photo-act { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
 .pname { min-width: 0; }
 .nm { font-weight: 650; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pcat { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
