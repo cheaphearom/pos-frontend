@@ -910,13 +910,30 @@ async function refreshData() {
   await Promise.allSettled([
     catalog.sync(),
     loadShift(),
-    api.get('/categories').then((c) => { categories.value = c; localStorage.setItem('pos.categories', JSON.stringify(c)); }),
-    api.get('/customers/loyalty-rules').then((r) => { loyalty.value = r; localStorage.setItem('pos.loyalty', JSON.stringify(r)); }),
+    loadCategories(),
+    loadLoyalty(),
     loadPromos(),
     loadSlides(),
-    api.get('/modifiers').then((g) => { optionGroups.value = g.filter((x: any) => x.isActive); localStorage.setItem('pos.modifiers', JSON.stringify(optionGroups.value)); }),
+    loadOptions(),
     syncNow(),
   ]);
+}
+
+/** Categories, drink options and loyalty rules: kept on this computer so the POS works offline. */
+async function loadCategories() {
+  const c = await api.get('/categories');
+  categories.value = c;
+  localStorage.setItem('pos.categories', JSON.stringify(c));
+}
+async function loadOptions() {
+  const g = await api.get('/modifiers');
+  optionGroups.value = g.filter((x: any) => x.isActive);
+  localStorage.setItem('pos.modifiers', JSON.stringify(optionGroups.value));
+}
+async function loadLoyalty() {
+  const r = await api.get('/customers/loyalty-rules');
+  loyalty.value = r;
+  localStorage.setItem('pos.loyalty', JSON.stringify(r));
 }
 
 /** Pictures for the customer display, kept on this computer so the display shows them offline too. */
@@ -952,11 +969,15 @@ onMounted(async () => {
   }
   loadOnline();
   onlineTimer = setInterval(loadOnline, 10_000);
+  // Every 5 minutes: what managers may change during the day (no refresh needed on the tills)
   syncTimer = setInterval(() => {
     if (!online.value) return;
     catalog.sync().catch(() => undefined);
     loadPromos().catch(() => undefined);
     loadSlides().catch(() => undefined);
+    loadCategories().catch(() => undefined);
+    loadOptions().catch(() => undefined);
+    loadLoyalty().catch(() => undefined);
   }, 5 * 60_000);
   window.addEventListener('keydown', onKey);
 });
