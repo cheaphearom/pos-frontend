@@ -83,6 +83,52 @@ watch(() => [pack.size, pack.price], applyPack);
 const modifierGroups = ref<any[]>([]);
 const dialog = ref(false);
 const saving = ref(false);
+
+// ── Bulk price change: tick products, choose the change, preview old → new, apply
+const selected = ref<Product[]>([]);
+const bulkDlg = ref(false);
+const bulk = reactive({ scope: 'ALL' as 'ALL' | 'STORE', type: 'PERCENT' as 'PERCENT' | 'AMOUNT' | 'SET', value: null as number | null, round: null as number | null, busy: false });
+const bulkPreview = ref<any>(null);
+/** The settings the preview was made with: Apply only applies what was previewed */
+const bulkKey = computed(() => JSON.stringify([bulk.scope, bulk.type, bulk.value, bulk.round, app.currentStoreId, selected.value.map((p) => p.id)]));
+const previewKey = ref('');
+const bulkBody = () => ({
+  productIds: selected.value.map((p) => p.id), scope: bulk.scope, storeId: bulk.scope === 'STORE' ? app.currentStoreId : undefined,
+  change: { type: bulk.type, value: bulk.value }, round: bulk.round ?? undefined,
+});
+function openBulk() {
+  Object.assign(bulk, { value: null, busy: false });
+  bulkPreview.value = null;
+  previewKey.value = '';
+  bulkDlg.value = true;
+}
+async function previewBulk() {
+  if (bulk.value === null) return notify.error(bulk.type === 'SET' ? 'Type the new price' : 'Type how much to change');
+  if (bulk.type === 'SET' && bulk.value < 0) return notify.error('A price cannot be below $0');
+  bulk.busy = true;
+  try {
+    bulkPreview.value = await api.post('/products/bulk-price/preview', bulkBody());
+    previewKey.value = bulkKey.value;
+  } catch (e) { notify.error(e); } finally { bulk.busy = false; }
+}
+async function applyBulk() {
+  if (previewKey.value !== bulkKey.value) return previewBulk();
+  bulk.busy = true;
+  try {
+    const r = await api.post('/products/bulk-price', bulkBody());
+    notify.success('Prices changed', `${r.changed} product(s)${r.skipped ? `, ${r.skipped} skipped` : ''}. Tills update within 5 minutes.`);
+    bulkDlg.value = false;
+    selected.value = [];
+    list.load();
+  } catch (e) { notify.error(e); } finally { bulk.busy = false; }
+}
+const changeHint = computed(() => (bulk.type === 'PERCENT' ? '10 = 10% more · -5 = 5% less' : bulk.type === 'AMOUNT' ? '0.25 = $0.25 more · -0.10 = $0.10 less' : 'The new price. Drinks with sizes: the smallest size gets this price, the others keep their difference.'));
+const priceText = (v: number | null | undefined) => (v === null || v === undefined ? '—' : money(v, cur.value));
+/** A row click opens the product, but not when the tick box was clicked */
+function onRowClick(e: any) {
+  if (!auth.isAdmin || (e.originalEvent?.target as HTMLElement)?.closest('.p-checkbox, .p-datatable-selection-column, td:first-child input')) return;
+  edit(e.data);
+}
 const form = reactive(empty());
 
 // ── Photo: uploaded to this server (resized here first), or a web link
@@ -265,6 +311,7 @@ onMounted(async () => {
       </div>
       <div class="actions">
         <Button v-if="auth.isAdmin" label="New ingredient" icon="pi pi-plus" severity="secondary" @click="openNew(true)" />
+        <Button v-if="auth.isAdmin && selected.length" :label="`Change prices (${selected.length})`" icon="pi pi-percentage" severity="secondary" data-test="bulk-open" @click="openBulk" />
         <Button v-if="auth.isAdmin" label="New product" icon="pi pi-plus" @click="openNew()" />
       </div>
     </div>
@@ -287,7 +334,8 @@ onMounted(async () => {
 
       <DataTable :value="list.rows.value" lazy paginator :rows="list.page.rows" :first="list.page.first" :total-records="list.total.value"
         :rows-per-page-options="[25, 50, 100]" :loading="list.loading.value" data-key="id" size="small" striped-rows
-        @page="list.onPage" @row-click="auth.isAdmin && edit($event.data)" :row-class="() => (auth.isAdmin ? 'clickable' : '')">
+        v-model:selection="selected" @page="list.onPage" @row-click="onRowClick" :row-class="() => (auth.isAdmin ? 'clickable' : '')">
+        <Column v-if="auth.isAdmin" selection-mode="multiple" header-style="width: 2.5rem" />
         <template #empty><span class="muted">No products found</span></template>
         <Column field="name" header="Product">
           <template #body="{ data }">
@@ -337,6 +385,54 @@ onMounted(async () => {
         </Column>
       </DataTable>
     </div>
+
+    <Dialog v-model:visible="bulkDlg" header="Change prices" modal :style="{ width: '820px' }" :breakpoints="{ '880px': '96vw' }">
+      <div class="form">
+        <p class="muted" style="margin: 0">{{ selected.length }} product(s) ticked. Check the preview, then Apply. Tills get the new prices within 5 minutes.</p>
+        <div class="field"><label>Where</label>
+          <SelectButton v-model="bulk.scope" :options="[{ l: 'All stores', v: 'ALL' }, { l: `Only ${app.currentStore?.code ?? 'this store'}`, v: 'STORE' }]" option-label="l" option-value="v" :allow-empty="false" />
+          <span class="hint">{{ bulk.scope === 'ALL' ? 'The normal price, every store\'s own price and size prices.' : `Only ${app.currentStore?.name}'s prices (its own price and size prices). Other stores keep theirs.` }}</span>
+        </div>
+        <div class="form-2">
+          <div class="field"><label>Change</label>
+            <SelectButton v-model="bulk.type" :options="[{ l: '+/- %', v: 'PERCENT' }, { l: '+/- $', v: 'AMOUNT' }, { l: 'Set to', v: 'SET' }]" option-label="l" option-value="v" :allow-empty="false" />
+          </div>
+          <div class="field"><label>{{ bulk.type === 'PERCENT' ? 'Percent' : bulk.type === 'AMOUNT' ? 'Amount ($)' : 'New price ($)' }}</label>
+            <InputNumber v-model="bulk.value" :min-fraction-digits="bulk.type === 'PERCENT' ? 0 : 2" :max-fraction-digits="2" :suffix="bulk.type === 'PERCENT' ? ' %' : ''" fluid data-test="bulk-value" @input="(e: any) => (bulk.value = e.value ?? null)" />
+            <span class="hint">{{ changeHint }}</span>
+          </div>
+        </div>
+        <div class="field"><label>Round the new prices</label>
+          <SelectButton v-model="bulk.round" :options="[{ l: 'No', v: null }, { l: '$0.05', v: 0.05 }, { l: '$0.10', v: 0.1 }, { l: '$0.25', v: 0.25 }]" option-label="l" option-value="v" :allow-empty="false" />
+        </div>
+        <div class="row" style="justify-content: flex-end"><Button label="Preview" icon="pi pi-eye" severity="secondary" :loading="bulk.busy && !bulkPreview" data-test="bulk-preview" @click="previewBulk" /></div>
+
+        <div v-if="bulkPreview" class="bulk-prev" data-test="bulk-table">
+          <div class="small"><b>{{ bulkPreview.changed }}</b> product(s) will change<span v-if="bulkPreview.skipped"> · {{ bulkPreview.skipped }} skipped</span><span v-if="previewKey !== bulkKey" class="neg"> · settings changed: preview again</span></div>
+          <table>
+            <thead><tr><th>Product</th><th>Store</th><th class="r">Now</th><th class="r">New</th></tr></thead>
+            <tbody>
+              <template v-for="r in bulkPreview.rows" :key="r.productId">
+                <tr v-if="r.skipped" class="skip"><td><b>{{ r.name }}</b> <span class="mono small muted">{{ r.sku }}</span></td><td colspan="3" class="muted small">Skipped: {{ r.skipped }}</td></tr>
+                <template v-else>
+                  <tr v-if="r.normal" class="first"><td :rowspan="r.stores.length + 1"><b>{{ r.name }}</b><div class="mono small muted">{{ r.sku }}</div></td><td class="muted small">Normal price</td><td class="r">{{ priceText(r.normal.before) }}</td><td class="r new">{{ priceText(r.normal.after) }}</td></tr>
+                  <tr v-for="(st, j) in r.stores" :key="st.storeId" :class="{ first: !r.normal && j === 0 }">
+                    <td v-if="!r.normal && j === 0" :rowspan="r.stores.length"><b>{{ r.name }}</b><div class="mono small muted">{{ r.sku }}</div></td>
+                    <td class="small">{{ st.code }}</td>
+                    <td class="r"><template v-if="st.sizes"><div v-for="z in st.sizes.filter((x: any) => x.before !== null)" :key="z.optionId" class="small">{{ z.name }} {{ priceText(z.before) }}</div></template><template v-else>{{ priceText(st.before) }}</template></td>
+                    <td class="r new"><template v-if="st.sizes"><div v-for="z in st.sizes.filter((x: any) => x.before !== null)" :key="z.optionId" class="small">{{ z.name }} <b>{{ priceText(z.after) }}</b></div></template><template v-else>{{ priceText(st.after) }}</template></td>
+                  </tr>
+                </template>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div class="row" style="justify-content: flex-end">
+          <Button label="Cancel" text severity="secondary" @click="bulkDlg = false" />
+          <Button label="Apply new prices" icon="pi pi-check" :disabled="!bulkPreview || !bulkPreview.changed || previewKey !== bulkKey" :loading="bulk.busy && !!bulkPreview" data-test="bulk-apply" @click="applyBulk" />
+        </div>
+      </div>
+    </Dialog>
 
     <Dialog v-model:visible="dialog" :header="form.id ? 'Edit product' : dupFrom ? `New product: copy of ${dupFrom}` : 'New product'" modal :style="{ width: '640px' }" :breakpoints="{ '720px': '95vw' }">
       <form class="form" @submit.prevent="save">
@@ -426,6 +522,14 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.bulk-prev { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; max-height: 46vh; overflow: auto; }
+.bulk-prev table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+.bulk-prev th { text-align: left; font-size: 12px; color: var(--text-2); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+.bulk-prev td { padding: 5px 6px; vertical-align: top; }
+.bulk-prev tr.first td { border-top: 1px solid var(--border); }
+.bulk-prev .r { text-align: right; white-space: nowrap; }
+.bulk-prev .new { color: var(--p-primary-color); font-weight: 700; }
+.bulk-prev tr.skip td { border-top: 1px solid var(--border); }
 .cat-chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: thin; }
 .cchip { --c: var(--text-2); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s; }
 .cchip:hover { border-color: var(--c); }
