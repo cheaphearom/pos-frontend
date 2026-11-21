@@ -52,7 +52,10 @@ const fmt = (n) => '$' + Number(n).toFixed(2);
   await ad.getByRole('button', { name: 'New promotion' }).click(); await ad.waitForTimeout(300);
   await (OUT ? ad.screenshot({ path: OUT + '35-promotion-edit.png' }) : null);
   await ad.keyboard.press('Escape');
-  await ad.goto(W + '/stores'); await ad.waitForTimeout(800); await ad.locator('.p-datatable-tbody tr').first().click(); await ad.waitForTimeout(400);
+  await ad.goto(W + '/stores'); await ad.waitForTimeout(800);
+  // stores are cards (the All tab shows every store)
+  await ad.locator('.p-selectbutton .p-togglebutton', { hasText: /^All/ }).click().catch(() => {}); await ad.waitForTimeout(400);
+  await ad.locator('.st-card', { hasText: 'PP01' }).first().click(); await ad.waitForTimeout(400);
   ok((await ad.locator('.p-dialog input[placeholder="myshop@aclb"]').inputValue()) === 'demo_shop@aclb', 'store dialog shows KHQR account');
   await ad.keyboard.press('Escape');
 
