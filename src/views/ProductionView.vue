@@ -119,10 +119,10 @@ onMounted(reload);
 </script>
 
 <template>
-  <div>
+  <div class="page">
     <div class="page-head">
       <div><h1>Bakery production</h1><div class="sub">{{ app.currentStore?.name }} · bake, then write off what is left at the end of the day</div></div>
-      <SelectButton v-model="tab" :options="TABS" option-label="l" option-value="v" :allow-empty="false" />
+      <div class="actions"><SelectButton v-model="tab" :options="TABS" option-label="l" option-value="v" :allow-empty="false" /></div>
     </div>
 
     <!-- Plan -->
