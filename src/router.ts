@@ -7,6 +7,7 @@ import type { Role } from './api/types';
 import AppLayout from './layouts/AppLayout.vue';
 import { useApp } from './stores/app';
 import { useAuth } from './stores/auth';
+import { CASHIER_PAGES } from '@/utils/cashier';
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -19,6 +20,7 @@ declare module 'vue-router' {
 }
 
 const M: Role[] = ['STORE_MANAGER'];
+
 const A: Role[] = ['SUPER_ADMIN'];
 
 const routes: RouteRecordRaw[] = [
@@ -93,6 +95,7 @@ router.beforeEach(async (to) => {
   if (!auth.user) return { path: '/login', query: to.fullPath !== '/' ? { next: to.fullPath } : {} };
   const app = useApp();
   if (!app.stores.length) await app.loadStores().catch(() => undefined);
+  if (auth.role === 'CASHIER' && !CASHIER_PAGES.includes(to.path)) return '/pos';
   if (to.meta.roles && !auth.can(...to.meta.roles)) return '/';
   return true;
 });

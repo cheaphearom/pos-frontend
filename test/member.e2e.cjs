@@ -105,6 +105,9 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await shot(pos, 'm9-pos-member');
 
   // Admin sees who uses the app
+  // cashiers only use the POS: a manager opens Customers
+  await pos.evaluate(() => localStorage.clear());
+  await pos.goto(W + '/login'); await pos.fill('#email', 'manager.pp@pos.local'); await pos.fill('#password', 'Password@123'); await pos.click('button[type=submit]'); await pos.waitForTimeout(1500);
   await pos.goto(W + '/customers'); await pos.waitForTimeout(1200);
   ok((await pos.locator('.p-tag', { hasText: /^app$/ }).count()) === 2, 'customers list marks the 2 app members');
 

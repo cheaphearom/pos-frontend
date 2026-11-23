@@ -1,5 +1,6 @@
 <!-- Copyright (c) 2026 Chea Phearom. All rights reserved. Proprietary and confidential: see the LICENSE file. -->
 <script setup lang="ts">
+import { CASHIER_PAGES } from '@/utils/cashier';
 import { useDark } from '@/composables/useDark';
 import LangSwitch from '@/components/LangSwitch.vue';
 import { COPYRIGHT } from '@/utils/copyright';
@@ -86,7 +87,7 @@ const sections: { title: string; items: NavItem[] }[] = [
 ];
 const visible = computed(() =>
   sections
-    .map((s) => ({ ...s, items: s.items.filter((i) => !i.roles || auth.can(...i.roles)) }))
+    .map((s) => ({ ...s, items: s.items.filter((i) => (!i.roles || auth.can(...i.roles)) && (auth.role !== 'CASHIER' || CASHIER_PAGES.includes(i.to))) }))
     .filter((s) => s.items.length),
 );
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to));

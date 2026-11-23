@@ -44,6 +44,11 @@ function initStores(inventory: any[], isNew: boolean) {
     return { storeId: s.id, code: s.code, name: s.name, sells, price, was: isNew ? undefined : { sells, price } };
   });
 }
+// New product: tick the stores that sell it (the store chosen at the top is ticked to start with)
+const allTicked = computed(() => storeRows.value.length > 0 && storeRows.value.every((r) => r.sells));
+function tickAll(on: boolean) {
+  for (const r of storeRows.value) r.sells = on;
+}
 const storesChanged = (r: StoreRow) => !r.was || r.was.sells !== r.sells || r.was.price !== r.price;
 
 // ── Drinks with sizes: the full price of each size (S / M / L) in each store
@@ -311,7 +316,13 @@ async function save() {
     } else {
       const created = await api.post<{ id: string }>('/products', { ...payload, isActive: undefined, stores: storeRows.value.filter((r) => r.sells).map((r) => ({ storeId: r.storeId, price: r.price })) });
       pid = created.id;
-      // a copy of a drink with sizes: its size prices too
+      // a copy of a drink with sizes: its size prices too; a newly ticked store gets the prices shown in the form
+      const formSizes = hereRow.value?.sizes;
+      if (sized.value && formSizes) {
+        for (const r of storeRows.value) {
+          if (r.sells && sizes.value.every((o) => r.sizes?.[o.id] == null)) r.sizes = { ...formSizes };
+        }
+      }
       const withSizes = sized.value ? storeRows.value.filter((r) => r.sells && sizes.value.some((o) => r.sizes?.[o.id] != null)) : [];
       if (withSizes.length) {
         await api.put(`/products/${pid}/size-prices`, { stores: withSizes.map((r) => ({ storeId: r.storeId, prices: sizes.value.map((o) => ({ optionId: o.id, price: r.sizes![o.id] ?? null })) })) });
@@ -520,6 +531,17 @@ onMounted(async () => {
           <div class="field"><label>Category</label><Select v-model="form.categoryId" :options="catOptions" option-label="label" filter option-value="id" show-clear placeholder="None" /></div>
           <div class="field"><label>Unit</label><InputText v-model="form.unit" placeholder="pcs, kg, box…" /></div>
         </div>
+        <!-- New product: which stores sell it (later: the "Sold in" switch on the list, per store) -->
+        <div v-if="!form.id && storeRows.length > 1" class="field" data-test="sold-in">
+          <label>Sold in stores * <span class="hint">(same selling price in each; a store's own price can be set later)</span></label>
+          <div class="store-picks">
+            <label v-for="r in storeRows" :key="r.storeId" class="store-pick" :class="{ on: r.sells }">
+              <Checkbox v-model="r.sells" binary :input-id="'sold-' + r.storeId" />
+              <span><b>{{ r.code }}</b> {{ r.name }}</span>
+            </label>
+            <Button :label="allTicked ? 'None' : 'All stores'" size="small" text @click="tickAll(!allTicked)" />
+          </div>
+        </div>
         <div class="form-2">
           <div class="field"><label>Cost per {{ form.unit || 'unit' }}</label><InputNumber v-model="form.costPrice" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="6" :min="0" fluid /></div>
           <div v-if="!form.isIngredient" class="field"><label>Selling price * <span class="hint">(before tax)</span></label><InputNumber v-model="form.sellPrice" mode="decimal" :min-fraction-digits="2" :max-fraction-digits="2" :min="0" fluid /></div>
@@ -633,5 +655,8 @@ onMounted(async () => {
 .size-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
 .size-f { display: flex; flex-direction: column; gap: 4px; }
 .size-f .size-h { font-size: .8rem; font-weight: 700; }
+.store-picks { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.store-pick { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--p-content-border-color); border-radius: 10px; cursor: pointer; font-size: .92rem; }
+.store-pick.on { border-color: var(--p-primary-color); background: color-mix(in srgb, var(--p-primary-color) 8%, transparent); }
 .own-price { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--bg); font-size: .9rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 </style>
