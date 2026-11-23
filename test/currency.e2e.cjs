@@ -64,6 +64,9 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   await page.keyboard.press('Escape');
 
   // Shifts page: riel drawer = 50,000 + 20,000 + 4,100 - 1,700 - 6,300 = 66,100
+  // cashiers only use the POS: a manager opens the Shifts page
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(W + '/login'); await page.fill('#email', 'manager.pp@pos.local'); await page.fill('#password', 'Password@123'); await page.click('button[type=submit]'); await page.waitForTimeout(1500);
   await page.goto(W + '/shifts'); await page.waitForTimeout(1200);
   await page.locator('.p-datatable-tbody tr').first().click(); await page.waitForSelector('[data-test=khr-drawer]');
   const drawer = (await text('[data-test=khr-drawer]'));

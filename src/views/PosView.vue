@@ -1016,11 +1016,12 @@ async function logout() {
       <Button icon="pi pi-wallet" label="Top up" size="small" text :disabled="!online" v-tooltip.bottom="'Top up a wallet card'" @click="openTopup()" />
       <Button v-if="shift" icon="pi pi-arrow-right-arrow-left" label="Cash in/out" size="small" text :disabled="!online" v-tooltip.bottom="'Money put in or taken out of the drawer'" @click="openCash('PAY_OUT')" />
       <Button v-if="shift" icon="pi pi-file" label="X report" size="small" text :disabled="!online" v-tooltip.bottom="'Print the shift so far'" @click="openX" />
+      <Button v-if="!auth.isManager" icon="pi pi-receipt" label="Sales" size="small" text v-tooltip.bottom="'Your sales: reprint, refund or void (manager PIN)'" @click="router.push('/sales')" />
       <Button icon="pi pi-print" label="Printers" size="small" text v-tooltip.bottom="'Receipt and kitchen printers of this till'" @click="openPrinters" />
       <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
       </div>
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
-      <Button v-if="shift" class="shift-chip" :label="(big ? '' : 'Shift since ') + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" severity="secondary" outlined @click="router.push(`/shifts?open=${shift.id}`)" />
+      <Button v-if="shift" class="shift-chip" :label="(big ? '' : 'Shift since ') + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" severity="secondary" outlined v-tooltip.bottom="auth.isManager ? 'Shift summary in the admin' : 'Your shift so far (X report)'" @click="auth.isManager ? router.push(`/shifts?open=${shift.id}`) : openX()" />
       <Button v-else label="Open shift" icon="pi pi-play" size="small" @click="shiftDlg = true" :disabled="!online" />
       <Button :icon="big ? 'pi pi-search-minus' : 'pi pi-search-plus'" :label="big ? 'Normal' : 'Big'" size="small" :severity="big ? undefined : 'secondary'" :outlined="!big"
         :aria-pressed="big" v-tooltip.bottom="big ? 'Back to the normal size' : 'Make everything bigger'" @click="big = !big" />
