@@ -515,6 +515,20 @@ const shiftPadValue = computed<number | null>({
   get: () => (shiftField.value === 'usd' ? openingCash.value : openingKhr.value),
   set: (v) => (shiftField.value === 'usd' ? (openingCash.value = v ?? 0) : (openingKhr.value = v ?? 0)),
 });
+/** A popup is open: keyboard shortcuts pause, and the big keyboard under the products hides (popups have their own pad). */
+const anyDialogOpen = computed(() => discardDlg.value || discardApprDlg.value || tableDlg.value || onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value || cashDlg.value || xDlg.value || cashApprDlg.value || approvalDlg.value || printersDlg.value || sellDlg.value || actDlg.value || topDlg.value);
+// Line edit on a touchscreen: the pad fills the box chosen (quantity or discount)
+const lineField = ref<'qty' | 'disc'>('qty');
+const linePadValue = computed<number | null>({
+  get: () => (lineField.value === 'qty' ? lineEdit.quantity : lineEdit.discount),
+  set: (v) => (lineField.value === 'qty' ? (lineEdit.quantity = v ?? 0) : (lineEdit.discount = v ?? 0)),
+});
+// Member popup on a touchscreen: the keyboard types into the box chosen (phone / card search, or the new member's fields)
+const custField = ref<'code' | 'name' | 'phone' | 'card'>('code');
+const custKbValue = computed<string>({
+  get: () => (custField.value === 'code' ? custCode.value : (newCust as any)[custField.value] ?? ''),
+  set: (v) => { if (custField.value === 'code') custCode.value = v; else (newCust as any)[custField.value] = v; },
+});
 const noOsKeyboard = computed(() => (touch.value ? { pcInputText: { root: { inputmode: 'none' } } } : undefined));
 async function loadShift() {
   try {
@@ -949,7 +963,7 @@ async function loadPromos() {
 }
 
 function onKey(e: KeyboardEvent) {
-  const dialogOpen = discardDlg.value || discardApprDlg.value || tableDlg.value || onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value || cashDlg.value || xDlg.value || cashApprDlg.value || approvalDlg.value;
+  const dialogOpen = anyDialogOpen.value;
   if (e.key === 'F9' || (e.key === 'Enter' && e.ctrlKey)) { e.preventDefault(); if (!dialogOpen) openPay(); }
   else if (e.key === 'F2') { e.preventDefault(); focusSearch(); }
   else if (e.key === 'F4' && !dialogOpen) { e.preventDefault(); custDlg.value = true; }
@@ -1068,7 +1082,7 @@ async function logout() {
             {{ catalog.items.value.length ? 'No matching products' : online ? 'Loading products…' : 'No products saved on this device yet. Connect to the internet once to download them.' }}
           </div>
         </div>
-        <TouchKeyboard v-if="touch && kbOpen" v-model="search" enter-label="Add" class="pos-kb" @enter="search.trim() && onSearchEnter()" @close="kbOpen = false" />
+        <TouchKeyboard v-if="touch && kbOpen && !anyDialogOpen" v-model="search" enter-label="Add" class="pos-kb" @enter="search.trim() && onSearchEnter()" @close="kbOpen = false" />
       </section>
 
       <!-- Cart -->
@@ -1210,22 +1224,28 @@ async function logout() {
     </Dialog>
 
     <!-- Member -->
-    <Dialog v-model:visible="custDlg" header="Loyalty member" modal :style="{ width: '420px' }" @show="newCust.show = false">
+    <Dialog v-model:visible="custDlg" header="Loyalty member" modal :style="{ width: touch ? '760px' : '420px' }" :breakpoints="{ '800px': '98vw' }" @show="newCust.show = false; custField = 'code'">
       <form class="form" @submit.prevent="newCust.show ? createCustomer() : findCustomer()">
         <template v-if="!newCust.show">
-          <div class="field"><label>Phone number or member card</label><InputText v-model="custCode" autofocus /></div>
-          <Button type="submit" label="Find" icon="pi pi-search" :loading="custBusy" />
+          <div class="field"><label>Phone number or member card</label><InputText v-model="custCode" autofocus :inputmode="touch ? 'none' : undefined"
+            :class="{ 'kb-target': touch }" @focus="custField = 'code'" /></div>
+          <Button v-if="!touch" type="submit" label="Find" icon="pi pi-search" :loading="custBusy" />
         </template>
         <template v-else>
           <Message severity="info" :closable="false" size="small">No member found. Register a new one:</Message>
-          <div class="field"><label>Name *</label><InputText v-model="newCust.name" required autofocus /></div>
-          <div class="field"><label>Phone</label><InputText v-model="newCust.phone" /></div>
-          <div class="field"><label for="new-card">Member card</label><InputText id="new-card" v-model="newCust.card" maxlength="30" placeholder="Tap the card on the reader, or leave empty" @keydown.enter.prevent /><span class="hint">Empty = a card number is made for the member.</span></div>
+          <div class="field"><label>Name *</label><InputText v-model="newCust.name" required autofocus :inputmode="touch ? 'none' : undefined"
+            :class="{ 'kb-target': touch && custField === 'name' }" @focus="custField = 'name'" /></div>
+          <div class="field"><label>Phone</label><InputText v-model="newCust.phone" :inputmode="touch ? 'none' : undefined"
+            :class="{ 'kb-target': touch && custField === 'phone' }" @focus="custField = 'phone'" /></div>
+          <div class="field"><label for="new-card">Member card</label><InputText id="new-card" v-model="newCust.card" maxlength="30" placeholder="Tap the card on the reader, or leave empty" @keydown.enter.prevent
+            :class="{ 'kb-target': touch && custField === 'card' }" @focus="custField = 'card'" /><span class="hint">Empty = a card number is made for the member.</span></div>
           <div class="row" style="justify-content: flex-end">
             <Button label="Back" text severity="secondary" @click="newCust.show = false" />
-            <Button type="submit" label="Register member" icon="pi pi-user-plus" />
+            <Button v-if="!touch" type="submit" label="Register member" icon="pi pi-user-plus" />
           </div>
         </template>
+        <TouchKeyboard v-if="touch" v-model="custKbValue" :enter-label="newCust.show ? 'Register' : 'Find'" data-test="cust-kb"
+          @enter="newCust.show ? createCustomer() : findCustomer()" @close="custDlg = false" />
       </form>
     </Dialog>
 
@@ -1273,23 +1293,28 @@ async function logout() {
     <Dialog v-model:visible="discDlg" header="Discount on whole sale" modal :style="{ width: '380px' }">
       <form class="form" @submit.prevent="applyDiscount">
         <SelectButton v-model="disc.type" :options="[{ l: 'Amount', v: 'amount' }, { l: 'Percent', v: 'percent' }]" option-label="l" option-value="v" :allow-empty="false" />
-        <InputNumber v-model="disc.value" :min="0" :max="disc.type === 'percent' ? 100 : undefined" :max-fraction-digits="2" :suffix="disc.type === 'percent' ? ' %' : ''" fluid autofocus />
+        <InputNumber v-model="disc.value" :min="0" :max="disc.type === 'percent' ? 100 : undefined" :max-fraction-digits="2" :suffix="disc.type === 'percent' ? ' %' : ''" fluid autofocus
+          :pt="noOsKeyboard" :class="{ 'pad-target': touch }" />
+        <NumPad v-if="touch" v-model="disc.value" :decimals="2" :max="disc.type === 'percent' ? 100 : undefined" enter-label="Apply" data-test="disc-pad" @enter="applyDiscount" />
         <small v-if="auth.role === 'CASHIER' && discountLimit < 100" class="muted">Up to {{ discountLimit }}% without a manager. More needs a manager PIN when paying.</small>
         <div class="row" style="justify-content: flex-end">
           <Button label="Remove" text severity="secondary" @click="disc.value = 0; applyDiscount()" />
-          <Button type="submit" label="Apply" />
+          <Button v-if="!touch" type="submit" label="Apply" />
         </div>
       </form>
     </Dialog>
 
     <!-- Line edit -->
-    <Dialog v-model:visible="lineDlg" :header="cart.lines[lineEdit.index]?.name" modal :style="{ width: '380px' }">
+    <Dialog v-model:visible="lineDlg" :header="cart.lines[lineEdit.index]?.name" modal :style="{ width: '380px' }" @show="lineField = 'qty'">
       <form class="form" @submit.prevent="saveLine">
-        <div class="field"><label>Quantity ({{ cart.lines[lineEdit.index]?.unit }})</label><InputNumber v-model="lineEdit.quantity" :min="0" :max-fraction-digits="3" fluid autofocus /></div>
-        <div class="field"><label>Discount on this line (amount)</label><InputNumber v-model="lineEdit.discount" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" fluid /></div>
+        <div class="field"><label>Quantity ({{ cart.lines[lineEdit.index]?.unit }})</label><InputNumber v-model="lineEdit.quantity" :min="0" :max-fraction-digits="3" fluid autofocus
+          :pt="noOsKeyboard" :class="{ 'pad-target': touch && lineField === 'qty' }" @focus="lineField = 'qty'" @click="lineField = 'qty'" /></div>
+        <div class="field"><label>Discount on this line (amount)</label><InputNumber v-model="lineEdit.discount" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" fluid
+          :pt="noOsKeyboard" :class="{ 'pad-target': touch && lineField === 'disc' }" @focus="lineField = 'disc'" @click="lineField = 'disc'" /></div>
+        <NumPad v-if="touch" v-model="linePadValue" :decimals="lineField === 'qty' ? 3 : 2" enter-label="Save" data-test="line-pad" @enter="saveLine" />
         <div class="row" style="justify-content: flex-end">
           <Button label="Remove item" text severity="danger" @click="lineEdit.quantity = 0; saveLine()" />
-          <Button type="submit" label="Save" />
+          <Button v-if="!touch" type="submit" label="Save" />
         </div>
       </form>
     </Dialog>
@@ -1547,6 +1572,7 @@ async function logout() {
 .search-btn:hover { background: var(--bg); color: var(--text); }
 .search-btn.on { background: color-mix(in srgb, var(--p-primary-color) 16%, transparent); color: var(--p-primary-color); }
 .pos-kb { flex: none; }
+.kb-target { border-color: var(--p-primary-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-primary-color) 22%, transparent); }
 .pad-target :deep(input) { border-color: var(--p-primary-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-primary-color) 22%, transparent); }
 .cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; flex-shrink: 0; scrollbar-width: none; }
 .cats.sub { margin-top: -2px; }
