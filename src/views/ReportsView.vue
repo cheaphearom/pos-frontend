@@ -23,7 +23,9 @@ async function load() {
   loading.value = true;
   try {
     const p = params.value;
-    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production] = await Promise.all([
+    const prev = prevRange.value;
+    const pp = prev ? { ...p, from: prev.from, to: prev.to } : null;
+    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production, hours, categories, prevSummary, prevProfit] = await Promise.all([
       api.get('/reports/sales-summary', { ...p, groupBy: f.groupBy }),
       api.get('/reports/profit', { ...p, groupBy: f.groupBy }),
       api.get('/reports/top-products', { ...p, limit: 20 }),
@@ -36,8 +38,12 @@ async function load() {
       api.get('/reports/coupons-vouchers', p),
       api.get('/reports/ingredient-usage', p),
       api.get('/production/report', p),
+      api.get('/reports/hours', p),
+      api.get('/reports/categories', p),
+      pp ? api.get('/reports/sales-summary', { ...pp, groupBy: 'store' }) : null,
+      pp ? api.get('/reports/profit', { ...pp, groupBy: 'store' }) : null,
     ]);
-    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production });
+    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production, hours, categories, prevSummary, prevProfit });
   } catch (e) {
     notify.error(e);
   } finally {
@@ -52,6 +58,72 @@ const profitTotals = computed(() => {
   const cost = rows.reduce((s: number, x: any) => s + x.cost, 0);
   return { revenue, cost, profit: revenue - cost, margin: revenue ? ((revenue - cost) / revenue) * 100 : 0 };
 });
+
+// ── Compare with the period just before (same number of days)
+const dayMs = 86_400_000;
+const toDay = (d: Date) => d.toISOString().slice(0, 10);
+const prevRange = computed(() => {
+  if (!f.from || !f.to) return null;
+  const a = new Date(f.from + 'T00:00:00Z').getTime();
+  const b = new Date(f.to + 'T00:00:00Z').getTime();
+  const days = Math.round((b - a) / dayMs) + 1;
+  return { from: toDay(new Date(a - days * dayMs)), to: toDay(new Date(a - dayMs)), days };
+});
+const prevLabel = computed(() => (prevRange.value ? (prevRange.value.days === 1 ? 'vs the day before' : `vs the ${prevRange.value.days} days before`) : ''));
+const prevTotals = computed(() => {
+  const t = r.prevSummary?.totals;
+  if (!t) return null;
+  const rows = r.prevProfit?.data ?? [];
+  const revenue = rows.reduce((x: number, y: any) => x + y.revenue, 0);
+  const cost = rows.reduce((x: number, y: any) => x + y.cost, 0);
+  return { ...t, profit: revenue - cost, avg: t.salesCount ? t.total / t.salesCount : 0 };
+});
+/** Change vs the previous period. `upIsGood` false for refunds. */
+function change(now: number, before: number | undefined, upIsGood = true) {
+  if (before === undefined || prevTotals.value === null) return null;
+  if (!before) return now ? { text: 'new', cls: upIsGood ? 'pos' : 'neg' } : null;
+  const pct = ((now - before) / Math.abs(before)) * 100;
+  if (Math.abs(pct) < 0.05) return { text: 'no change', cls: 'muted' };
+  const good = pct > 0 === upIsGood;
+  return { text: `${pct > 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(Math.abs(pct) < 10 ? 1 : 0)}%`, cls: good ? 'pos' : 'neg' };
+}
+const avgSale = computed(() => (r.summary?.totals.salesCount ? r.summary.totals.total / r.summary.totals.salesCount : 0));
+
+// ── Busy hours: average per day of the period
+const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const hourRange = computed(() => {
+  const hs = (r.hours?.data ?? []).map((x: any) => x.hour);
+  if (!hs.length) return [] as number[];
+  const lo = Math.min(...hs), hi = Math.max(...hs);
+  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+});
+const totalDays = computed(() => Object.values(r.hours?.days ?? {}).reduce((a: number, b: any) => a + Number(b), 0) || 1);
+const byHour = computed(() => hourRange.value.map((h) => {
+  const rows = (r.hours?.data ?? []).filter((x: any) => x.hour === h);
+  return { hour: h, sales: rows.reduce((t: number, x: any) => t + x.salesCount, 0) / totalDays.value, net: rows.reduce((t: number, x: any) => t + x.net, 0) / totalDays.value };
+}));
+const hourLabel = (h: number) => `${String(h).padStart(2, '0')}:00`;
+/** Average number of sales on that weekday at that hour. */
+const cell = (dow: number, hour: number) => {
+  const x = (r.hours?.data ?? []).find((y: any) => y.dow === dow && y.hour === hour);
+  const n = Number(r.hours?.days?.[dow] ?? 0);
+  return x && n ? x.salesCount / n : 0;
+};
+const cellMax = computed(() => Math.max(0.0001, ...(r.hours?.data ?? []).map((x: any) => x.salesCount / Math.max(1, Number(r.hours.days[x.dow])))));
+const busiest = computed(() => {
+  const all = (r.hours?.data ?? []).map((x: any) => ({ ...x, avg: x.salesCount / Math.max(1, Number(r.hours.days[x.dow])) }));
+  if (!all.length) return null;
+  const b = all.reduce((a: any, c: any) => (c.avg > a.avg ? c : a));
+  const h = byHour.value.reduce((a, c) => (c.sales > a.sales ? c : a));
+  return { slot: `${DOW[b.dow - 1]} ${hourLabel(b.hour)}–${hourLabel(b.hour + 1)}`, slotAvg: b.avg, hour: `${hourLabel(h.hour)}–${hourLabel(h.hour + 1)}` };
+});
+
+function exportCategories() {
+  downloadCsv(`categories-${f.from}-${f.to}.csv`, [
+    { key: 'name', label: 'Category' }, { key: 'quantity', label: 'Quantity' }, { key: 'revenue', label: 'Revenue (ex tax)' }, { key: 'sharePercent', label: 'Share %' },
+    { key: 'cost', label: 'Cost' }, { key: 'profit', label: 'Profit' }, { key: 'marginPercent', label: 'Margin %' },
+  ], r.categories.data);
+}
 
 function exportSummary() {
   downloadCsv(`sales-${f.from}-${f.to}.csv`, [
@@ -84,10 +156,16 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
 
     <template v-if="r.summary">
       <div class="grid grid-4 mt">
-        <div class="card"><div class="muted">Net sales</div><div class="big num">{{ m(r.summary.totals.net) }}</div><div class="small muted">after refunds and points</div></div>
-        <div class="card"><div class="muted">Transactions</div><div class="big num">{{ num(r.summary.totals.salesCount) }}</div><div class="small muted">avg {{ m(r.summary.totals.salesCount ? r.summary.totals.total / r.summary.totals.salesCount : 0) }}</div></div>
-        <div class="card"><div class="muted">Gross profit</div><div class="big num">{{ m(profitTotals.profit) }}</div><div class="small muted">margin {{ profitTotals.margin.toFixed(1) }}%</div></div>
-        <div class="card"><div class="muted">Refunds</div><div class="big num">{{ m(r.summary.totals.refunds) }}</div><div class="small muted">tax collected {{ m(r.summary.totals.tax) }}</div></div>
+        <div class="card" data-test="card-net"><div class="muted">Net sales</div><div class="big num">{{ m(r.summary.totals.net) }}</div>
+          <div class="small"><span v-if="change(r.summary.totals.net, prevTotals?.net)" :class="change(r.summary.totals.net, prevTotals?.net)!.cls" class="chg">{{ change(r.summary.totals.net, prevTotals?.net)!.text }}</span> <span class="muted">{{ prevTotals ? `${prevLabel} (${m(prevTotals.net)})` : 'after refunds and points' }}</span></div></div>
+        <div class="card"><div class="muted">Transactions</div><div class="big num">{{ num(r.summary.totals.salesCount) }}</div>
+          <div class="small"><span v-if="change(r.summary.totals.salesCount, prevTotals?.salesCount)" :class="change(r.summary.totals.salesCount, prevTotals?.salesCount)!.cls" class="chg">{{ change(r.summary.totals.salesCount, prevTotals?.salesCount)!.text }}</span>
+            <span class="muted" style="margin-right: 4px">avg sale {{ m(avgSale) }}</span>
+            <span v-if="change(avgSale, prevTotals?.avg)" :class="change(avgSale, prevTotals?.avg)!.cls" class="chg">({{ change(avgSale, prevTotals?.avg)!.text }})</span></div></div>
+        <div class="card"><div class="muted">Gross profit</div><div class="big num">{{ m(profitTotals.profit) }}</div>
+          <div class="small"><span v-if="change(profitTotals.profit, prevTotals?.profit)" :class="change(profitTotals.profit, prevTotals?.profit)!.cls" class="chg">{{ change(profitTotals.profit, prevTotals?.profit)!.text }}</span> <span class="muted">margin {{ profitTotals.margin.toFixed(1) }}%</span></div></div>
+        <div class="card"><div class="muted">Refunds</div><div class="big num">{{ m(r.summary.totals.refunds) }}</div>
+          <div class="small"><span v-if="change(r.summary.totals.refunds, prevTotals?.refunds, false)" :class="change(r.summary.totals.refunds, prevTotals?.refunds, false)!.cls" class="chg">{{ change(r.summary.totals.refunds, prevTotals?.refunds, false)!.text }}</span> <span class="muted">tax collected {{ m(r.summary.totals.tax) }}</span></div></div>
       </div>
 
       <div class="card mt">
@@ -105,6 +183,46 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
           <Column header="Refunds" class="right"><template #body="{ data }">{{ m(data.refunds) }}</template></Column>
           <Column header="Net" class="right"><template #body="{ data }"><b>{{ m(data.net) }}</b></template></Column>
         </DataTable>
+      </div>
+
+      <div class="card mt" data-test="busy-hours">
+        <div class="row" style="justify-content: space-between; flex-wrap: wrap"><h3>Busy hours</h3>
+          <span v-if="busiest" class="small muted">Busiest hour: <b>{{ busiest.hour }}</b> · busiest slot: <b>{{ busiest.slot }}</b> ({{ busiest.slotAvg.toFixed(1) }} sales on average)</span></div>
+        <template v-if="byHour.length">
+          <p class="small muted" style="margin: 0 0 8px">Average net sales per day at each hour (store time), over {{ totalDays }} day{{ totalDays === 1 ? '' : 's' }}</p>
+          <SimpleChart :labels="byHour.map((x) => hourLabel(x.hour))" :values="byHour.map((x) => Math.round(x.net * 100) / 100)" :format="m" :height="220" />
+          <div class="heat mt">
+            <table>
+              <thead><tr><th></th><th v-for="h in hourRange" :key="h">{{ String(h).padStart(2, '0') }}</th></tr></thead>
+              <tbody>
+                <tr v-for="(d, i) in DOW" :key="d">
+                  <th>{{ d }}</th>
+                  <td v-for="h in hourRange" :key="h" :style="{ '--a': cell(i + 1, h) / cellMax }" :class="{ hot: cell(i + 1, h) / cellMax > 0.55 }" :title="`${d} ${hourLabel(h)}: ${cell(i + 1, h).toFixed(1)} sales on average`">{{ cell(i + 1, h) ? (cell(i + 1, h) < 10 ? cell(i + 1, h).toFixed(1) : Math.round(cell(i + 1, h))) : '' }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="small muted" style="margin: 6px 0 0">Number of sales on average, per weekday and hour. Darker = busier: plan staff and baking for these hours.</p>
+          </div>
+        </template>
+        <span v-else class="muted">No sales in this period</span>
+      </div>
+
+      <div class="card mt" data-test="categories">
+        <div class="row" style="justify-content: space-between"><h3>Sales by category</h3><Button label="CSV" icon="pi pi-download" size="small" text :disabled="!r.categories.data.length" @click="exportCategories" /></div>
+        <template v-if="r.categories.data.length">
+          <SimpleChart horizontal :labels="r.categories.data.map((x: any) => x.name)" :values="r.categories.data.map((x: any) => x.revenue)" :format="m" :height="Math.max(120, r.categories.data.length * 36)" />
+          <DataTable :value="r.categories.data" size="small" class="mt">
+            <Column field="name" header="Category" />
+            <Column header="Qty" class="right"><template #body="{ data }">{{ num(data.quantity, 3) }}</template></Column>
+            <Column header="Revenue (ex tax)" class="right"><template #body="{ data }">{{ m(data.revenue) }}</template></Column>
+            <Column header="Share" class="right"><template #body="{ data }">{{ data.sharePercent }}%</template></Column>
+            <Column header="Cost" class="right"><template #body="{ data }">{{ m(data.cost) }}</template></Column>
+            <Column header="Profit" class="right"><template #body="{ data }"><b>{{ m(data.profit) }}</b></template></Column>
+            <Column header="Margin" class="right"><template #body="{ data }">{{ data.marginPercent }}%</template></Column>
+          </DataTable>
+          <p class="small muted" style="margin: 6px 0 0">Each product counts in its category as it is now.</p>
+        </template>
+        <span v-else class="muted">No sales in this period</span>
       </div>
 
       <div class="grid grid-2 mt">
@@ -261,4 +379,15 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
 
 <style scoped>
 .big { font-size: 24px; font-weight: 650; margin: 4px 0; }
+.chg { font-weight: 700; margin-right: 4px; }
+.heat { overflow-x: auto; }
+.heat table { border-collapse: separate; border-spacing: 3px; font-size: 12px; min-width: 100%; }
+.heat th { color: var(--text-2); font-weight: 600; padding: 2px 4px; text-align: center; }
+.heat tbody th { text-align: left; }
+.heat td {
+  text-align: center; min-width: 30px; height: 28px; border-radius: 5px; font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--series-1) calc(var(--a, 0) * 85%), var(--bg));
+  color: var(--text-1, inherit);
+}
+.heat td.hot { color: #fff; }
 </style>
