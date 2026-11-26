@@ -22,6 +22,9 @@ const SEVERITY: Record<string, string> = {
   DISCOUNT_APPROVED: 'warn', APPROVAL_GRANTED: 'warn', POINTS_ADJUSTED: 'warn', STOCK_ADJUSTED: 'warn', PRODUCT_CHANGED: 'warn', WALLET_BLOCKED: 'warn',
   DISCOUNT: 'info', LOGIN: 'secondary',
   SHIFT_CLOSED_DIFFERENCE: 'danger', SHIFT_CLOSED: 'secondary', PROMOTION_CREATED: 'warn', PROMOTION_CHANGED: 'warn', PROMOTION_DELETED: 'warn',
+  API_KEY_CREATED: 'danger', API_KEY_REVOKED: 'danger', VOUCHER_VOIDED: 'danger', WALLET_PIN_CHANGED: 'warn', WALLET_CARD_REPLACED: 'warn',
+  CATEGORY_DELETED: 'warn', DRINK_OPTIONS_DELETED: 'warn', DISPLAY_SLIDE_DELETED: 'warn', PO_CANCELLED: 'warn', TRANSFER_CANCELLED: 'warn', PRODUCTION_CANCELLED: 'warn',
+  STORE_PRODUCT_CHANGED: 'warn', RECIPE_CHANGED: 'info', DRINK_OPTIONS_CHANGED: 'info', SHIFT_OPENED: 'secondary',
 };
 const QUICK: { label: string; v: string | null; all?: boolean }[] = [
   { label: 'All', v: null },
@@ -45,7 +48,7 @@ onMounted(async () => {
 <template>
   <div class="page">
     <div class="page-head">
-      <div><h1>Audit log</h1><div class="sub">Who did what: discounts above the limit, refunds, voids, manager PINs, price and stock changes, logins</div></div>
+      <div><h1>Audit log</h1><div class="sub">Who did what: every change to products, prices, stock, promotions, coupons, cash and settings, refunds, voids, manager PINs, logins (sales are in Sales)</div></div>
       <SelectButton v-model="scope" :options="[{ l: 'This store', v: 'store' }, { l: 'All my stores', v: 'all' }]" option-label="l" option-value="v" :allow-empty="false" />
     </div>
     <div class="card">

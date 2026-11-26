@@ -49,7 +49,59 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   ok(pch.length === 1 && /value 10 → 15/.test(pch[0].summary) && /isActive true → false/.test(pch[0].summary), 'audit: one PROMOTION_CHANGED with "value 10 → 15, isActive true → false" (an edit that changes nothing is not logged)');
   ok(pd && /"Audit test 10%" deleted/.test(pd.summary), 'audit: PROMOTION_DELETED');
 
-  // ── 4. The Audit page
+  // ── 4. Every other admin action writes an entry (sales are in Sales, not here)
+  const req = async (m, path, body) => {
+    const r = await fetch(API + path, { method: m, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + at }, body: body && JSON.stringify(body) });
+    const t = await r.text();
+    if (r.status >= 400) throw new Error(`${m} ${path} → ${r.status} ${t.slice(0, 200)}`);
+    return t ? JSON.parse(t) : null;
+  };
+  const stores = await req('GET', '/stores/directory');
+  const [s1, s2] = stores;
+  const prods = (await req('GET', `/products?storeId=${s1.id}&limit=100`)).data;
+  const sellable = prods.find((x) => !x.isIngredient && x.trackStock && x.barcode);
+  const ingredient = (await req('GET', '/products?limit=100')).data.find((x) => x.isIngredient);
+  const cat = await req('POST', '/categories', { name: 'Audit cat' });
+  await req('PATCH', `/categories/${cat.id}`, { name: 'Audit cat 2' });
+  await req('DELETE', `/categories/${cat.id}`);
+  const grp = await req('POST', '/modifiers', { name: 'Audit toppings', minSelect: 0, maxSelect: 2, options: [{ name: 'Jelly', priceDelta: 0.3 }, { name: 'Pearls', priceDelta: 0.5 }] });
+  await req('DELETE', `/modifiers/${grp.id}`);
+  await req('PUT', `/recipes/${sellable.id}`, { items: [{ ingredientId: ingredient.id, quantity: 10 }] });
+  const key = await req('POST', '/api-keys', { name: 'Audit key', scopes: ['products:read'] });
+  await req('DELETE', `/api-keys/${key.id ?? key.apiKey?.id}`);
+  const sup = await req('POST', '/suppliers', { code: 'SUP-AUD', name: 'Audit Supplies' });
+  await req('PATCH', `/suppliers/${sup.id}`, { phone: '012 999 888' });
+  const tr = await req('POST', '/transfers', { fromStoreId: s1.id, toStoreId: s2.id, items: [{ productId: sellable.id, quantity: 1 }] });
+  await req('POST', `/transfers/${tr.id}/cancel`);
+  await req('PUT', `/inventory/${s1.id}/${sellable.id}`, { reorderLevel: 7 });
+  const vb = await req('POST', '/vouchers/batches', { name: 'Audit vouchers', value: 5, count: 2, sold: false });
+  const cards = await req('POST', '/wallet/cards', { count: 1 });
+  const num = cards.cards?.[0]?.cardNumber;
+  const card = (await req('GET', `/wallet/cards?search=${num}&limit=5`)).data.find((c) => c.cardNumber === num);
+  await req('POST', `/wallet/cards/${card.id}/pin`, { pin: '4321' });
+  const cu = await req('POST', '/customers', { name: 'Audit Member', phone: '+855 12 777 666' });
+  await req('PATCH', `/customers/${cu.id}`, { email: 'audit.member@example.com' });
+  await new Promise((r) => setTimeout(r, 500));
+  const all = (await call('GET', '/audit?limit=200', at)).data;
+  const has = (action, re) => all.some((e) => e.action === action && (!re || re.test(e.summary)));
+  const expect = [
+    ['CATEGORY_CREATED', /"Audit cat" created/], ['CATEGORY_CHANGED', /"Audit cat 2": name/], ['CATEGORY_DELETED', /"Audit cat 2" deleted/],
+    ['DRINK_OPTIONS_CREATED', /"Audit toppings" created: Jelly, Pearls/], ['DRINK_OPTIONS_DELETED', /"Audit toppings" deleted/],
+    ['RECIPE_CHANGED', new RegExp(`Recipe of ${sellable.name.replace(/[()]/g, '.')}: 1 ingredient`)],
+    ['API_KEY_CREATED', /"Audit key" created.*scopes: products:read/], ['API_KEY_REVOKED', /"Audit key" revoked/],
+    ['SUPPLIER_CREATED', /SUP-AUD Audit Supplies created/], ['SUPPLIER_CHANGED', /SUP-AUD Audit Supplies: phone/],
+    ['TRANSFER_CREATED', /sent: 1 product/], ['TRANSFER_CANCELLED', /cancelled/],
+    ['STORE_PRODUCT_CHANGED', /reorderLevel 7/],
+    ['VOUCHER_BATCH_CREATED', /2 gift voucher\(s\) "Audit vouchers" of \$5\.00 created \(free\)/],
+    ['WALLET_CARDS_CREATED', /1 wallet card\(s\) created/], ['WALLET_PIN_CHANGED', /PIN of wallet card \d+/],
+    ['CUSTOMER_CREATED', /Member Audit Member .* registered/], ['CUSTOMER_CHANGED', /Audit Member .*: email/],
+  ];
+  for (const [action, re] of expect) ok(has(action, re), `audit: ${action}` + (has(action) && !has(action, re) ? ' (summary: ' + all.find((e) => e.action === action).summary + ')' : ''));
+  const secret = key.key ?? key.apiKey?.key ?? key.token;
+  ok(!!secret && !JSON.stringify(all).includes(secret), 'the new API key itself is not in the audit log');
+  ok(!JSON.stringify(all).includes('4321'), 'the wallet PIN is not in the audit log');
+
+  // ── 5. The Audit page
   const browser = await chromium.launch();
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
   const errors = [];
