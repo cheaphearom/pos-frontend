@@ -515,7 +515,7 @@ const shiftPadValue = computed<number | null>({
   set: (v) => (shiftField.value === 'usd' ? (openingCash.value = v ?? 0) : (openingKhr.value = v ?? 0)),
 });
 /** A popup is open: keyboard shortcuts pause, and the big keyboard under the products hides (popups have their own pad). */
-const anyDialogOpen = computed(() => discardDlg.value || discardApprDlg.value || tableDlg.value || onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value || cashDlg.value || xDlg.value || cashApprDlg.value || approvalDlg.value || printersDlg.value || sellDlg.value || actDlg.value || topDlg.value);
+const anyDialogOpen = computed(() => discardDlg.value || discardApprDlg.value || tableDlg.value || onlineDlg.value || optDlg.value || payment.value || receiptDlg.value || custDlg.value || discDlg.value || lineDlg.value || shiftDlg.value || heldDlg.value || queueDlg.value || cashDlg.value || xDlg.value || cashApprDlg.value || approvalDlg.value || printersDlg.value || sellDlg.value || actDlg.value || topDlg.value || closeDlg.value);
 // Line edit on a touchscreen: the pad fills the box chosen (quantity or discount)
 const lineField = ref<'qty' | 'disc'>('qty');
 const linePadValue = computed<number | null>({
@@ -874,6 +874,45 @@ async function openX() {
 }
 function printX() {
   printElement(document.querySelector('.reg-report'));
+}
+
+// ── Close the shift from the POS (cashiers do not use the Shifts page). The cashier counts the drawer: the boxes
+// start empty, so the count is not copied from what the system expects.
+const closeDlg = ref(false);
+const closeForm = reactive({ cash: null as number | null, khr: null as number | null, note: '', busy: false });
+const closed = ref<any>(null);
+const closeHasKhr = computed(() => !!khrRate.value || Number(shift.value?.openingKhr ?? 0) > 0);
+const canCloseShift = computed(() => !!shift.value && (shift.value.userId === auth.user?.id || auth.isManager));
+const closeField = ref<'usd' | 'khr'>('usd');
+const closePadValue = computed<number | null>({
+  get: () => (closeField.value === 'usd' ? closeForm.cash : closeForm.khr),
+  set: (v) => (closeField.value === 'usd' ? (closeForm.cash = v) : (closeForm.khr = v)),
+});
+function startCloseShift() {
+  if (!online.value) return notify.error('Closing the shift needs the internet, so the count is saved. Try again when online.');
+  if (queue.value.length) return notify.error(`${queue.value.length} offline sale(s) are still uploading. Wait until they are sent, then close the shift.`);
+  Object.assign(closeForm, { cash: null, khr: null, note: '', busy: false });
+  closeField.value = 'usd';
+  closed.value = null;
+  xDlg.value = false;
+  closeDlg.value = true;
+}
+async function doCloseShift() {
+  if (closeForm.cash === null || (closeHasKhr.value && closeForm.khr === null)) return notify.error('Count the drawer and enter what is in it (0 if empty)');
+  closeForm.busy = true;
+  try {
+    closed.value = await api.post(`/shifts/${shift.value.id}/close`, { closingCash: closeForm.cash, closingKhr: closeHasKhr.value ? closeForm.khr ?? 0 : undefined, note: closeForm.note.trim() || undefined });
+    xReport.value = await api.get(`/shifts/${closed.value.id ?? shift.value.id}/x-report`).catch(() => null);
+    notify.success('Shift closed');
+  } catch (e) { notify.error(e); } finally { closeForm.busy = false; }
+}
+/** After closing: no shift on this till until a new one is opened. */
+function finishClose() {
+  closeDlg.value = false;
+  shift.value = null;
+  localStorage.removeItem(`pos.shift:${app.currentStoreId}`);
+  closed.value = null;
+  focusSearch();
 }
 
 /** The discount split for the customer display: promotions, line discounts, the sale discount (the coupon is shown on its own). */
@@ -1326,7 +1365,39 @@ async function logout() {
       :message="`Cash out ${cashForm.currency === 'KHR' ? formatKhr(cashForm.amount) : m(cashForm.amount)}: ${cashForm.reason}`" @approved="(a) => doSaveCash(a.approvalId)" />
     <Dialog v-model:visible="xDlg" header="X report" modal :style="{ width: '440px' }" :breakpoints="{ '480px': '96vw' }">
       <RegisterReport v-if="xReport" :report="xReport" />
-      <div class="row mt no-print" style="justify-content: flex-end"><Button label="Print" icon="pi pi-print" @click="printX" /></div>
+      <div class="row mt no-print" style="justify-content: flex-end">
+        <Button v-if="canCloseShift" label="Close shift" icon="pi pi-stop" severity="danger" outlined data-test="close-shift" @click="startCloseShift" />
+        <Button label="Print" icon="pi pi-print" @click="printX" />
+      </div>
+    </Dialog>
+    <Dialog v-model:visible="closeDlg" :header="closed ? 'Shift closed' : 'Close shift'" modal :closable="!closed" :style="{ width: touch ? '440px' : '400px' }" :breakpoints="{ '480px': '96vw' }" @hide="closed && finishClose()">
+      <form v-if="!closed" class="form" @submit.prevent="doCloseShift">
+        <p class="small muted" style="margin: 0">Count the money in the drawer and enter it. After closing, nothing more can be sold on this shift.</p>
+        <div class="field"><label>{{ closeHasKhr ? 'Dollars counted in the drawer' : 'Cash counted in the drawer' }}</label>
+          <InputNumber v-model="closeForm.cash" :min="0" :min-fraction-digits="2" :max-fraction-digits="2" placeholder="0.00" fluid autofocus data-test="close-usd"
+            :pt="noOsKeyboard" :class="{ 'pad-target': touch && closeField === 'usd' }" @focus="closeField = 'usd'" @click="closeField = 'usd'" /></div>
+        <div v-if="closeHasKhr" class="field"><label>Riel counted</label>
+          <InputNumber v-model="closeForm.khr" :min="0" :step="100" prefix="៛" placeholder="៛0" fluid data-test="close-khr"
+            :pt="noOsKeyboard" :class="{ 'pad-target': touch && closeField === 'khr' }" @focus="closeField = 'khr'" @click="closeField = 'khr'" /></div>
+        <div class="field"><label>Note</label><InputText v-model="closeForm.note" maxlength="200" placeholder="Optional" /></div>
+        <NumPad v-if="touch" v-model="closePadValue" :decimals="closeField === 'usd' ? 2 : 0" enter-label="Close" @enter="doCloseShift" />
+        <div v-if="!touch" class="row" style="justify-content: flex-end"><Button type="submit" label="Close shift" icon="pi pi-stop" severity="danger" :loading="closeForm.busy" data-test="close-confirm" /></div>
+      </form>
+      <div v-else class="form close-result" data-test="close-result">
+        <Message :severity="Number(closed.difference) === 0 ? 'success' : 'warn'" :closable="false">
+          Expected {{ m(closed.expectedCash) }}, counted {{ m(closed.closingCash) }}.
+          {{ Number(closed.difference) === 0 ? 'The drawer balances.' : `Difference: ${m(closed.difference)}` }}
+        </Message>
+        <Message v-if="closed.differenceKhr !== null && closed.differenceKhr !== undefined" :severity="closed.differenceKhr === 0 ? 'success' : 'warn'" :closable="false">
+          Riel: expected {{ formatKhr(closed.expectedKhr) }}, counted {{ formatKhr(closed.closingKhr) }}.
+          {{ closed.differenceKhr === 0 ? 'Balances.' : `Difference: ${formatKhr(closed.differenceKhr)}` }}
+        </Message>
+        <div v-if="xReport" class="no-print close-report"><RegisterReport :report="xReport" /></div>
+        <div class="row" style="justify-content: flex-end">
+          <Button v-if="xReport" label="Print" icon="pi pi-print" severity="secondary" @click="printX" />
+          <Button label="Done" icon="pi pi-check" data-test="close-done" @click="finishClose" />
+        </div>
+      </div>
     </Dialog>
     <Dialog v-model:visible="discardDlg" header="Delete offline sale" modal :style="{ width: '420px' }" :breakpoints="{ '480px': '96vw' }">
       <form v-if="discardItem" class="form" @submit.prevent="askDiscardPin">
@@ -1692,6 +1763,8 @@ async function logout() {
 .opt-mark { font-size: 11px; color: var(--text-3); margin-left: 6px; }
 .wallet-line { color: var(--p-primary-color); font-weight: 600; }
 .coupon-row { color: var(--p-primary-color); font-weight: 600; }
+.close-result > * { flex-shrink: 0; }
+.close-result > .close-report { flex-shrink: 1; max-height: 38vh; overflow: auto; }
 .online-link { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 14px; border-bottom: 1px solid var(--border); font-size: 13px; background: color-mix(in srgb, var(--p-primary-color) 10%, transparent); }
 .online-link span { flex: 1; min-width: 0; }
 .qty { display: flex; align-items: center; gap: 4px; }

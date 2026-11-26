@@ -43,14 +43,18 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   const xr = await text(pos, '[data-test=reg-report]');
   ok(xr.includes('X REPORT') && xr.includes('Ice delivery') && xr.includes('Sokha Chan'), 'X report lists the cash out and the approving manager');
   await shot('z1-x-report');
-  await pos.keyboard.press('Escape'); await pos.waitForTimeout(300);
 
-  // Close the shift (counted $45 / ៛10,000)
-  await pos.goto(W + '/shifts'); await pos.waitForTimeout(1200);
-  await pos.locator('.p-datatable-tbody tr').first().click(); await pos.waitForTimeout(600);
-  await pos.getByRole('button', { name: 'Close shift' }).click(); await pos.waitForTimeout(400);
-  await pos.locator('.p-dialog button[type=submit]').click(); await pos.waitForTimeout(1000);
-  ok((await pos.locator('.p-dialog').textContent()).includes('The drawer balances.'), 'shift closed, drawer balances');
+  // Close the shift on the POS (cashiers do not use the Shifts page): counted $45 / ៛10,000
+  await pos.locator('[data-test=close-shift]').click(); await pos.waitForSelector('[data-test=close-usd]');
+  ok((await pos.locator('[data-test=close-usd] input').inputValue()) === '' && (await pos.locator('[data-test=close-khr] input').inputValue()) === '', 'close shift: the count starts empty (counted, not copied)');
+  await pos.locator('[data-test=close-confirm]').click(); await pos.waitForTimeout(400);
+  ok(await pos.getByText('Count the drawer and enter what is in it').count() > 0, 'closing without a count is refused');
+  await pos.locator('[data-test=close-usd] input').pressSequentially('45'); await pos.locator('[data-test=close-khr] input').pressSequentially('10000');
+  await pos.locator('[data-test=close-confirm]').click(); await pos.waitForSelector('[data-test=close-result]');
+  ok((await pos.locator('[data-test=close-result]').textContent()).includes('The drawer balances.') && (await pos.locator('[data-test=close-result]').textContent()).includes('Balances.'), 'shift closed on the POS, dollars and riel balance');
+  await pos.waitForTimeout(900); await shot('z1b-closed');
+  await pos.locator('[data-test=close-done]').click(); await pos.waitForTimeout(500);
+  ok(await pos.getByRole('button', { name: 'Open shift' }).count() > 0 && pos.url() === W + '/pos', 'back on the POS with no shift: Open shift is offered');
 
   // Manager: Z report
   const mg = watch(await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage());
