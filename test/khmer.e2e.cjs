@@ -38,6 +38,8 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   ok((await page.locator('.p-dialog').textContent()).includes('ចំនួនត្រូវបង់') && (await page.locator('.p-dialog').textContent()).includes('សាច់ប្រាក់ ៛'), 'payment dialog in Khmer');
   await shot('h2-pay');
   await page.locator('.quick button').last().click();
+  // the sale is saved only after "Complete sale" (in Khmer too)
+  await page.locator('[data-test=complete-sale]').click({ timeout: 5000 });
   await page.waitForSelector('.receipt-box'); await page.waitForTimeout(500);
   const rec = (await page.locator('.receipt-box').textContent()).replace(/\s+/g, ' ');
   ok(rec.includes('ទឹកសុទ្ធ 500ml') && rec.includes('សរុប') && rec.includes('សូមអរគុណ'), 'receipt in Khmer with the Khmer product name');
