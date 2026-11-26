@@ -11,11 +11,16 @@ export const useAuth = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => !!user.value);
   const role = computed(() => user.value?.role);
+  /** The owner (super admin). */
   const isAdmin = computed(() => role.value === 'SUPER_ADMIN');
-  const isManager = computed(() => role.value === 'SUPER_ADMIN' || role.value === 'STORE_MANAGER');
+  /** Store manager rights: store managers, admins, super admins. */
+  const isManager = computed(() => role.value === 'SUPER_ADMIN' || role.value === 'ADMIN' || role.value === 'STORE_MANAGER');
 
-  /** True if the user has one of the roles (super admin always passes). */
-  const can = (...roles: Role[]) => !!role.value && (role.value === 'SUPER_ADMIN' || roles.includes(role.value));
+  /** True if the user has one of the roles (super admin always passes; an admin passes manager and cashier pages). */
+  const can = (...roles: Role[]) =>
+    !!role.value && (role.value === 'SUPER_ADMIN' || roles.includes(role.value) || (role.value === 'ADMIN' && roles.some((r) => r === 'STORE_MANAGER' || r === 'CASHIER')));
+  /** An owner area (utils/permissions.ts): super admin, or an admin a super admin allowed it. */
+  const has = (perm: string) => role.value === 'SUPER_ADMIN' || (role.value === 'ADMIN' && !!user.value?.permissions?.includes(perm));
 
   async function login(email: string, password: string) {
     const t = await api.post('/auth/login', { email, password });
@@ -50,7 +55,7 @@ export const useAuth = defineStore('auth', () => {
     cache.clear();
   }
 
-  return { user, isLoggedIn, role, isAdmin, isManager, can, login, loadMe, logout, clear };
+  return { user, isLoggedIn, role, isAdmin, isManager, can, has, login, loadMe, logout, clear };
 });
 
 const ME = 'pos.me';

@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Chea Phearom. All rights reserved.
 // Proprietary and confidential: see the LICENSE file.
-export type Role = 'SUPER_ADMIN' | 'STORE_MANAGER' | 'CASHIER';
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'STORE_MANAGER' | 'CASHIER';
 
 export interface StoreRef { id: string; code: string; name: string }
 
@@ -10,6 +10,8 @@ export interface Me {
   fullName: string;
   role: Role;
   stores: StoreRef[];
+  /** Admins: the owner areas a super admin allowed */
+  permissions?: string[];
   /** Time zone reports count days in */
   timezone?: string;
 }
@@ -52,6 +54,7 @@ export interface Product {
 
 export const ROLE_LABEL: Record<Role, string> = {
   SUPER_ADMIN: 'Super admin',
+  ADMIN: 'Admin',
   STORE_MANAGER: 'Store manager',
   CASHIER: 'Cashier',
 };

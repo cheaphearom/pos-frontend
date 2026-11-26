@@ -156,7 +156,7 @@ const schedDlg = ref(false);
 const schedules = ref<any[]>([]);
 const pendingSchedules = computed(() => schedules.value.filter((x) => x.status === 'PENDING' || x.status === 'RUNNING').length);
 async function loadSchedules() {
-  if (!auth.isAdmin) return;
+  if (!auth.has('products')) return;
   try { schedules.value = await api.get('/products/price-schedules'); } catch { /* the list stays as it was */ }
 }
 async function cancelSchedule(x: any) {
@@ -171,7 +171,7 @@ const changeHint = computed(() => (bulk.type === 'PERCENT' ? '10 = 10% more · -
 const priceText = (v: number | null | undefined) => (v === null || v === undefined ? '—' : money(v, cur.value));
 /** A row click opens the product, but not when the tick box was clicked */
 function onRowClick(e: any) {
-  if (!auth.isAdmin || (e.originalEvent?.target as HTMLElement)?.closest('.p-checkbox, .p-datatable-selection-column, td:first-child input')) return;
+  if (!auth.has('products') || (e.originalEvent?.target as HTMLElement)?.closest('.p-checkbox, .p-datatable-selection-column, td:first-child input')) return;
   edit(e.data);
 }
 const form = reactive(empty());
@@ -362,11 +362,11 @@ onMounted(async () => {
         <div class="sub"><b>{{ list.total.value }}</b> products · each store sells its own products at its own price · showing <b>{{ app.currentStore?.code }}</b></div>
       </div>
       <div class="actions">
-        <Button v-if="auth.isAdmin" label="New ingredient" icon="pi pi-plus" severity="secondary" @click="openNew(true)" />
+        <Button v-if="auth.has('products')" label="New ingredient" icon="pi pi-plus" severity="secondary" @click="openNew(true)" />
         <Button v-if="auth.isManager" label="Price history" icon="pi pi-history" severity="secondary" text data-test="hist-open" @click="openHistory()" />
-        <Button v-if="auth.isAdmin && schedules.length" :label="pendingSchedules ? `Scheduled prices (${pendingSchedules})` : 'Scheduled prices'" icon="pi pi-calendar-clock" severity="secondary" text data-test="sched-open" @click="loadSchedules(); schedDlg = true" />
-        <Button v-if="auth.isAdmin && selected.length" :label="`Change prices (${selected.length})`" icon="pi pi-percentage" severity="secondary" data-test="bulk-open" @click="openBulk" />
-        <Button v-if="auth.isAdmin" label="New product" icon="pi pi-plus" @click="openNew()" />
+        <Button v-if="auth.has('products') && schedules.length" :label="pendingSchedules ? `Scheduled prices (${pendingSchedules})` : 'Scheduled prices'" icon="pi pi-calendar-clock" severity="secondary" text data-test="sched-open" @click="loadSchedules(); schedDlg = true" />
+        <Button v-if="auth.has('products') && selected.length" :label="`Change prices (${selected.length})`" icon="pi pi-percentage" severity="secondary" data-test="bulk-open" @click="openBulk" />
+        <Button v-if="auth.has('products')" label="New product" icon="pi pi-plus" @click="openNew()" />
       </div>
     </div>
 
@@ -388,8 +388,8 @@ onMounted(async () => {
 
       <DataTable :value="list.rows.value" lazy paginator :rows="list.page.rows" :first="list.page.first" :total-records="list.total.value"
         :rows-per-page-options="[25, 50, 100]" :loading="list.loading.value" data-key="id" size="small" striped-rows
-        v-model:selection="selected" @page="list.onPage" @row-click="onRowClick" :row-class="() => (auth.isAdmin ? 'clickable' : '')">
-        <Column v-if="auth.isAdmin" selection-mode="multiple" header-style="width: 2.5rem" />
+        v-model:selection="selected" @page="list.onPage" @row-click="onRowClick" :row-class="() => (auth.has('products') ? 'clickable' : '')">
+        <Column v-if="auth.has('products')" selection-mode="multiple" header-style="width: 2.5rem" />
         <template #empty><span class="muted">No products found</span></template>
         <Column field="name" header="Product">
           <template #body="{ data }">
@@ -427,7 +427,7 @@ onMounted(async () => {
         <Column v-if="auth.isManager" header="" class="right" style="width: 1%; white-space: nowrap">
           <template #body="{ data }">
             <Button icon="pi pi-history" text rounded size="small" severity="secondary" aria-label="Price history" v-tooltip.left="'Price history'" data-test="hist-row" @click.stop="openHistory(data)" />
-            <Button v-if="auth.isAdmin" icon="pi pi-copy" text rounded size="small" severity="secondary" aria-label="Duplicate" v-tooltip.left="'Duplicate'" data-test="dup-row" @click.stop="duplicateRow(data)" />
+            <Button v-if="auth.has('products')" icon="pi pi-copy" text rounded size="small" severity="secondary" aria-label="Duplicate" v-tooltip.left="'Duplicate'" data-test="dup-row" @click.stop="duplicateRow(data)" />
           </template>
         </Column>
         <Column :header="`Sold in ${app.currentStore?.code ?? ''}`" class="right">

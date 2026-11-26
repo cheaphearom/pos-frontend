@@ -126,12 +126,12 @@ onMounted(async () => {
   <div class="page">
     <div class="page-head">
       <div><h1>Promotions</h1><div class="sub">Applied automatically at the POS, also offline · times use the {{ timeZone }} clock</div></div>
-      <div class="actions"><Button v-if="auth.isAdmin" label="New promotion" icon="pi pi-plus" @click="open()" /></div>
+      <div class="actions"><Button v-if="auth.has('marketing')" label="New promotion" icon="pi pi-plus" @click="open()" /></div>
     </div>
     <div class="card">
       <div class="toolbar"><IconField><InputIcon class="pi pi-search" /><InputText v-model="list.filters.search" placeholder="Name" /></IconField></div>
       <DataTable :value="list.rows.value" lazy paginator :rows="list.page.rows" :first="list.page.first" :total-records="list.total.value"
-        :loading="list.loading.value" size="small" @page="list.onPage" @row-click="auth.isAdmin && open($event.data)" :row-class="() => (auth.isAdmin ? 'clickable' : '')">
+        :loading="list.loading.value" size="small" @page="list.onPage" @row-click="auth.has('marketing') && open($event.data)" :row-class="() => (auth.has('marketing') ? 'clickable' : '')">
         <template #empty><span class="muted">No promotions yet</span></template>
         <Column header="Name"><template #body="{ data }"><b>{{ data.name }}</b><div class="small muted">{{ data.description }}</div></template></Column>
         <Column header="Deal"><template #body="{ data }">{{ describePromotion(data) }}</template></Column>
@@ -139,7 +139,7 @@ onMounted(async () => {
         <Column header="Stores"><template #body="{ data }">{{ storesText(data) }}</template></Column>
         <Column header="When"><template #body="{ data }"><span class="small">{{ whenText(data) }}</span></template></Column>
         <Column header="Status"><template #body="{ data }"><Tag :value="state(data).l" :severity="state(data).s" /></template></Column>
-        <Column v-if="auth.isAdmin" style="width: 70px"><template #body="{ data }"><ToggleSwitch :model-value="data.isActive" @click.stop @update:model-value="toggle(data)" /></template></Column>
+        <Column v-if="auth.has('marketing')" style="width: 70px"><template #body="{ data }"><ToggleSwitch :model-value="data.isActive" @click.stop @update:model-value="toggle(data)" /></template></Column>
       </DataTable>
     </div>
 

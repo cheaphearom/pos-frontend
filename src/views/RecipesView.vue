@@ -135,22 +135,22 @@ onMounted(() => {
       <template v-if="rec">
         <h3 v-if="rec.madeInHouse">Batch recipe <span class="small muted">(one batch = {{ Number(rec.batchYield) }} {{ rec.unit }}; used when baked on the Production page)</span></h3>
         <h3 v-else>Base recipe <span class="small muted">(one {{ rec.unit }}, default size)</span></h3>
-        <ProductPicker v-if="auth.isAdmin" kind="ingredient" placeholder="Add an ingredient…" @select="addIngredient" />
+        <ProductPicker v-if="auth.has('catalogue')" kind="ingredient" placeholder="Add an ingredient…" @select="addIngredient" />
         <DataTable :value="items" size="small" class="mt">
           <template #empty><span class="muted">No ingredients yet. Add beans, milk, cups…</span></template>
           <Column header="Ingredient"><template #body="{ data }">{{ ingName(data.ingredientId) }}</template></Column>
           <Column header="Quantity" style="width: 170px">
             <template #body="{ data }">
-              <div class="row"><InputNumber v-model="data.quantity" :min="0" :max-fraction-digits="4" size="small" :input-style="{ width: '90px' }" :disabled="!auth.isAdmin" /><span class="muted small">{{ ingUnit(data.ingredientId) }}</span></div>
+              <div class="row"><InputNumber v-model="data.quantity" :min="0" :max-fraction-digits="4" size="small" :input-style="{ width: '90px' }" :disabled="!auth.has('catalogue')" /><span class="muted small">{{ ingUnit(data.ingredientId) }}</span></div>
             </template>
           </Column>
           <Column header="Cost" class="right"><template #body="{ data }">{{ c4(data.quantity * Number(ingredients.find((x) => x.id === data.ingredientId)?.costPrice ?? 0)) }}</template></Column>
-          <Column v-if="auth.isAdmin" style="width: 40px"><template #body="{ index }"><Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Remove" @click="items.splice(index, 1)" /></template></Column>
+          <Column v-if="auth.has('catalogue')" style="width: 40px"><template #body="{ index }"><Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Remove" @click="items.splice(index, 1)" /></template></Column>
         </DataTable>
         <div class="row mt" style="justify-content: space-between">
           <span v-if="rec.madeInHouse">Batch cost <b>{{ c4(baseCost) }}</b> · per piece <b>{{ c4(baseCost / (Number(rec.batchYield) || 1)) }}</b> · price {{ money(rec.sellPrice) }}</span>
           <span v-else>Base cost <b>{{ c4(baseCost) }}</b> · price {{ money(rec.sellPrice) }}</span>
-          <Button v-if="auth.isAdmin" label="Save recipe" icon="pi pi-check" :loading="saving" @click="saveRecipe" />
+          <Button v-if="auth.has('catalogue')" label="Save recipe" icon="pi pi-check" :loading="saving" @click="saveRecipe" />
         </div>
 
         <template v-if="!rec.madeInHouse">
@@ -161,7 +161,7 @@ onMounted(() => {
           <div v-for="o in g.options" :key="o.id" class="opt row">
             <span class="oname">{{ o.name }}</span>
             <span class="small muted" style="flex: 1">{{ o.effects.length ? o.effects.map(describeEffect).join(' · ') : 'no change' }}</span>
-            <Button v-if="auth.isAdmin" label="Edit" text size="small" @click="editEffects(o)" />
+            <Button v-if="auth.has('catalogue')" label="Edit" text size="small" @click="editEffects(o)" />
           </div>
         </div>
 
