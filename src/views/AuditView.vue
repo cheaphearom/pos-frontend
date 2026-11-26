@@ -21,12 +21,18 @@ const SEVERITY: Record<string, string> = {
   VOID: 'danger', REFUND: 'danger', APPROVAL_DENIED: 'danger', LOGIN_FAILED: 'danger', WALLET_ADJUSTED: 'danger',
   DISCOUNT_APPROVED: 'warn', APPROVAL_GRANTED: 'warn', POINTS_ADJUSTED: 'warn', STOCK_ADJUSTED: 'warn', PRODUCT_CHANGED: 'warn', WALLET_BLOCKED: 'warn',
   DISCOUNT: 'info', LOGIN: 'secondary',
+  SHIFT_CLOSED_DIFFERENCE: 'danger', SHIFT_CLOSED: 'secondary', PROMOTION_CREATED: 'warn', PROMOTION_CHANGED: 'warn', PROMOTION_DELETED: 'warn',
+  API_KEY_CREATED: 'danger', API_KEY_REVOKED: 'danger', VOUCHER_VOIDED: 'danger', WALLET_PIN_CHANGED: 'warn', WALLET_CARD_REPLACED: 'warn',
+  CATEGORY_DELETED: 'warn', DRINK_OPTIONS_DELETED: 'warn', DISPLAY_SLIDE_DELETED: 'warn', PO_CANCELLED: 'warn', TRANSFER_CANCELLED: 'warn', PRODUCTION_CANCELLED: 'warn',
+  STORE_PRODUCT_CHANGED: 'warn', RECIPE_CHANGED: 'info', DRINK_OPTIONS_CHANGED: 'info', SHIFT_OPENED: 'secondary',
 };
-const QUICK = [
+const QUICK: { label: string; v: string | null; all?: boolean }[] = [
   { label: 'All', v: null },
   { label: 'Discounts', v: 'DISCOUNT_APPROVED' },
   { label: 'Refunds', v: 'REFUND' },
   { label: 'Voids', v: 'VOID' },
+  { label: 'Cash differences', v: 'SHIFT_CLOSED_DIFFERENCE' },
+  { label: 'Promotion changes', v: 'PROMOTION_CHANGED', all: true }, // promotions usually cover several stores
   { label: 'Wrong PINs', v: 'APPROVAL_DENIED' },
   { label: 'Failed logins', v: 'LOGIN_FAILED' },
 ];
@@ -42,13 +48,13 @@ onMounted(async () => {
 <template>
   <div class="page">
     <div class="page-head">
-      <div><h1>Audit log</h1><div class="sub">Who did what: discounts above the limit, refunds, voids, manager PINs, price and stock changes, logins</div></div>
+      <div><h1>Audit log</h1><div class="sub">Who did what: every change to products, prices, stock, promotions, coupons, cash and settings, refunds, voids, manager PINs, logins (sales are in Sales)</div></div>
       <SelectButton v-model="scope" :options="[{ l: 'This store', v: 'store' }, { l: 'All my stores', v: 'all' }]" option-label="l" option-value="v" :allow-empty="false" />
     </div>
     <div class="card">
       <div class="toolbar" style="flex-wrap: wrap">
         <div class="row" style="gap: 4px; flex-wrap: wrap">
-          <Button v-for="q in QUICK" :key="q.label" :label="q.label" size="small" :text="list.filters.action !== q.v" :severity="list.filters.action === q.v ? undefined : 'secondary'" @click="list.filters.action = q.v" />
+          <Button v-for="q in QUICK" :key="q.label" :label="q.label" size="small" :text="list.filters.action !== q.v" :severity="list.filters.action === q.v ? undefined : 'secondary'" @click="list.filters.action = q.v; if (q.all) scope = 'all'" />
         </div>
         <Select v-model="list.filters.action" :options="actions" :option-label="(a: string) => humanize(a)" placeholder="Any action" show-clear filter size="small" style="width: 200px" />
         <IconField><InputIcon class="pi pi-search" /><InputText v-model="list.filters.search" placeholder="Receipt, user, text" size="small" /></IconField>
