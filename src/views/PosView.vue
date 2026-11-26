@@ -33,7 +33,7 @@ import { useCatalog, type CatalogItem } from '@/pos/catalog';
 import { isNetworkError, online } from '@/pos/network';
 import { PricingError, priceCart, pointsValue } from '@/pos/pricing';
 import { applyPromotions, type PromoRule } from '@shared/promotions';
-import { couponDiscount, type CouponRule } from '@shared/coupons';
+import { couponForLines, type CouponRule } from '@shared/coupons';
 import { enqueue, loadQueue, queue, removeFromQueue, reportNow, retryQueued, syncingQueue, syncQueue } from '@/pos/queue';
 import { nextOfflineSeq, offlineReceiptNo, tillCode, tillId } from '@/pos/till';
 import { uuid } from '@/pos/uuid';
@@ -159,11 +159,10 @@ const lineDiscount = (l: Line, i: number) => {
 
 // ───────────── Totals (same maths as the server) ─────────────
 const taxRate = computed(() => Number(store.value?.taxRate ?? 0));
-/** Coupon on the sale value after line discounts and promotions (same file as the server). */
+/** Coupon on the lines after line discounts and promotions; a coupon for some products / categories counts only those (same file as the server). */
 const coupon = computed(() => {
   if (!cart.coupon || !cart.lines.length) return { discount: 0, error: '' };
-  const base = cart.lines.reduce((t, l, i) => t + r2(Number(l.price) * l.quantity) - lineDiscount(l, i), 0);
-  const r = couponDiscount(cart.coupon, r2(base));
+  const r = couponForLines(cart.coupon, cart.lines.map((l, i) => ({ productId: l.productId, categoryId: l.categoryId ?? null, net: r2(r2(Number(l.price) * l.quantity) - lineDiscount(l, i)) })));
   return { discount: r.discount, error: r.error ?? '' };
 });
 const priced = computed(() => {
@@ -308,7 +307,7 @@ async function scanCode(code: string) {
     }
     if (r.kind === 'voucher') return useVoucher(r.voucher);
     if (r.kind === 'coupon') {
-      cart.coupon = { ...r.coupon, value: r.coupon.value, minSpend: r.coupon.minSpend, maxDiscount: r.coupon.maxDiscount };
+      cart.coupon = { ...r.coupon, value: r.coupon.value, minSpend: r.coupon.minSpend, maxDiscount: r.coupon.maxDiscount, productIds: r.coupon.productIds ?? [], categoryIds: r.coupon.categoryIds ?? [] };
       notify.success(`Coupon ${r.coupon.code}`, r.coupon.name);
     }
   } catch (e) {
@@ -484,7 +483,7 @@ function cartSummary(c: Cart) {
   try {
     const pr = applyPromotions(c.lines.map((l) => ({ productId: l.productId, categoryId: l.categoryId ?? null, price: l.price, quantity: l.quantity })), promoData.value.promotions, app.currentStoreId!, now.value, promoData.value.timeZone);
     const ld = c.lines.map((l, i) => { const gross = r2(Number(l.price) * l.quantity); const promo = pr[i]?.discount ?? 0; return r2(promo + Math.min(l.discount || 0, r2(gross - promo))); });
-    const couponOff = c.coupon ? couponDiscount(c.coupon, r2(c.lines.reduce((t, l, i) => t + r2(Number(l.price) * l.quantity) - ld[i], 0))).discount : 0;
+    const couponOff = c.coupon ? couponForLines(c.coupon, c.lines.map((l, i) => ({ productId: l.productId, categoryId: l.categoryId ?? null, net: r2(r2(Number(l.price) * l.quantity) - ld[i]) }))).discount : 0;
     const t = priceCart(c.lines.map((l, i) => ({ price: l.price, quantity: l.quantity, discount: ld[i], taxable: l.taxable })), taxRate.value, { amount: r2((c.discount || 0) + couponOff) || undefined, percent: c.discountPercent || undefined });
     const points = c.customer && c.redeemPoints ? pointsValue(c.redeemPoints, loyalty.value.pointValue) : 0;
     return { subtotal: Number(t.subtotal), discount: Number(t.discountTotal), tax: Number(t.taxTotal), total: r2(Number(t.total) - points), points, lineDiscount: ld, promo: pr };
