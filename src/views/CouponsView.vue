@@ -3,6 +3,8 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { describeCoupon } from '@shared/coupons';
 import { api } from '@/api/client';
+import type { Category, Product } from '@/api/types';
+import ProductPicker from '@/components/ProductPicker.vue';
 import { useNotify } from '@/composables/useNotify';
 import { usePagedList } from '@/composables/usePagedList';
 import { useApp } from '@/stores/app';
@@ -17,6 +19,8 @@ const cur = computed(() => app.currentStore?.currency ?? 'USD');
 const m = (v: any) => money(v, cur.value);
 const list = usePagedList('/coupons', { search: '' });
 const allStores = ref<any[]>([]);
+const categories = ref<Category[]>([]);
+const catName = (id: string) => categories.value.find((c) => c.id === id)?.name ?? '(deleted category)';
 
 const state = (c: any) => {
   if (!c.isActive) return { l: 'Off', s: 'secondary' };
@@ -31,17 +35,23 @@ const dlg = ref(false);
 const saving = ref(false);
 const empty = () => ({
   name: '', type: 'PERCENT', value: 10, minSpend: 0, maxDiscount: null as number | null, storeIds: [] as string[],
+  items: 'all' as 'all' | 'some', categoryIds: [] as string[], products: [] as { id: string; name: string }[],
   startsAt: null as Date | null, endsAt: null as Date | null, usageLimit: null as number | null, perCustomerLimit: null as number | null,
   membersOnly: false, mode: 'shared' as 'shared' | 'unique', sharedCode: '', uniqueCount: 100, prefix: '',
 });
 const form = reactive(empty());
-const preview = computed(() => describeCoupon({ type: form.type as any, value: form.value, minSpend: form.minSpend, maxDiscount: form.maxDiscount }));
+const preview = computed(() => describeCoupon({ type: form.type as any, value: form.value, minSpend: form.minSpend, maxDiscount: form.maxDiscount, productIds: form.items === 'some' ? form.products.map((x) => x.id) : [], categoryIds: form.items === 'some' ? form.categoryIds : [] }));
+function addProduct(p: Product) {
+  if (!form.products.some((x) => x.id === p.id)) form.products.push({ id: p.id, name: p.name });
+}
 async function create() {
+  if (form.items === 'some' && !form.products.length && !form.categoryIds.length) return notify.error('Choose the categories or products the coupon is for');
   saving.value = true;
   try {
     const body: any = {
       name: form.name, type: form.type, value: form.value, minSpend: form.minSpend || undefined,
       maxDiscount: form.type === 'PERCENT' && form.maxDiscount ? form.maxDiscount : undefined, storeIds: form.storeIds,
+      productIds: form.items === 'some' ? form.products.map((x) => x.id) : [], categoryIds: form.items === 'some' ? form.categoryIds : [],
       startsAt: form.startsAt?.toISOString(), endsAt: form.endsAt?.toISOString(),
       usageLimit: form.usageLimit || undefined, perCustomerLimit: form.perCustomerLimit || undefined, membersOnly: form.membersOnly,
       ...(form.mode === 'shared' ? { sharedCode: form.sharedCode.trim().toUpperCase() } : { uniqueCount: form.uniqueCount, prefix: form.prefix || undefined }),
@@ -56,12 +66,14 @@ async function create() {
 
 // ── Detail
 const detail = ref<any>(null);
+const detailProducts = ref<string[]>([]);
 const codes = ref<any[]>([]);
 const show = ref(false);
 const more = ref(100);
 async function open(c: any) {
   try {
     [detail.value, codes.value] = await Promise.all([api.get(`/coupons/${c.id}`), api.get(`/coupons/${c.id}/codes`, { limit: 50 }).then((r) => r.data)]);
+    detailProducts.value = await Promise.all((detail.value.productIds ?? []).map((id: string) => api.get<any>(`/products/${id}`).then((x) => x.name).catch(() => '(deleted product)')));
     show.value = true;
   } catch (e) { notify.error(e); }
 }
@@ -82,7 +94,7 @@ async function toggle(c: any) {
 }
 onMounted(async () => {
   list.load();
-  allStores.value = await api.get('/stores/directory');
+  [allStores.value, categories.value] = await Promise.all([api.get('/stores/directory'), api.get('/categories')]);
 });
 </script>
 
@@ -133,6 +145,23 @@ onMounted(async () => {
         </div>
         <label class="row"><ToggleSwitch v-model="form.membersOnly" /> Members only</label>
         <div class="field"><label>Stores</label><MultiSelect v-model="form.storeIds" :options="allStores" option-label="name" option-value="id" display="chip" placeholder="All stores" /></div>
+        <div class="field" data-test="coupon-items">
+          <label>Items</label>
+          <SelectButton v-model="form.items" :options="[{ l: 'All items', v: 'all' }, { l: 'Only some categories / products', v: 'some' }]" option-label="l" option-value="v" :allow-empty="false" />
+          <span class="hint">{{ form.items === 'all' ? 'The discount is on the whole sale.' : 'The discount and the minimum spend count only these items; the rest of the sale pays full price.' }}</span>
+        </div>
+        <template v-if="form.items === 'some'">
+          <div class="field"><label>Categories <span class="hint">(includes their sub-categories)</span></label><MultiSelect v-model="form.categoryIds" :options="categories" option-label="name" option-value="id" display="chip" filter placeholder="None" /></div>
+          <div class="field">
+            <label>Products</label>
+            <ProductPicker :store-id="app.currentStoreId" placeholder="Add a product…" @select="addProduct" />
+            <div class="row" style="flex-wrap: wrap; gap: 6px; margin-top: 4px">
+              <Tag v-for="(p, i) in form.products" :key="p.id" severity="secondary">
+                {{ p.name }} <i class="pi pi-times" style="cursor: pointer; margin-left: 6px; font-size: 10px" @click="form.products.splice(i, 1)" />
+              </Tag>
+            </div>
+          </div>
+        </template>
         <div class="form-2">
           <div class="field"><label>Valid from</label><DatePicker v-model="form.startsAt" show-time hour-format="24" show-button-bar placeholder="Now" /></div>
           <div class="field"><label>Valid until</label><DatePicker v-model="form.endsAt" show-time hour-format="24" show-button-bar placeholder="No end" /></div>
@@ -154,6 +183,13 @@ onMounted(async () => {
           <dt>Members only</dt><dd>{{ detail.membersOnly ? 'Yes' : 'No' }}</dd>
           <dt>Per customer</dt><dd>{{ detail.perCustomerLimit ?? 'No limit' }}</dd>
           <dt>Stores</dt><dd>{{ detail.storeIds.length ? detail.storeIds.map((id: string) => allStores.find((s) => s.id === id)?.code).join(', ') : 'All' }}</dd>
+          <dt>Items</dt><dd data-test="coupon-items-detail">
+            <template v-if="!detail.categoryIds?.length && !detail.productIds?.length">All items</template>
+            <template v-else>
+              <div v-if="detail.categoryIds.length">Categories: {{ detail.categoryIds.map(catName).join(', ') }} <span class="muted small">(and their sub-categories)</span></div>
+              <div v-if="detailProducts.length">Products: {{ detailProducts.join(', ') }}</div>
+            </template>
+          </dd>
         </dl>
         <div class="row mt" style="flex-wrap: wrap">
           <Button label="Download codes (CSV)" icon="pi pi-download" severity="secondary" @click="exportCodes(detail)" />
