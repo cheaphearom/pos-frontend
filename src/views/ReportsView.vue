@@ -6,10 +6,12 @@ import DateRange from '@/components/DateRange.vue';
 import SimpleChart from '@/components/SimpleChart.vue';
 import { useNotify } from '@/composables/useNotify';
 import { useApp } from '@/stores/app';
+import { useAuth } from '@/stores/auth';
 import { downloadCsv } from '@/utils/csv';
-import { businessDay, humanize, money, num } from '@/utils/format';
+import { businessDay, date, dateTime, humanize, money, num } from '@/utils/format';
 
 const app = useApp();
+const auth = useAuth();
 const notify = useNotify();
 const f = reactive({ from: businessDay(29) as string | null, to: businessDay(0) as string | null, scope: 'store' as 'store' | 'all', groupBy: 'day' });
 const loading = ref(false);
@@ -25,7 +27,7 @@ async function load() {
     const p = params.value;
     const prev = prevRange.value;
     const pp = prev ? { ...p, from: prev.from, to: prev.to } : null;
-    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production, hours, categories, prevSummary, prevProfit, options, orderTypes] = await Promise.all([
+    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production, hours, categories, prevSummary, prevProfit, options, orderTypes, control, slow] = await Promise.all([
       api.get('/reports/sales-summary', { ...p, groupBy: f.groupBy }),
       api.get('/reports/profit', { ...p, groupBy: f.groupBy }),
       api.get('/reports/top-products', { ...p, limit: 20 }),
@@ -44,8 +46,10 @@ async function load() {
       pp ? api.get('/reports/profit', { ...pp, groupBy: 'store' }) : null,
       api.get('/reports/options', p),
       api.get('/reports/order-types', p),
+      api.get('/reports/control', p),
+      api.get('/reports/slow-movers', { ...p, limit: 30 }),
     ]);
-    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production, hours, categories, prevSummary, prevProfit, options, orderTypes });
+    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production, hours, categories, prevSummary, prevProfit, options, orderTypes, control, slow });
   } catch (e) {
     notify.error(e);
   } finally {
@@ -137,6 +141,47 @@ function exportOptions() {
   ], (r.options?.data ?? []).flatMap((g: any) => g.options.map((o: any) => ({ group: g.group, ...o }))));
 }
 
+// ── Control
+const EVENT: Record<string, { l: string; s: string }> = {
+  DISCOUNT: { l: 'Discount', s: 'info' }, DISCOUNT_APPROVED: { l: 'Discount (PIN)', s: 'info' }, REFUND: { l: 'Refund', s: 'warn' },
+  VOID: { l: 'Void', s: 'danger' }, APPROVAL_DENIED: { l: 'Wrong PIN', s: 'danger' },
+};
+const eventFilter = ref<string>('all');
+const events = computed(() => (r.control?.events ?? []).filter((e: any) => eventFilter.value === 'all' || (eventFilter.value === 'DISCOUNT' ? e.action.startsWith('DISCOUNT') : e.action === eventFilter.value)));
+const nothingToCheck = computed(() => {
+  const t = r.control?.totals;
+  return !t || !(t.discounts || t.refunds || t.voids || t.wrongPins);
+});
+function exportControl() {
+  downloadCsv(`control-${f.from}-${f.to}.csv`, [
+    { key: 'at', label: 'Time' }, { key: 'store', label: 'Store' }, { key: 'user', label: 'Cashier' }, { key: 'action', label: 'What' }, { key: 'receipt', label: 'Receipt' },
+    { key: 'amount', label: 'Amount' }, { key: 'approvedBy', label: 'Approved by' }, { key: 'summary', label: 'Details' },
+  ], r.control.events);
+}
+function exportSlow() {
+  downloadCsv(`slow-movers-${f.from}-${f.to}.csv`, [
+    { key: 'sku', label: 'SKU' }, { key: 'name', label: 'Product' }, { key: 'category', label: 'Category' }, { key: 'quantity', label: 'Sold' }, { key: 'revenue', label: 'Revenue' },
+    { key: 'lastSold', label: 'Last sold' }, { key: 'stock', label: 'In stock' }, { key: 'stockValue', label: 'Stock value (cost)' },
+  ], r.slow.data);
+}
+
+// ── Nightly Telegram summary
+const sumDlg = ref(false);
+const summary = ref<any>(null);
+const sumBusy = ref(false);
+async function openSummary() {
+  sumDlg.value = true;
+  summary.value = null;
+  try { summary.value = await api.get('/reports/daily-summary'); } catch (e) { notify.error(e); }
+}
+async function sendSummary() {
+  sumBusy.value = true;
+  try {
+    await api.post('/reports/daily-summary/send');
+    notify.success('Sent to Telegram', `Summary for ${summary.value?.date ?? 'today'}`);
+  } catch (e) { notify.error(e); } finally { sumBusy.value = false; }
+}
+
 function exportCategories() {
   downloadCsv(`categories-${f.from}-${f.to}.csv`, [
     { key: 'name', label: 'Category' }, { key: 'quantity', label: 'Quantity' }, { key: 'revenue', label: 'Revenue (ex tax)' }, { key: 'sharePercent', label: 'Share %' },
@@ -165,6 +210,7 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
   <div class="page">
     <div class="page-head">
       <div><h1>Reports</h1><div class="sub">{{ f.scope === 'store' ? app.currentStore?.name : 'All my stores' }} · {{ f.from }} to {{ f.to }}</div></div>
+      <div class="actions"><Button label="Telegram summary" icon="pi pi-send" severity="secondary" data-test="summary-open" @click="openSummary" /></div>
     </div>
     <div class="card toolbar" style="position: sticky; top: 60px; z-index: 3">
       <DateRange v-model:from="f.from" v-model:to="f.to" />
@@ -297,6 +343,60 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
           <Column field="name" header="Drink" />
           <Column v-for="c in sizeCols" :key="c" :header="c" class="right"><template #body="{ data }"><span :class="{ muted: !data.sizes[c] }">{{ data.sizes[c] ? num(data.sizes[c], 3) : '–' }}</span></template></Column>
           <Column header="Total" class="right"><template #body="{ data }"><b>{{ num(data.total, 3) }}</b></template></Column>
+        </DataTable>
+      </div>
+
+      <div class="card mt" data-test="control">
+        <div class="row" style="justify-content: space-between; flex-wrap: wrap">
+          <h3>Control: discounts, refunds and voids</h3>
+          <Button label="CSV" icon="pi pi-download" size="small" text :disabled="!r.control.events.length" @click="exportControl" />
+        </div>
+        <div v-if="nothingToCheck" class="muted"><i class="pi pi-check-circle pos" /> No manual discounts, refunds, voids or wrong manager PINs in this period.</div>
+        <template v-else>
+          <div class="ctl-chips">
+            <span><b>{{ r.control.totals.discounts }}</b> manual discount{{ r.control.totals.discounts === 1 ? '' : 's' }} · {{ m(r.control.totals.discountAmount) }}</span>
+            <span><b>{{ r.control.totals.refunds }}</b> refund{{ r.control.totals.refunds === 1 ? '' : 's' }} · {{ m(r.control.totals.refundAmount) }}</span>
+            <span><b>{{ r.control.totals.voids }}</b> void{{ r.control.totals.voids === 1 ? '' : 's' }} · {{ m(r.control.totals.voidAmount) }}</span>
+            <span :class="{ neg: r.control.totals.wrongPins }"><b>{{ r.control.totals.wrongPins }}</b> wrong manager PIN{{ r.control.totals.wrongPins === 1 ? '' : 's' }}</span>
+          </div>
+          <DataTable :value="r.control.cashiers" size="small" class="mt">
+            <Column field="name" header="Cashier" />
+            <Column header="Their sales" class="right"><template #body="{ data }">{{ data.salesCount }} · {{ m(data.salesTotal) }}</template></Column>
+            <Column header="Discounts" class="right"><template #body="{ data }"><template v-if="data.discounts">{{ data.discounts }} · {{ m(data.discountAmount) }}<div v-if="data.discountsApproved" class="small muted">{{ data.discountsApproved }} with a manager PIN</div></template><span v-else class="muted">–</span></template></Column>
+            <Column header="Refunds" class="right"><template #body="{ data }"><template v-if="data.refunds">{{ data.refunds }} · {{ m(data.refundAmount) }}</template><span v-else class="muted">–</span></template></Column>
+            <Column header="Voids" class="right"><template #body="{ data }"><template v-if="data.voids">{{ data.voids }} · {{ m(data.voidAmount) }}</template><span v-else class="muted">–</span></template></Column>
+            <Column header="Refunds + voids" class="right"><template #body="{ data }"><b :class="{ neg: data.refundPercent >= 3 }">{{ data.refundPercent }}%</b><div class="small muted">of their sales</div></template></Column>
+            <Column header="Wrong PINs" class="right"><template #body="{ data }"><span :class="{ neg: data.wrongPins }">{{ data.wrongPins || '–' }}</span></template></Column>
+          </DataTable>
+          <div v-if="r.control.approvers.length" class="small mt"><b>Approved by:</b>
+            <span v-for="(a, i) in r.control.approvers" :key="a.name">{{ i ? ' · ' : ' ' }}{{ a.name }} ({{ [a.discounts && `${a.discounts} discount${a.discounts > 1 ? 's' : ''}`, a.refunds && `${a.refunds} refund${a.refunds > 1 ? 's' : ''}`, a.voids && `${a.voids} void${a.voids > 1 ? 's' : ''}`].filter(Boolean).join(', ') }})</span>
+          </div>
+          <div class="row mt" style="justify-content: space-between; flex-wrap: wrap">
+            <b class="small">What happened</b>
+            <SelectButton v-model="eventFilter" size="small" :options="[{ l: 'All', v: 'all' }, { l: 'Discounts', v: 'DISCOUNT' }, { l: 'Refunds', v: 'REFUND' }, { l: 'Voids', v: 'VOID' }, { l: 'Wrong PINs', v: 'APPROVAL_DENIED' }]" option-label="l" option-value="v" :allow-empty="false" />
+          </div>
+          <DataTable :value="events" size="small" class="mt" scrollable scroll-height="320px">
+            <template #empty><span class="muted">Nothing of this kind</span></template>
+            <Column header="Time"><template #body="{ data }"><span class="small">{{ dateTime(data.at) }}</span></template></Column>
+            <Column header="Cashier"><template #body="{ data }">{{ data.user }}<span v-if="f.scope === 'all' && data.store" class="muted small"> · {{ data.store }}</span></template></Column>
+            <Column header="What"><template #body="{ data }"><Tag :value="EVENT[data.action]?.l ?? data.action" :severity="EVENT[data.action]?.s" /></template></Column>
+            <Column header="Amount" class="right"><template #body="{ data }">{{ data.amount != null ? m(data.amount) : '' }}</template></Column>
+            <Column header="Details"><template #body="{ data }"><span class="small">{{ data.summary }}</span></template></Column>
+          </DataTable>
+        </template>
+      </div>
+
+      <div class="card mt" data-test="slow-movers">
+        <div class="row" style="justify-content: space-between"><h3>Slow movers</h3><Button label="CSV" icon="pi pi-download" size="small" text :disabled="!r.slow.data.length" @click="exportSlow" /></div>
+        <p class="small muted" style="margin: 0 0 8px">Products this store sells that sold the least in the period, and the money waiting on the shelf. Think of a promotion, a better place, ordering less, or stopping them.</p>
+        <DataTable :value="r.slow.data" size="small" scrollable scroll-height="380px">
+          <template #empty><span class="muted">No products</span></template>
+          <Column header="Product"><template #body="{ data }">{{ data.name }} <Tag v-if="data.isNew" v-tooltip="'Added during this period'" value="new" severity="info" /><div class="small muted mono">{{ data.sku }}<template v-if="data.category"> · {{ data.category }}</template></div></template></Column>
+          <Column header="Sold" class="right"><template #body="{ data }"><b :class="{ neg: !data.quantity }">{{ num(data.quantity, 3) }}</b></template></Column>
+          <Column header="Revenue" class="right"><template #body="{ data }">{{ m(data.revenue) }}</template></Column>
+          <Column header="Last sold"><template #body="{ data }"><span class="small" :class="{ neg: !data.lastSold }">{{ data.lastSold ? date(data.lastSold) : 'never' }}</span></template></Column>
+          <Column header="In stock" class="right"><template #body="{ data }">{{ data.stock == null ? 'not tracked' : num(data.stock, 3) + ' ' + data.unit }}</template></Column>
+          <Column header="Stock value (cost)" class="right"><template #body="{ data }">{{ data.stockValue == null ? '' : m(data.stockValue) }}</template></Column>
         </DataTable>
       </div>
 
@@ -449,6 +549,31 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
         </div>
       </div>
     </template>
+
+    <Dialog v-model:visible="sumDlg" header="Nightly Telegram summary" modal :style="{ width: '560px' }" :breakpoints="{ '600px': '96vw' }">
+      <div v-if="!summary" class="muted"><i class="pi pi-spin pi-spinner" /> Loading…</div>
+      <template v-else>
+        <p v-if="summary.configured && summary.at" class="small" style="margin-top: 0">
+          <i class="pi pi-check-circle pos" /> Sent every day at <b>{{ summary.at }}</b> ({{ summary.timezone }}) to your Telegram chat.
+          <template v-if="summary.sent?.at"> Today's was sent at {{ dateTime(summary.sent.at) }}.</template>
+          <span v-else-if="summary.sent?.error" class="neg"> Today's could not be sent: {{ summary.sent.error }}</span>
+        </p>
+        <p v-else-if="summary.configured" class="small" style="margin-top: 0">Telegram is set up, automatic sending is off (DAILY_SUMMARY_AT=off). You can still send it with the button.</p>
+        <div v-else class="setup small">
+          <b>Not set up yet.</b> On the server, add to <span class="mono">~/pos-backend/deploy/.env</span> (the same bot and chat as the ML detector work):
+          <pre>TELEGRAM_BOT_TOKEN=…
+TELEGRAM_CHAT_ID=…
+DAILY_SUMMARY_AT=22:00</pre>
+          then <span class="mono">cd ~/pos-backend/deploy &amp;&amp; docker compose up -d</span>.
+        </div>
+        <div class="small muted" style="margin: 10px 0 4px">Today's message (all stores):</div>
+        <pre class="tg" data-test="summary-text">{{ summary.text }}</pre>
+      </template>
+      <template #footer>
+        <Button label="Close" severity="secondary" text @click="sumDlg = false" />
+        <Button v-if="auth.isAdmin" label="Send now" icon="pi pi-send" :loading="sumBusy" :disabled="!summary?.configured" data-test="summary-send" @click="sendSummary" />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -471,4 +596,9 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
 .bar { height: 10px; border-radius: 5px; background: var(--bg); overflow: hidden; }
 .bar > span { display: block; height: 100%; border-radius: 5px; background: var(--series-1); }
 .bar-v { min-width: 70px; text-align: right; }
+.ctl-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ctl-chips > span { background: var(--bg); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+.tg { white-space: pre-wrap; background: var(--bg); border-radius: 10px; padding: 12px 14px; font: 13px/1.5 system-ui, sans-serif; margin: 0; max-height: 50vh; overflow: auto; }
+.setup { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+.setup pre { margin: 6px 0; font-size: 12px; }
 </style>
