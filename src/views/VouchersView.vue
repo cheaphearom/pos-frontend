@@ -69,7 +69,7 @@ async function voidVoucher() {
   <div class="page">
     <div class="page-head">
       <div><h1>Gift vouchers</h1><div class="sub">Prepaid codes customers pay with. Sold vouchers are activated at the POS when bought.</div></div>
-      <div class="actions"><Button v-if="auth.isAdmin" label="Create vouchers" icon="pi pi-plus" @click="dlg = true" /></div>
+      <div class="actions"><Button v-if="auth.has('marketing')" label="Create vouchers" icon="pi pi-plus" @click="dlg = true" /></div>
     </div>
 
     <div class="card">

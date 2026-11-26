@@ -571,7 +571,7 @@ DAILY_SUMMARY_AT=22:00</pre>
       </template>
       <template #footer>
         <Button label="Close" severity="secondary" text @click="sumDlg = false" />
-        <Button v-if="auth.isAdmin" label="Send now" icon="pi pi-send" :loading="sumBusy" :disabled="!summary?.configured" data-test="summary-send" @click="sendSummary" />
+        <Button v-if="auth.has('monitor')" label="Send now" icon="pi pi-send" :loading="sumBusy" :disabled="!summary?.configured" data-test="summary-send" @click="sendSummary" />
       </template>
     </Dialog>
   </div>

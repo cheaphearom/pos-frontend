@@ -102,7 +102,7 @@ onMounted(async () => {
   <div class="page">
     <div class="page-head">
       <div><h1>Coupons</h1><div class="sub">Discount codes the cashier scans or types at the POS</div></div>
-      <div class="actions"><Button v-if="auth.isAdmin" label="New coupon" icon="pi pi-plus" @click="Object.assign(form, empty()); dlg = true" /></div>
+      <div class="actions"><Button v-if="auth.has('marketing')" label="New coupon" icon="pi pi-plus" @click="Object.assign(form, empty()); dlg = true" /></div>
     </div>
     <div class="card">
       <div class="toolbar"><IconField><InputIcon class="pi pi-search" /><InputText v-model="list.filters.search" placeholder="Campaign name" /></IconField></div>
@@ -115,7 +115,7 @@ onMounted(async () => {
         <Column header="Discount given" class="right"><template #body="{ data }">{{ m(data.discountGiven) }}</template></Column>
         <Column header="Valid"><template #body="{ data }"><span class="small">{{ data.startsAt ? date(data.startsAt) : 'now' }} → {{ data.endsAt ? date(data.endsAt) : 'no end' }}</span></template></Column>
         <Column header="Status"><template #body="{ data }"><Tag :value="state(data).l" :severity="state(data).s" /></template></Column>
-        <Column v-if="auth.isAdmin" style="width: 70px"><template #body="{ data }"><ToggleSwitch :model-value="data.isActive" @click.stop @update:model-value="toggle(data)" /></template></Column>
+        <Column v-if="auth.has('marketing')" style="width: 70px"><template #body="{ data }"><ToggleSwitch :model-value="data.isActive" @click.stop @update:model-value="toggle(data)" /></template></Column>
       </DataTable>
     </div>
 
@@ -193,7 +193,7 @@ onMounted(async () => {
         </dl>
         <div class="row mt" style="flex-wrap: wrap">
           <Button label="Download codes (CSV)" icon="pi pi-download" severity="secondary" @click="exportCodes(detail)" />
-          <template v-if="auth.isAdmin && codes[0]?.maxUses === 1">
+          <template v-if="auth.has('marketing') && codes[0]?.maxUses === 1">
             <InputNumber v-model="more" :min="1" :max="10000" style="width: 110px" />
             <Button label="Add codes" icon="pi pi-plus" severity="secondary" @click="addCodes" />
           </template>

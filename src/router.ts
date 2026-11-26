@@ -14,6 +14,8 @@ declare module 'vue-router' {
     title?: string;
     public?: boolean;
     roles?: Role[];
+    /** Owner area (utils/permissions.ts): super admins, and admins allowed it */
+    perm?: string;
     /** Member app page: needs the member (customer) login, not staff */
     member?: boolean;
   }
@@ -21,7 +23,6 @@ declare module 'vue-router' {
 
 const M: Role[] = ['STORE_MANAGER'];
 
-const A: Role[] = ['SUPER_ADMIN'];
 
 const routes: RouteRecordRaw[] = [
   { path: '/login', component: () => import('./views/LoginView.vue'), meta: { public: true, title: 'Log in' } },
@@ -61,7 +62,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'production', component: () => import('./views/ProductionView.vue'), meta: { title: 'Bakery production' } },
       { path: 'recipes', component: () => import('./views/RecipesView.vue'), meta: { title: 'Recipes', roles: M } },
       { path: 'modifiers', component: () => import('./views/ModifiersView.vue'), meta: { title: 'Drink options', roles: M } },
-      { path: 'categories', component: () => import('./views/CategoriesView.vue'), meta: { title: 'Categories', roles: A } },
+      { path: 'categories', component: () => import('./views/CategoriesView.vue'), meta: { title: 'Categories', perm: 'catalogue' } },
       { path: 'inventory', component: () => import('./views/InventoryView.vue'), meta: { title: 'Inventory', roles: M } },
       { path: 'transfers', component: () => import('./views/TransfersView.vue'), meta: { title: 'Transfers', roles: M } },
       { path: 'suppliers', component: () => import('./views/SuppliersView.vue'), meta: { title: 'Suppliers', roles: M } },
@@ -69,15 +70,15 @@ const routes: RouteRecordRaw[] = [
       { path: 'coupons', component: () => import('./views/CouponsView.vue'), meta: { title: 'Coupons', roles: M } },
       { path: 'vouchers', component: () => import('./views/VouchersView.vue'), meta: { title: 'Gift vouchers', roles: M } },
       { path: 'promotions', component: () => import('./views/PromotionsView.vue'), meta: { title: 'Promotions', roles: M } },
-      { path: 'customer-display', component: () => import('./views/DisplaySlidesView.vue'), meta: { title: 'Customer display', roles: A } },
+      { path: 'customer-display', component: () => import('./views/DisplaySlidesView.vue'), meta: { title: 'Customer display', perm: 'display' } },
       { path: 'wallet-cards', component: () => import('./views/WalletCardsView.vue'), meta: { title: 'Wallet cards', roles: M } },
       { path: 'customers', component: () => import('./views/CustomersView.vue'), meta: { title: 'Customers' } },
       { path: 'reports', component: () => import('./views/ReportsView.vue'), meta: { title: 'Reports', roles: M } },
       { path: 'users', component: () => import('./views/UsersView.vue'), meta: { title: 'Users', roles: M } },
-      { path: 'stores', component: () => import('./views/StoresView.vue'), meta: { title: 'Stores', roles: A } },
+      { path: 'stores', component: () => import('./views/StoresView.vue'), meta: { title: 'Stores', perm: 'stores' } },
       { path: 'audit', component: () => import('./views/AuditView.vue'), meta: { title: 'Audit log', roles: M } },
-      { path: 'integrations', component: () => import('./views/IntegrationsView.vue'), meta: { title: 'Integrations', roles: A } },
-      { path: 'monitor', component: () => import('./views/MonitorView.vue'), meta: { title: 'System monitor', roles: A } },
+      { path: 'integrations', component: () => import('./views/IntegrationsView.vue'), meta: { title: 'Integrations', perm: 'integrations' } },
+      { path: 'monitor', component: () => import('./views/MonitorView.vue'), meta: { title: 'System monitor', perm: 'monitor' } },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
@@ -97,6 +98,7 @@ router.beforeEach(async (to) => {
   if (!app.stores.length) await app.loadStores().catch(() => undefined);
   if (auth.role === 'CASHIER' && !CASHIER_PAGES.includes(to.path)) return '/pos';
   if (to.meta.roles && !auth.can(...to.meta.roles)) return '/';
+  if (to.meta.perm && !auth.has(to.meta.perm)) return '/';
   return true;
 });
 

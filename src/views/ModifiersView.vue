@@ -68,7 +68,7 @@ onMounted(load);
       <div><h1>Drink options</h1><div class="sub"><b>{{ groups.length }}</b> option groups · <b>{{ totalOptions }}</b> options · attach them to drinks on the Products page</div></div>
       <div class="actions">
         <IconField><InputIcon class="pi pi-search" /><InputText v-model="q" placeholder="Search options" /></IconField>
-        <Button v-if="auth.isAdmin" label="New option group" icon="pi pi-plus" @click="open()" />
+        <Button v-if="auth.has('catalogue')" label="New option group" icon="pi pi-plus" @click="open()" />
       </div>
     </div>
     <div v-if="loading && !groups.length" class="muted">Loading…</div>
@@ -84,7 +84,7 @@ onMounted(load);
               <span class="b">{{ g.maxSelect > 1 ? `up to ${g.maxSelect}` : 'choose one' }}</span>
             </div>
           </div>
-          <div v-if="auth.isAdmin" class="acts">
+          <div v-if="auth.has('catalogue')" class="acts">
             <Button icon="pi pi-pencil" text rounded size="small" aria-label="Edit" @click="open(g)" />
             <Button icon="pi pi-trash" text rounded size="small" severity="danger" aria-label="Delete" @click="remove(g)" />
           </div>

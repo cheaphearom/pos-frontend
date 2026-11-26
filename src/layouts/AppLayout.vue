@@ -44,7 +44,7 @@ const route = useRoute();
 const router = useRouter();
 const open = ref(false);
 
-interface NavItem { to: string; label: string; icon: string; roles?: Role[] }
+interface NavItem { to: string; label: string; icon: string; roles?: Role[]; perm?: string }
 const sections: { title: string; items: NavItem[] }[] = [
   { title: 'Overview', items: [
     { to: '/', label: 'Dashboard', icon: 'pi pi-home' },
@@ -60,7 +60,7 @@ const sections: { title: string; items: NavItem[] }[] = [
   ] },
   { title: 'Catalogue & stock', items: [
     { to: '/products', label: 'Products', icon: 'pi pi-box' },
-    { to: '/categories', label: 'Categories', icon: 'pi pi-tags', roles: ['SUPER_ADMIN'] },
+    { to: '/categories', label: 'Categories', icon: 'pi pi-tags', perm: 'catalogue' },
     { to: '/modifiers', label: 'Drink options', icon: 'pi pi-sliders-v', roles: ['STORE_MANAGER'] },
     { to: '/recipes', label: 'Recipes', icon: 'pi pi-book', roles: ['STORE_MANAGER'] },
     { to: '/production', label: 'Bakery production', icon: 'pi pi-sun' },
@@ -71,7 +71,7 @@ const sections: { title: string; items: NavItem[] }[] = [
     { to: '/promotions', label: 'Promotions', icon: 'pi pi-megaphone', roles: ['STORE_MANAGER'] },
     { to: '/coupons', label: 'Coupons', icon: 'pi pi-ticket', roles: ['STORE_MANAGER'] },
     { to: '/vouchers', label: 'Gift vouchers', icon: 'pi pi-gift', roles: ['STORE_MANAGER'] },
-    { to: '/customer-display', label: 'Customer display', icon: 'pi pi-desktop', roles: ['SUPER_ADMIN'] },
+    { to: '/customer-display', label: 'Customer display', icon: 'pi pi-desktop', perm: 'display' },
   ] },
   { title: 'Purchasing', items: [
     { to: '/purchase-orders', label: 'Purchase orders', icon: 'pi pi-file-edit', roles: ['STORE_MANAGER'] },
@@ -79,15 +79,15 @@ const sections: { title: string; items: NavItem[] }[] = [
   ] },
   { title: 'Administration', items: [
     { to: '/users', label: 'Users', icon: 'pi pi-users', roles: ['STORE_MANAGER'] },
-    { to: '/stores', label: 'Stores', icon: 'pi pi-building', roles: ['SUPER_ADMIN'] },
+    { to: '/stores', label: 'Stores', icon: 'pi pi-building', perm: 'stores' },
     { to: '/audit', label: 'Audit log', icon: 'pi pi-shield', roles: ['STORE_MANAGER'] },
-    { to: '/integrations', label: 'Integrations', icon: 'pi pi-link', roles: ['SUPER_ADMIN'] },
-    { to: '/monitor', label: 'System monitor', icon: 'pi pi-chart-line', roles: ['SUPER_ADMIN'] },
+    { to: '/integrations', label: 'Integrations', icon: 'pi pi-link', perm: 'integrations' },
+    { to: '/monitor', label: 'System monitor', icon: 'pi pi-chart-line', perm: 'monitor' },
   ] },
 ];
 const visible = computed(() =>
   sections
-    .map((s) => ({ ...s, items: s.items.filter((i) => (!i.roles || auth.can(...i.roles)) && (auth.role !== 'CASHIER' || CASHIER_PAGES.includes(i.to))) }))
+    .map((s) => ({ ...s, items: s.items.filter((i) => (!i.roles || auth.can(...i.roles)) && (!i.perm || auth.has(i.perm)) && (auth.role !== 'CASHIER' || CASHIER_PAGES.includes(i.to))) }))
     .filter((s) => s.items.length),
 );
 /** Cashiers use the POS only: their few other pages (Sales, Bakery production) open without the portal menu,

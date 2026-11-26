@@ -87,7 +87,7 @@ const setStatus = (action: 'block' | 'unblock') => run(() => api.post(`/wallet/c
   <div class="page">
     <div class="page-head">
       <div><h1>Wallet cards</h1><div class="sub">Store-value cards: customers top up money and pay with the card</div></div>
-      <div class="actions"><Button v-if="auth.isAdmin" label="Generate cards" icon="pi pi-plus" @click="genDlg = true" /></div>
+      <div class="actions"><Button v-if="auth.has('wallet')" label="Generate cards" icon="pi pi-plus" @click="genDlg = true" /></div>
     </div>
     <div class="card">
       <div class="toolbar">
