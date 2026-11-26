@@ -90,6 +90,10 @@ const visible = computed(() =>
     .map((s) => ({ ...s, items: s.items.filter((i) => (!i.roles || auth.can(...i.roles)) && (auth.role !== 'CASHIER' || CASHIER_PAGES.includes(i.to))) }))
     .filter((s) => s.items.length),
 );
+/** Cashiers use the POS only: their few other pages (Sales, Bakery production) open without the portal menu,
+ *  with a "Back to POS" button and links to their pages. */
+const cashier = computed(() => auth.role === 'CASHIER');
+const cashierLinks = computed(() => visible.value.flatMap((s) => s.items));
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to));
 
 const dark = useDark();
@@ -103,8 +107,8 @@ async function logout() {
 </script>
 
 <template>
-  <div class="shell" :class="{ open }">
-    <aside class="sidebar">
+  <div class="shell" :class="{ open, cashier }">
+    <aside v-if="!cashier" class="sidebar">
       <div class="brand"><span class="logo"><img src="/favicon.svg" alt="" /></span><span>POS Admin<small>{{ app.currentStore?.name }}</small></span></div>
       <nav>
         <div v-for="s in visible" :key="s.title" class="nav-section">
@@ -116,12 +120,18 @@ async function logout() {
       </nav>
       <p class="side-copy">{{ COPYRIGHT }}</p>
     </aside>
-    <div class="backdrop" @click="open = false" />
+    <div v-if="!cashier" class="backdrop" @click="open = false" />
 
     <div class="main">
       <header class="topbar">
-        <Button icon="pi pi-bars" text rounded class="menu-btn" aria-label="Menu" @click="open = !open" />
-        <div class="store-pick">
+        <template v-if="cashier">
+          <RouterLink to="/pos" class="back-pos"><Button label="Back to POS" icon="pi pi-arrow-left" data-test="back-to-pos" /></RouterLink>
+          <nav class="cashier-links">
+            <RouterLink v-for="i in cashierLinks" :key="i.to" :to="i.to" class="c-link" :class="{ active: isActive(i.to) }"><i :class="i.icon" /> {{ i.label }}</RouterLink>
+          </nav>
+        </template>
+        <Button v-else icon="pi pi-bars" text rounded class="menu-btn" aria-label="Menu" @click="open = !open" />
+        <div v-if="!cashier || app.stores.length > 1" class="store-pick">
           <i class="pi pi-building muted" />
           <Select
             v-model="app.currentStoreId"
@@ -136,7 +146,7 @@ async function logout() {
           </Select>
         </div>
         <div class="spacer" />
-        <RouterLink to="/pos"><Button label="Open POS" icon="pi pi-shopping-cart" size="small" class="open-pos" aria-label="Open POS" /></RouterLink>
+        <RouterLink v-if="!cashier" to="/pos"><Button label="Open POS" icon="pi pi-shopping-cart" size="small" class="open-pos" aria-label="Open POS" /></RouterLink>
         <LangSwitch />
         <Button :icon="dark ? 'pi pi-sun' : 'pi pi-moon'" text rounded aria-label="Toggle dark mode" @click="dark = !dark" />
         <div class="user">
@@ -200,6 +210,10 @@ async function logout() {
 .user .name { font-weight: 600; }
 .user .role { font-size: 12px; color: var(--text-2); }
 .menu-btn { display: none; }
+.cashier-links { display: flex; gap: 4px; margin-left: 8px; overflow-x: auto; scrollbar-width: none; }
+.c-link { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 9px; color: var(--text-2); text-decoration: none; font-weight: 600; white-space: nowrap; }
+.c-link:hover { background: var(--bg); }
+.c-link.active { background: color-mix(in srgb, var(--p-primary-color) 12%, transparent); color: var(--p-primary-color); }
 .backdrop { display: none; }
 @media (max-width: 900px) {
   .sidebar { position: fixed; left: 0; z-index: 20; transform: translateX(-100%); transition: transform .2s; }
@@ -216,5 +230,7 @@ async function logout() {
   .store-pick > .pi, .avatar, .spacer { display: none; }
   .store-select { width: 100%; }
   .topbar :deep(.open-pos .p-button-label) { display: none; }
+  .back-pos :deep(.p-button-label) { display: none; }
+  .c-link { padding: 7px 8px; }
 }
 </style>

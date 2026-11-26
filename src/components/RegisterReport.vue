@@ -9,7 +9,9 @@ const props = defineProps<{ report: any }>();
 const r = computed(() => props.report);
 const m = (v: number | string | null | undefined) => money(Number(v ?? 0), r.value?.store?.currency ?? 'USD');
 const isZ = computed(() => r.value.kind === 'Z');
-const title = computed(() => (isZ.value ? (r.value.zNo ? `Z REPORT ${r.value.store.code}-Z${String(r.value.zNo).padStart(4, '0')}` : 'Z REPORT (preview)') : 'X REPORT'));
+/** An X report of a shift that is already closed is its final shift report. */
+const closedShift = computed(() => !isZ.value && !!r.value.shift?.closedAt);
+const title = computed(() => (isZ.value ? (r.value.zNo ? `Z REPORT ${r.value.store.code}-Z${String(r.value.zNo).padStart(4, '0')}` : 'Z REPORT (preview)') : closedShift.value ? 'SHIFT REPORT' : 'X REPORT'));
 const signed = (v: number | null | undefined, khr = false) => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${khr ? formatKhr(v) : m(v)}`);
 const payLabel = (p: any) => (p.currency === 'KHR' ? `Cash ${formatKhr(p.tendered)}` : humanize(p.method));
 </script>
@@ -18,7 +20,7 @@ const payLabel = (p: any) => (p.currency === 'KHR' ? `Cash ${formatKhr(p.tendere
   <div class="reg-report" data-test="reg-report">
     <div class="c b big">{{ r.store.name }}</div>
     <div class="c b">{{ title }}</div>
-    <div class="c small">{{ isZ ? `Business day ${r.businessDay}` : 'Shift so far — the shift is not closed by this report' }}</div>
+    <div class="c small">{{ isZ ? `Business day ${r.businessDay}` : closedShift ? 'Shift closed — final figures' : 'Shift so far — the shift is not closed by this report' }}</div>
     <div class="c small">Printed {{ dateTime(r.printedAt ?? r.createdAt ?? new Date().toISOString()) }}</div>
     <template v-if="!isZ">
       <div class="row2"><span>Cashier</span><span>{{ r.cashier }}</span></div>
