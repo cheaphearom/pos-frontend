@@ -93,7 +93,7 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
     ['TRANSFER_CREATED', /sent: 1 product/], ['TRANSFER_CANCELLED', /cancelled/],
     ['STORE_PRODUCT_CHANGED', /reorderLevel 7/],
     ['VOUCHER_BATCH_CREATED', /2 gift voucher\(s\) "Audit vouchers" of \$5\.00 created \(free\)/],
-    ['WALLET_CARDS_CREATED', /1 wallet card\(s\) created/], ['WALLET_PIN_CHANGED', /PIN of wallet card \d+/],
+    ['WALLET_CARDS_CREATED', /1 wallet card\(s\) created/], ['WALLET_PIN_CHANGED', /PIN of wallet card ••••\d{4} set or changed/],
     ['CUSTOMER_CREATED', /Member Audit Member .* registered/], ['CUSTOMER_CHANGED', /Audit Member .*: email/],
   ];
   for (const [action, re] of expect) ok(has(action, re), `audit: ${action}` + (has(action) && !has(action, re) ? ' (summary: ' + all.find((e) => e.action === action).summary + ')' : ''));
@@ -101,7 +101,39 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   ok(!!secret && !JSON.stringify(all).includes(secret), 'the new API key itself is not in the audit log');
   ok(!JSON.stringify(all).includes('4321'), 'the wallet PIN is not in the audit log');
 
-  // ── 5. The Audit page
+  // ── 5. Password changes, online orders handled by staff, wallet card numbers masked
+  const pw = await req('POST', '/users', { email: 'pw.test@pos.local', password: 'Password@123', fullName: 'Pw Tester', role: 'CASHIER', storeIds: [s1.id] });
+  const pwt = await tokenOf('pw.test@pos.local');
+  const chg = await fetch(API + '/auth/change-password', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + pwt }, body: JSON.stringify({ currentPassword: 'Password@123', newPassword: 'Password@456' }) });
+  ok(chg.status === 204, 'a cashier changes their own password');
+  const menu = (await (await fetch(API + `/public/stores/${s1.code}/menu`)).json()).products;
+  const plain = menu.find((x) => x.name === 'Butter Croissant') ?? menu[0];
+  const placeOrder = async (name, payMethod) => (await fetch(API + `/public/stores/${s1.code}/orders`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: [{ productId: plain.id, quantity: 2 }], customerName: name, phone: '012 345 670', payMethod }) })).status;
+  // confirm payment is for KHQR orders waiting for the money; pay-at-counter orders are paid at the till
+  ok(await placeOrder('Online One', 'KHQR') === 201 && await placeOrder('Online Two', 'COUNTER') === 201, 'two online orders placed (KHQR, pay at the counter)');
+  const mt2 = await tokenOf('manager.pp@pos.local');
+  const open = (await (await fetch(API + `/online-orders?storeId=${s1.id}`, { headers: { authorization: 'Bearer ' + mt2 } })).json());
+  const openList = Array.isArray(open) ? open : open.data ?? open.orders ?? [];
+  const o1 = openList.find((o) => o.customerName === 'Online One');
+  const o2 = openList.find((o) => o.customerName === 'Online Two');
+  const conf = await fetch(API + `/online-orders/${o1?.id}/confirm-payment`, { method: 'POST', headers: { authorization: 'Bearer ' + mt2 } });
+  const canc = await fetch(API + `/online-orders/${o2?.id}/cancel`, { method: 'POST', headers: { authorization: 'Bearer ' + mt2 } });
+  ok(conf.status < 300 && canc.status < 300, 'manager confirms one online order and cancels another');
+  // wallet: activate, top up, block the new card
+  await req('POST', `/wallet/cards/${card.id}/activate`, { storeId: s1.id, amount: 5, method: 'CASH' }).catch(() => null);
+  await req('POST', `/wallet/cards/${card.id}/block`, { reason: 'lost' }).catch(() => null);
+  await new Promise((r) => setTimeout(r, 500));
+  const all2 = (await call('GET', '/audit?limit=200', at)).data;
+  const has2 = (action, re) => all2.some((e) => e.action === action && (!re || re.test(e.summary)));
+  ok(has2('PASSWORD_CHANGED', /Changed their own password/) && all2.find((e) => e.action === 'PASSWORD_CHANGED').userName === 'Pw Tester', 'audit: PASSWORD_CHANGED by the cashier');
+  ok(!JSON.stringify(all2).includes('Password@456'), 'the new password is not in the audit log');
+  ok(has2('ONLINE_ORDER_PAID', /Online order of Online One \(\$\d+\.\d\d, KHQR\) marked paid/), 'audit: ONLINE_ORDER_PAID with the customer and amount');
+  ok(has2('ONLINE_ORDER_CANCELLED', /Online order of Online Two \(\$\d+\.\d\d\) cancelled \(was pay at counter\)/), 'audit: ONLINE_ORDER_CANCELLED with the customer, amount and former status');
+  const walletEntries = all2.filter((e) => e.entityType === 'wallet_card' || e.entityType === 'wallet');
+  ok(walletEntries.length >= 2 && walletEntries.every((e) => /••••\d{4}/.test(e.summary) || /wallet card\(s\) created/.test(e.summary)), 'wallet entries show cards as ••••1234 (' + walletEntries.map((e) => e.action).join(', ') + ')');
+  ok(!JSON.stringify(all2).includes(num), 'the full wallet card number is not in the audit log');
+
+  // ── 6. The Audit page
   const browser = await chromium.launch();
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
   const errors = [];
