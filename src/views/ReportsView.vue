@@ -25,7 +25,7 @@ async function load() {
     const p = params.value;
     const prev = prevRange.value;
     const pp = prev ? { ...p, from: prev.from, to: prev.to } : null;
-    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production, hours, categories, prevSummary, prevProfit] = await Promise.all([
+    const [summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production, hours, categories, prevSummary, prevProfit, options, orderTypes] = await Promise.all([
       api.get('/reports/sales-summary', { ...p, groupBy: f.groupBy }),
       api.get('/reports/profit', { ...p, groupBy: f.groupBy }),
       api.get('/reports/top-products', { ...p, limit: 20 }),
@@ -42,8 +42,10 @@ async function load() {
       api.get('/reports/categories', p),
       pp ? api.get('/reports/sales-summary', { ...pp, groupBy: 'store' }) : null,
       pp ? api.get('/reports/profit', { ...pp, groupBy: 'store' }) : null,
+      api.get('/reports/options', p),
+      api.get('/reports/order-types', p),
     ]);
-    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production, hours, categories, prevSummary, prevProfit });
+    Object.assign(r, { summary, profit, top, payments, cashiers, loyalty, stock, promotions, wallet, cv, ingredients, production, hours, categories, prevSummary, prevProfit, options, orderTypes });
   } catch (e) {
     notify.error(e);
   } finally {
@@ -117,6 +119,23 @@ const busiest = computed(() => {
   const h = byHour.value.reduce((a, c) => (c.sales > a.sales ? c : a));
   return { slot: `${DOW[b.dow - 1]} ${hourLabel(b.hour)}–${hourLabel(b.hour + 1)}`, slotAvg: b.avg, hour: `${hourLabel(h.hour)}–${hourLabel(h.hour + 1)}` };
 });
+
+// ── Order type and sizes / options
+const ORDER_TYPES: Record<string, string> = { RETAIL: 'Shop sale', TAKEAWAY: 'Takeaway', DINE_IN: 'Dine-in', PICKUP: 'Pick-up', DELIVERY: 'Delivery' };
+const orderLabel = (x: any) => (x.channel === 'ONLINE' ? 'Online · ' : x.channel && x.channel !== 'POS' ? `${humanize(x.channel)} · ` : '') + (ORDER_TYPES[x.orderType] ?? humanize(x.orderType));
+const sizeGroup = computed(() => (r.options?.data ?? []).find((g: any) => g.group.toLowerCase() === 'size') ?? null);
+/** Size columns in the order they sell (from the Size group), then any other size names. */
+const sizeCols = computed(() => {
+  const cols: string[] = (sizeGroup.value?.options ?? []).map((o: any) => o.option);
+  for (const d of r.options?.sizes ?? []) for (const k of Object.keys(d.sizes)) if (!cols.includes(k)) cols.push(k);
+  return cols;
+});
+const otherGroups = computed(() => (r.options?.data ?? []).filter((g: any) => g !== sizeGroup.value));
+function exportOptions() {
+  downloadCsv(`options-${f.from}-${f.to}.csv`, [
+    { key: 'group', label: 'Group' }, { key: 'option', label: 'Option' }, { key: 'quantity', label: 'Items' }, { key: 'sharePercent', label: 'Share of group %' }, { key: 'extra', label: 'Extra charged' },
+  ], (r.options?.data ?? []).flatMap((g: any) => g.options.map((o: any) => ({ group: g.group, ...o }))));
+}
 
 function exportCategories() {
   downloadCsv(`categories-${f.from}-${f.to}.csv`, [
@@ -223,6 +242,62 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
           <p class="small muted" style="margin: 6px 0 0">Each product counts in its category as it is now.</p>
         </template>
         <span v-else class="muted">No sales in this period</span>
+      </div>
+
+      <div class="grid grid-2 mt">
+        <div class="card" data-test="order-types">
+          <h3>Order type</h3>
+          <template v-if="r.orderTypes.data.length">
+            <div class="bars">
+              <div v-for="x in r.orderTypes.data" :key="x.orderType + x.channel" class="bar-row">
+                <span class="bar-l">{{ orderLabel(x) }}</span>
+                <span class="bar"><span :style="{ width: x.sharePercent + '%' }" /></span>
+                <span class="bar-v num">{{ m(x.net) }} <span class="muted small">({{ Math.round(x.sharePercent) }}%)</span></span>
+              </div>
+            </div>
+            <DataTable :value="r.orderTypes.data" size="small" class="mt">
+              <Column header="Type"><template #body="{ data }">{{ orderLabel(data) }}</template></Column>
+              <Column field="salesCount" header="Sales" class="right" />
+              <Column header="Net sales" class="right"><template #body="{ data }"><b>{{ m(data.net) }}</b></template></Column>
+              <Column header="Share" class="right"><template #body="{ data }">{{ data.sharePercent }}%</template></Column>
+              <Column header="Avg sale" class="right"><template #body="{ data }">{{ m(data.averageSale) }}</template></Column>
+            </DataTable>
+          </template>
+          <span v-else class="muted">No sales in this period</span>
+        </div>
+        <div class="card" data-test="options">
+          <div class="row" style="justify-content: space-between"><h3>Sizes and drink options</h3><Button label="CSV" icon="pi pi-download" size="small" text :disabled="!r.options.data.length" @click="exportOptions" /></div>
+          <span v-if="!r.options.data.length" class="muted">No sizes or options sold in this period</span>
+          <template v-if="sizeGroup">
+            <div class="opt-head"><b>Size</b><span class="muted small">{{ num(sizeGroup.quantity, 3) }} drinks · extra charged {{ m(sizeGroup.extra) }}</span></div>
+            <div class="bars">
+              <div v-for="o in sizeGroup.options" :key="o.option" class="bar-row">
+                <span class="bar-l">{{ o.option }}</span>
+                <span class="bar"><span :style="{ width: o.sharePercent + '%' }" /></span>
+                <span class="bar-v num">{{ num(o.quantity, 3) }} <span class="muted small">({{ Math.round(o.sharePercent) }}%)</span></span>
+              </div>
+            </div>
+          </template>
+          <div v-for="g in otherGroups" :key="g.group" class="mt">
+            <div class="opt-head"><b>{{ g.group }}</b><span class="muted small">{{ num(g.quantity, 3) }} chosen<template v-if="g.extra"> · extra charged {{ m(g.extra) }}</template></span></div>
+            <div class="bars">
+              <div v-for="o in g.options" :key="o.option" class="bar-row">
+                <span class="bar-l">{{ o.option }}</span>
+                <span class="bar"><span :style="{ width: o.sharePercent + '%' }" /></span>
+                <span class="bar-v num">{{ num(o.quantity, 3) }} <span class="muted small">({{ Math.round(o.sharePercent) }}%)</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="r.options.sizes.length" class="card mt" data-test="sizes-per-drink">
+        <h3>Sizes per drink</h3>
+        <DataTable :value="r.options.sizes" size="small" scrollable scroll-height="360px">
+          <Column field="name" header="Drink" />
+          <Column v-for="c in sizeCols" :key="c" :header="c" class="right"><template #body="{ data }"><span :class="{ muted: !data.sizes[c] }">{{ data.sizes[c] ? num(data.sizes[c], 3) : '–' }}</span></template></Column>
+          <Column header="Total" class="right"><template #body="{ data }"><b>{{ num(data.total, 3) }}</b></template></Column>
+        </DataTable>
       </div>
 
       <div class="grid grid-2 mt">
@@ -390,4 +465,10 @@ watch(() => [f.from, f.to, f.scope, f.groupBy], load);
   color: var(--text-1, inherit);
 }
 .heat td.hot { color: #fff; }
+.opt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 6px 0 4px; }
+.bars { display: grid; gap: 5px; }
+.bar-row { display: grid; grid-template-columns: minmax(90px, 30%) 1fr auto; align-items: center; gap: 10px; font-size: 13px; }
+.bar { height: 10px; border-radius: 5px; background: var(--bg); overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: 5px; background: var(--series-1); }
+.bar-v { min-width: 70px; text-align: right; }
 </style>

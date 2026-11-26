@@ -18,11 +18,36 @@ const near = (a, b) => Math.abs(a - b) < 0.02;
     await call('POST', '/sales', ct, { storeId, items: [{ productId: prods[i * 3 % prods.length].id, quantity: 1 + (i % 2) }], payments: [{ method: 'CASH', amount: 200 }] });
   }
 
-  // the API numbers agree with each other
   const { accessToken: at } = await call('POST', '/auth/login', null, { email: 'admin@pos.local', password: 'Password@123' });
+  // two café sales with a size (dine-in): Americano Medium ×2, Latte Small ×1
+  const groups = await call('GET', '/modifiers', at);
+  const size = (groups.data ?? groups).find((g) => g.name === 'Size');
+  const opt = (n) => size.options.find((o) => o.name === n).id;
+  const all = (await call('GET', `/products?storeId=${storeId}&limit=100`, ct)).data;
+  const byName = (n) => all.find((p) => p.name === n);
+  const withSize = (p, o) => {
+    // the drink's required groups: first option of each, the size as asked
+    const ids = [];
+    for (const { groupId } of p.modifierGroups) {
+      const g = (groups.data ?? groups).find((x) => x.id === groupId);
+      if (g.id === size.id) ids.push(opt(o)); else if (g.minSelect > 0) ids.push(g.options[0].id);
+    }
+    return ids;
+  };
+  const am = byName('Americano'), la = byName('Latte');
+  const c1 = await call('POST', '/sales', ct, { storeId, orderType: 'DINE_IN', items: [{ productId: am.id, quantity: 2, modifiers: withSize(am, 'Medium') }], payments: [{ method: 'CASH', amount: 200 }] });
+  const c2 = await call('POST', '/sales', ct, { storeId, orderType: 'DINE_IN', items: [{ productId: la.id, quantity: 1, modifiers: withSize(la, 'Small') }], payments: [{ method: 'CASH', amount: 200 }] });
+  ok(!!c1.id && !!c2.id, 'two dine-in café sales with sizes');
+
+  // the API numbers agree with each other
   const q = `storeId=${storeId}`;
-  const [sum, hours, cats, profit] = await Promise.all(['sales-summary', 'hours', 'categories', 'profit'].map((r) => call('GET', `/reports/${r}?${q}`, at)));
-  ok(sum.totals.salesCount === 6, 'summary: 6 sales');
+  const [sum, hours, cats, profit, types, options] = await Promise.all(['sales-summary', 'hours', 'categories', 'profit', 'order-types', 'options'].map((r) => call('GET', `/reports/${r}?${q}`, at)));
+  ok(sum.totals.salesCount === 8, 'summary: 8 sales');
+  ok(types.data.reduce((t, x) => t + x.salesCount, 0) === 8 && types.data.find((x) => x.orderType === 'DINE_IN')?.salesCount === 2, 'order types: every sale counted, 2 dine-in');
+  ok(near(types.data.reduce((t, x) => t + x.net, 0), sum.totals.net), 'order types net = net sales');
+  const sz = options.data.find((g) => g.group === 'Size');
+  ok(sz && sz.quantity === 3 && sz.options.find((o) => o.option === 'Medium')?.quantity === 2 && sz.options.find((o) => o.option === 'Small')?.quantity === 1, 'sizes: Medium 2, Small 1');
+  ok(options.sizes.find((d) => d.name === 'Americano')?.sizes.Medium === 2, 'sizes per drink: Americano Medium 2');
   ok(hours.data.reduce((t, x) => t + x.salesCount, 0) === sum.totals.salesCount, 'busy hours count every sale (' + hours.data.reduce((t, x) => t + x.salesCount, 0) + ')');
   ok(near(hours.data.reduce((t, x) => t + x.net, 0), sum.totals.net), 'busy hours net = net sales');
   ok(Object.values(hours.days).reduce((a, b) => a + b, 0) === 30, 'the default period has 30 days, split by weekday');
@@ -48,6 +73,9 @@ const near = (a, b) => Math.abs(a - b) < 0.02;
   const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('[data-test=categories]').getByRole('button', { name: 'CSV' }).click()]);
   ok(dl.suggestedFilename().startsWith('categories-'), 'category CSV downloads');
   if (OUT) await page.locator('[data-test=busy-hours]').screenshot({ path: OUT + 'rep-hours.png' });
+  ok(/Dine-in/.test(await page.locator('[data-test=order-types]').innerText()), 'Order type card lists Dine-in');
+  ok(/Size[\s\S]*Medium[\s\S]*2 \(67%\)/.test(await page.locator('[data-test=options]').innerText()), 'Sizes card: Medium 2 (67%)');
+  ok(/Americano/.test(await page.locator('[data-test=sizes-per-drink]').innerText()), 'Sizes per drink lists Americano');
 
   // "Today" → compared with yesterday
   await page.getByRole('button', { name: 'Today' }).click(); await page.waitForTimeout(1500);
