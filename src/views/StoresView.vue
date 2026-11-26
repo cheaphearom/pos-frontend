@@ -3,7 +3,7 @@
 import QRCode from 'qrcode';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { api } from '@/api/client';
-import type { Store } from '@/api/types';
+import type { Category, Store } from '@/api/types';
 import { useNotify } from '@/composables/useNotify';
 import { useApp } from '@/stores/app';
 import { nameColor } from '@/utils/colors';
@@ -11,10 +11,13 @@ import { nameColor } from '@/utils/colors';
 const notify = useNotify();
 const app = useApp();
 const rows = ref<Store[]>([]);
+const categories = ref<Category[]>([]);
+type Station = { id: string; name: string; categoryIds: string[] };
+const newStationId = () => 'st-' + Math.random().toString(36).slice(2, 10);
 const loading = ref(false);
 const dialog = ref(false);
 const saving = ref(false);
-const empty = () => ({ id: '', code: '', name: '', externalId: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, printAuto: false, printCustomer: true, printCashierCopy: false, printKitchen: false, cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true, khrOn: true, khrRate: 4100 as number | null, cashOutNeedsApproval: true, copyProductsFrom: null as string | null });
+const empty = () => ({ id: '', code: '', name: '', externalId: '', address: '', phone: '', currency: 'USD', taxPercent: 10, isActive: true, khqrAccountId: '', khqrMerchantName: '', khqrCity: '', khqrMerchantId: '', khqrBank: '', hasKitchen: false, onlineOrdering: false, printAuto: false, printCustomer: true, printCashierCopy: false, printKitchen: false, kitchenStations: [] as Station[], cashierMaxDiscountPercent: 10, refundNeedsApproval: true, voidNeedsApproval: true, khrOn: true, khrRate: 4100 as number | null, cashOutNeedsApproval: true, copyProductsFrom: null as string | null });
 const form = reactive(empty());
 
 // ── Cards: search and filters
@@ -37,10 +40,19 @@ async function load() {
   try { rows.value = await api.get('/stores', { includeInactive: true }); } catch (e) { notify.error(e); } finally { loading.value = false; }
 }
 function open(s?: Store) {
-  Object.assign(form, s ? { ...empty(), ...Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v ?? ''])), taxPercent: Number(s.taxRate) * 100, cashierMaxDiscountPercent: Number((s as any).cashierMaxDiscountPercent ?? 10), refundNeedsApproval: (s as any).refundNeedsApproval !== false, voidNeedsApproval: (s as any).voidNeedsApproval !== false, khrOn: !!(s as any).khrRate, khrRate: (s as any).khrRate || 4100, cashOutNeedsApproval: (s as any).cashOutNeedsApproval !== false } : empty());
+  Object.assign(form, s ? { ...empty(), ...Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v ?? ''])), taxPercent: Number(s.taxRate) * 100, cashierMaxDiscountPercent: Number((s as any).cashierMaxDiscountPercent ?? 10), refundNeedsApproval: (s as any).refundNeedsApproval !== false, voidNeedsApproval: (s as any).voidNeedsApproval !== false, khrOn: !!(s as any).khrRate, khrRate: (s as any).khrRate || 4100, cashOutNeedsApproval: (s as any).cashOutNeedsApproval !== false, kitchenStations: JSON.parse(JSON.stringify((s as any).kitchenStations ?? [])) } : empty());
   dialog.value = true;
 }
+function addStation() {
+  form.kitchenStations.push({ id: newStationId(), name: form.kitchenStations.length ? '' : 'Kitchen', categoryIds: [] });
+}
+/** A category already in another station (each category prints at one station). */
+const takenBy = (st: Station, catId: string) => form.kitchenStations.find((x) => x !== st && x.categoryIds.includes(catId))?.name;
+const stationCats = (st: Station) => categories.value.map((c) => ({ ...c, label: takenBy(st, c.id) ? `${c.name} (in ${takenBy(st, c.id) || 'another station'})` : c.name, disabled: !!takenBy(st, c.id) }));
+
 async function save() {
+  if (form.printKitchen && form.kitchenStations.some((st) => !st.name.trim())) return notify.error('Give every kitchen station a name');
+  if (form.printKitchen && form.kitchenStations.some((st) => !st.categoryIds.length)) return notify.error('Choose the categories of every kitchen station (or remove it)');
   saving.value = true;
   try {
     const body = {
@@ -49,6 +61,7 @@ async function save() {
       khqrAccountId: form.khqrAccountId || null, khqrMerchantName: form.khqrMerchantName || null, khqrCity: form.khqrCity || null,
       khqrMerchantId: form.khqrMerchantId || null, khqrBank: form.khqrBank || null, hasKitchen: !!form.hasKitchen, onlineOrdering: !!form.onlineOrdering,
       printAuto: !!form.printAuto, printCustomer: !!form.printCustomer, printCashierCopy: !!form.printCashierCopy, printKitchen: !!form.printKitchen,
+      kitchenStations: form.kitchenStations.map((st) => ({ id: st.id, name: st.name.trim(), categoryIds: st.categoryIds })),
       cashierMaxDiscountPercent: Number(form.cashierMaxDiscountPercent ?? 0), refundNeedsApproval: !!form.refundNeedsApproval, voidNeedsApproval: !!form.voidNeedsApproval,
       khrRate: form.khrOn && form.khrRate ? Math.round(form.khrRate) : null, cashOutNeedsApproval: !!form.cashOutNeedsApproval,
     };
@@ -173,7 +186,10 @@ function printQr() {
   setTimeout(() => document.body.classList.remove('printing-qr'), 500);
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  api.get<Category[]>('/categories').then((c) => (categories.value = c)).catch(() => {});
+});
 </script>
 
 <template>
@@ -250,6 +266,19 @@ onMounted(load);
           <label class="row"><Checkbox v-model="form.printCustomer" binary /> Customer receipt</label>
           <label class="row"><Checkbox v-model="form.printCashierCopy" binary /> Cashier copy</label>
           <label class="row"><Checkbox v-model="form.printKitchen" binary /> Kitchen ticket (no prices)</label>
+        </div>
+        <div v-if="form.printKitchen" class="stations" data-test="stations">
+          <div class="row" style="justify-content: space-between"><b class="small">Kitchen stations</b>
+            <Button label="Add station" icon="pi pi-plus" size="small" text data-test="station-add" @click="addStation" /></div>
+          <span v-if="!form.kitchenStations.length" class="hint">None: one kitchen ticket with every item, on the till's kitchen printer. Add stations (e.g. Bar for drinks, Kitchen for food) to print each station's items on its own printer.</span>
+          <template v-else>
+            <div v-for="(st, i) in form.kitchenStations" :key="st.id" class="station">
+              <InputText v-model="st.name" maxlength="30" placeholder="Station name, e.g. Bar" class="st-name" />
+              <MultiSelect v-model="st.categoryIds" :options="stationCats(st)" option-label="label" option-value="id" option-disabled="disabled" display="chip" filter placeholder="Categories it prepares" class="st-cats" />
+              <Button icon="pi pi-trash" text rounded severity="secondary" aria-label="Remove station" @click="form.kitchenStations.splice(i, 1)" />
+            </div>
+            <span class="hint">Each station gets a ticket with only its items (sub-categories included). Items in no station are not printed. Each till chooses the printer of each station on the POS (Printers).</span>
+          </template>
         </div>
         <span class="hint">Each till chooses its receipt and kitchen printers on the POS (Printers). Without QZ Tray on the till, slips use the browser's printing.</span>
         <h3 style="margin: 8px 0 0">Riel cash (USD / KHR)</h3>
@@ -378,6 +407,10 @@ onMounted(load);
 </style>
 
 <style scoped>
+.stations { background: var(--bg); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+.station { display: grid; grid-template-columns: 150px 1fr auto; gap: 8px; align-items: center; }
+.station .st-cats { min-width: 0; }
+@media (max-width: 560px) { .station { grid-template-columns: 1fr auto; } .station .st-cats { grid-column: 1 / -1; } }
 .st-tools { margin-bottom: 14px; }
 .st-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; align-items: start; }
 .st-card { position: relative; display: flex; flex-direction: column; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; cursor: pointer; overflow: hidden; transition: transform .15s ease, box-shadow .15s ease, border-color .15s; }

@@ -604,7 +604,10 @@ async function complete(payments: PayLine[], changeIn: ChangeMode = 'MIXED') {
     cart.lines.forEach((l) => catalog.deduct(l.productId, l.quantity));
     receipt.value = sale;
     showDone(sale);
-    if ((store.value as any)?.printAuto) printSale(sale, storeSlips.value);
+    if ((store.value as any)?.printAuto) {
+      slipsPrintedFor.value = saleKey(sale);
+      printSale(sale, storeSlips.value);
+    }
     payment.value = false;
     receiptDlg.value = true;
     Object.assign(cart, newCart());
@@ -639,7 +642,7 @@ async function saveOffline(body: any, payments: { method: string; amount: number
     store: store.value,
     cashier: { fullName: auth.user?.fullName },
     customer: cart.customer,
-    items: cart.lines.map((l, i) => ({ name: l.name, nameKm: l.nameKm, quantity: l.quantity, unitPrice: l.price, discount: t.lines[i].discount, lineTotal: t.lines[i].total, promotion: promos.value[i]?.name ? { name: promos.value[i].name } : null, modifiers: l.modifiers, note: l.note })),
+    items: cart.lines.map((l, i) => ({ productId: l.productId, categoryId: l.categoryId ?? null, name: l.name, nameKm: l.nameKm, quantity: l.quantity, unitPrice: l.price, discount: t.lines[i].discount, lineTotal: t.lines[i].total, promotion: promos.value[i]?.name ? { name: promos.value[i].name } : null, modifiers: l.modifiers, note: l.note })),
     orderType: store.value?.hasKitchen ? cart.orderType : undefined, tableNo: cart.tableNo,
     subtotal: t.subtotal, discountTotal: t.discountTotal, taxTotal: t.taxTotal, total: t.total,
     pointsRedeemed: 0, pointsDiscount: 0, payments,
@@ -655,9 +658,37 @@ async function saveOffline(body: any, payments: { method: string; amount: number
 const slipSale = ref<any>(null);
 const slipCustomer = ref<HTMLElement | null>(null);
 const slipCashier = ref<HTMLElement | null>(null);
-const slipKitchen = ref<HTMLElement | null>(null);
 const printing = ref(false);
 type SlipKind = Slip['kind'];
+
+// Kitchen tickets: one per kitchen station (only its categories), or one with every item when the store has no stations
+type KTicket = { id: string | null; name: string | null; items: any[] };
+type Station = { id: string; name: string; categoryIds: string[] };
+const stations = computed<Station[]>(() => ((store.value as any)?.kitchenStations ?? []).filter((st: Station) => st.categoryIds?.length));
+const slipTickets = ref<KTicket[]>([]);
+let slipKitchenEls: HTMLElement[] = [];
+const setKitchenEl = (i: number) => (el: any) => { if (el) slipKitchenEls[i] = el as HTMLElement; };
+/** The category and all categories under it. */
+function withSubcategories(ids: string[]) {
+  const all = new Set(ids);
+  const todo = [...ids];
+  while (todo.length) {
+    const id = todo.pop();
+    for (const c of categories.value) if (c.parentId === id && !all.has(c.id)) { all.add(c.id); todo.push(c.id); }
+  }
+  return all;
+}
+const productCategory = computed(() => new Map(catalog.items.value.map((p) => [p.id, p.categoryId ?? null])));
+function kitchenTicketsFor(sale: any): KTicket[] {
+  const items = sale?.items ?? [];
+  if (!stations.value.length) return [{ id: null, name: null, items }];
+  return stations.value
+    .map((st) => {
+      const cats = withSubcategories(st.categoryIds);
+      return { id: st.id, name: st.name, items: items.filter((i: any) => { const c = i.categoryId ?? productCategory.value.get(i.productId) ?? null; return !!c && cats.has(c); }) };
+    })
+    .filter((t) => t.items.length); // a station with nothing to make prints nothing; items in no station are not printed
+}
 /** The slips this store prints after a sale */
 const storeSlips = computed<SlipKind[]>(() => {
   const st: any = store.value ?? {};
@@ -667,14 +698,22 @@ const storeSlips = computed<SlipKind[]>(() => {
   if (st.printKitchen) k.push('kitchen');
   return k;
 });
-async function printSale(sale: any, kinds: SlipKind[]) {
+async function printSale(sale: any, kinds: SlipKind[], tickets?: KTicket[]) {
   if (!sale || !kinds.length) return;
   printing.value = true;
   slipSale.value = sale;
+  slipKitchenEls = [];
+  slipTickets.value = kinds.includes('kitchen') ? tickets ?? kitchenTicketsFor(sale) : [];
   await nextTick();
   try {
-    const els = { customer: slipCustomer.value, cashier: slipCashier.value, kitchen: slipKitchen.value };
-    const slips = kinds.map((kind) => ({ kind, el: els[kind] })).filter((x): x is Slip => !!x.el);
+    const slips: Slip[] = [];
+    for (const kind of kinds) {
+      if (kind === 'kitchen') slipTickets.value.forEach((t, i) => slipKitchenEls[i] && slips.push({ kind, station: t.id, el: slipKitchenEls[i] }));
+      else {
+        const el = kind === 'customer' ? slipCustomer.value : slipCashier.value;
+        if (el) slips.push({ kind, el });
+      }
+    }
     await printSlips(slips);
   } catch (e) {
     notify.error(`Printing failed: ${e instanceof Error ? e.message : String(e)}. The sale is saved; press Print to try again.`);
@@ -682,20 +721,28 @@ async function printSale(sale: any, kinds: SlipKind[]) {
     printing.value = false;
   }
 }
+/** The sale whose slips (kitchen tickets too) were already printed: Print again only reprints the customer receipt. */
+const slipsPrintedFor = ref<string | null>(null);
+const saleKey = (s: any) => String(s?.id ?? s?.clientRef ?? s?.receiptNo ?? '');
 function printReceipt() {
-  printSale(receipt.value, ['customer']);
+  const key = saleKey(receipt.value);
+  const first = slipsPrintedFor.value !== key;
+  slipsPrintedFor.value = key;
+  // first press (no automatic printing): the store's slips, kitchen tickets included; then only the customer receipt
+  printSale(receipt.value, first && storeSlips.value.length ? storeSlips.value : ['customer']);
 }
 
 // Printers of this till (QZ Tray)
 const printersDlg = ref(false);
 const printerList = ref<string[]>([]);
 const tillPrinters = reactive(loadPrinters());
+const saveTill = () => savePrinters({ receipt: tillPrinters.receipt, kitchen: tillPrinters.kitchen, stations: { ...tillPrinters.stations } });
 async function openPrinters() {
   printersDlg.value = true;
   printerList.value = await listPrinters().catch(() => []);
 }
 function savePrinterChoice() {
-  savePrinters({ receipt: tillPrinters.receipt, kitchen: tillPrinters.kitchen });
+  saveTill();
   notify.success('Printers saved for this till');
   printersDlg.value = false;
 }
@@ -704,9 +751,9 @@ const testSale = computed(() => ({
   receiptNo: 'TEST-0001', queueNo: 'A000', orderType: 'TAKEAWAY', createdAt: new Date().toISOString(), store: store.value, cashier: { fullName: auth.user?.fullName },
   items: [{ name: 'Test print', quantity: 1, unitPrice: 0, lineTotal: 0, modifiers: [], note: 'Printer works' }], subtotal: 0, discountTotal: 0, taxTotal: 0, total: 0, payments: [],
 }));
-async function testPrint(kind: SlipKind) {
-  savePrinters({ receipt: tillPrinters.receipt, kitchen: tillPrinters.kitchen });
-  await printSale(testSale.value, [kind]);
+async function testPrint(kind: SlipKind, st?: Station) {
+  saveTill();
+  await printSale(testSale.value, [kind], kind === 'kitchen' ? [{ id: st?.id ?? null, name: st?.name ?? null, items: testSale.value.items }] : undefined);
 }
 function nextSale() {
   receiptDlg.value = false;
@@ -1194,7 +1241,7 @@ async function logout() {
     <div v-if="slipSale" class="slips-offscreen" aria-hidden="true">
       <div ref="slipCustomer" class="slip"><PosReceipt :sale="slipSale" :currency="cur" /></div>
       <div ref="slipCashier" class="slip"><PosReceipt :sale="slipSale" :currency="cur" copy-label="CASHIER COPY" /></div>
-      <div ref="slipKitchen" class="slip"><KitchenTicket :sale="slipSale" /></div>
+      <div v-for="(t, i) in slipTickets" :key="t.id ?? 'all'" :ref="setKitchenEl(i)" class="slip"><KitchenTicket :sale="{ ...slipSale, items: t.items }" :station="t.name" /></div>
     </div>
 
     <!-- Printers of this till -->
@@ -1207,16 +1254,26 @@ async function logout() {
           Until then slips use the browser's printing (the default printer).
         </Message>
         <div class="field"><label for="pr-receipt">Receipt printer (customer receipt, cashier copy)</label>
-          <Select input-id="pr-receipt" v-model="tillPrinters.receipt" :options="printerOptions" option-label="l" option-value="v" /></div>
-        <div class="field"><label for="pr-kitchen">Kitchen printer (kitchen ticket)</label>
-          <Select input-id="pr-kitchen" v-model="tillPrinters.kitchen" :options="printerOptions" option-label="l" option-value="v" />
+          <Select input-id="pr-receipt" v-model="tillPrinters.receipt" :options="printerOptions" option-label="l" option-value="v" placeholder="Browser printing (default printer)" /></div>
+        <template v-if="stations.length">
+          <div v-for="st in stations" :key="st.id" class="field" data-test="station-printer">
+            <label :for="'pr-st-' + st.id">{{ st.name }} printer <span class="hint">(kitchen tickets for {{ st.name }})</span></label>
+            <div class="row" style="gap: 6px">
+              <Select :input-id="'pr-st-' + st.id" v-model="tillPrinters.stations[st.id]" :options="printerOptions" option-label="l" option-value="v" placeholder="Browser printing (default printer)" style="flex: 1" />
+              <Button label="Test" icon="pi pi-print" severity="secondary" outlined size="small" :loading="printing" @click="testPrint('kitchen', st)" />
+            </div>
+          </div>
+          <span class="hint">Each station prints only its own categories (set in Stores → edit → Printing). Items in no station are not printed.</span>
+        </template>
+        <div v-else class="field"><label for="pr-kitchen">Kitchen printer (kitchen ticket)</label>
+          <Select input-id="pr-kitchen" v-model="tillPrinters.kitchen" :options="printerOptions" option-label="l" option-value="v" placeholder="Browser printing (default printer)" />
           <span class="hint">Leave on the receipt printer's choice if the kitchen has no printer of its own.</span></div>
         <div class="small muted">This store prints after each sale: <b>{{ storeSlips.length ? storeSlips.map((k) => ({ customer: 'customer receipt', cashier: 'cashier copy', kitchen: 'kitchen ticket' })[k]).join(', ') : 'nothing' }}</b>{{ (store as any)?.printAuto ? ', automatically' : ', when Print is pressed' }}. Change it in Stores → edit → Printing.</div>
         <div class="row" style="flex-wrap: wrap; gap: 6px">
           <Button label="Check again" icon="pi pi-refresh" text size="small" @click="openPrinters" />
           <span style="flex: 1" />
           <Button label="Test receipt" icon="pi pi-print" severity="secondary" outlined size="small" :loading="printing" @click="testPrint('customer')" />
-          <Button label="Test kitchen" icon="pi pi-print" severity="secondary" outlined size="small" :loading="printing" @click="testPrint('kitchen')" />
+          <Button v-if="!stations.length" label="Test kitchen" icon="pi pi-print" severity="secondary" outlined size="small" :loading="printing" @click="testPrint('kitchen')" />
           <Button label="Save" icon="pi pi-check" size="small" @click="savePrinterChoice" />
         </div>
       </div>
