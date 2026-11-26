@@ -5,13 +5,13 @@ import { localName } from '@/i18n';
 import { dateTime, qty } from '@/utils/format';
 import { optionsText } from '@/utils/modifiers';
 
-defineProps<{ sale: any }>();
+defineProps<{ sale: any; station?: string | null }>();
 const type = (s: any) => (s.orderType === 'DINE_IN' ? 'DINE-IN' : s.orderType === 'PICKUP' ? 'PICKUP' : 'TAKEAWAY');
 </script>
 
 <template>
   <div class="kt">
-    <div class="head">KITCHEN · {{ sale.store?.name }}</div>
+    <div class="head">{{ station ? station.toUpperCase() : 'KITCHEN' }} · {{ sale.store?.name }}</div>
     <div class="no">{{ sale.queueNo || sale.receiptNo }}</div>
     <div class="type">{{ type(sale) }}<template v-if="sale.orderType === 'DINE_IN' && sale.tableNo"> · TABLE {{ sale.tableNo }}</template></div>
     <div class="meta">{{ dateTime(sale.createdAt) }} · {{ sale.cashier?.fullName }}</div>

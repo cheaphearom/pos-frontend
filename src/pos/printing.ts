@@ -9,7 +9,8 @@
  * "Allow?" once its certificate is trusted. Without QZ Tray the slips go to the browser's normal printing
  * (the default printer), one after the other.
  *
- * Which printer is which is kept on this computer only (each till has its own printers).
+ * Which printer is which is kept on this computer only (each till has its own printers), also the printer of each
+ * kitchen station (Bar, Kitchen…) when the store prints kitchen tickets per station.
  */
 import { ref } from 'vue';
 import qz from 'qz-tray';
@@ -21,12 +22,12 @@ export type QzState = 'off' | 'connecting' | 'on' | 'missing';
 export const qzState = ref<QzState>('off');
 
 const KEY = 'pos.printers';
-export interface TillPrinters { receipt: string | null; kitchen: string | null }
+export interface TillPrinters { receipt: string | null; kitchen: string | null; stations: Record<string, string | null> }
 export function loadPrinters(): TillPrinters {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-    return { receipt: v?.receipt ?? null, kitchen: v?.kitchen ?? null };
-  } catch { return { receipt: null, kitchen: null }; }
+    return { receipt: v?.receipt ?? null, kitchen: v?.kitchen ?? null, stations: v?.stations && typeof v.stations === 'object' ? v.stations : {} };
+  } catch { return { receipt: null, kitchen: null, stations: {} }; }
 }
 export function savePrinters(p: TillPrinters) {
   try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* private window */ }
@@ -81,7 +82,14 @@ export async function printSlipTo(printer: string, el: HTMLElement) {
   await qz.print(config, [{ type: 'pixel', format: 'image', flavor: 'base64', data }]);
 }
 
-export interface Slip { kind: 'customer' | 'cashier' | 'kitchen'; el: HTMLElement }
+/** `station`: a kitchen ticket for one kitchen station (its printer, else the kitchen printer, else the receipt printer). */
+export interface Slip { kind: 'customer' | 'cashier' | 'kitchen'; el: HTMLElement; station?: string | null }
+
+/** The printer a slip goes to on this till (null = browser printing). */
+export function printerFor(s: Pick<Slip, 'kind' | 'station'>, printers: TillPrinters = loadPrinters()): string | null {
+  if (s.kind !== 'kitchen') return printers.receipt;
+  return (s.station ? printers.stations[s.station] : null) ?? printers.kitchen ?? printers.receipt;
+}
 
 /**
  * Prints the slips: the kitchen ticket on the kitchen printer, the others on the receipt printer.
@@ -92,9 +100,9 @@ export async function printSlips(slips: Slip[]): Promise<{ direct: number; brows
   const printers = loadPrinters();
   const browser: HTMLElement[] = [];
   let direct = 0;
-  const on = slips.length && (printers.receipt || printers.kitchen) ? await connectQz() : false;
+  const on = slips.length && slips.some((s) => printerFor(s, printers)) ? await connectQz() : false;
   for (const s of slips) {
-    const target = s.kind === 'kitchen' ? printers.kitchen ?? printers.receipt : printers.receipt;
+    const target = printerFor(s, printers);
     if (on && target) {
       await printSlipTo(target, s.el);
       direct++;
