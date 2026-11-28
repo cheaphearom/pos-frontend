@@ -66,7 +66,21 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
   // POS reload: display reconnects and shows the cart again
   await pos.reload(); await pos.waitForSelector('.tile'); await pos.waitForTimeout(1500);
   ok((await disp.locator('.line').count()) === 1 && (await pos.getByRole('button', { name: 'Display on' }).count()) === 1, 'after POS reload the display reconnects');
-  await disp.close(); await pos.waitForTimeout(12500);
+  // Tapping "Display on" turns the display off: the window closes and the POS shows it at once
+  await pos.getByRole('button', { name: 'Display on' }).click(); await pos.waitForTimeout(800);
+  ok(disp.isClosed(), 'tapping "Display on" closes the customer display window');
+  ok(await pos.getByRole('button', { name: 'Customer display' }).count() === 1, 'the POS shows the display is off at once');
+  // A display opened by hand (the POS cannot close it) goes dark, and wakes up when the POS turns it on again
+  const sid = await pos.evaluate(() => localStorage.getItem('pos.currentStoreId'));
+  const hand = await ctx.newPage(); await hand.goto(W + '/display?store=' + sid); await hand.waitForTimeout(1500);
+  ok(await pos.getByRole('button', { name: 'Display on' }).count() === 1, 'a display opened by hand connects');
+  await pos.getByRole('button', { name: 'Display on' }).click(); await pos.waitForTimeout(800);
+  ok(await hand.locator('[data-test=display-off]').count() === 1, 'a display the POS cannot close goes dark (standby)');
+  ok(await pos.getByRole('button', { name: 'Customer display' }).count() === 1, 'POS shows it off');
+  await pos.getByRole('button', { name: 'Customer display' }).click(); await pos.waitForTimeout(1200);
+  ok(await hand.locator('[data-test=display-off]').count() === 0 && (await hand.locator('.line').count()) === 1, 'turning it on again wakes the same screen with the cart');
+  ok(await pos.getByRole('button', { name: 'Display on' }).count() === 1, 'POS shows it on again');
+  await hand.close(); await pos.waitForTimeout(12500);
   ok(await pos.getByRole('button', { name: 'Customer display' }).count() === 1, 'closing the display is noticed by the POS');
 
   // portrait tablet-style display

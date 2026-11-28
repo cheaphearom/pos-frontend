@@ -14,6 +14,8 @@ import { registerComponents } from './components/register';
 import { router } from './router';
 import './styles.css';
 import { startTranslator } from './i18n';
+import { installOverlayGuard } from './utils/overlayGuard';
+import { installTouchFocus } from './utils/touchFocus';
 
 // LOK blue brand: deep blue #1E3A8A with bright blue #3B82F6, cool greys (slate) for borders and inputs.
 const stone = {
@@ -49,6 +51,8 @@ app.directive('tooltip', Tooltip);
 registerComponents(app);
 app.mount('#app');
 startTranslator(); // ខ្មែរ / English (src/i18n)
+installTouchFocus(); // touchscreens: device keyboard only when a field is tapped
+installOverlayGuard(); // no frozen screen from a pop-up backdrop left behind
 
 // Offline support (production builds only; needs HTTPS or localhost).
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

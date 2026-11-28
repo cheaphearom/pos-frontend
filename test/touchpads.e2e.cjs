@@ -30,7 +30,9 @@ let fails = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + ms
     await tap(dlg, 'Open'); await page.waitForTimeout(800);
   }
   ok(await page.getByText(/Shift since/).count() > 0, 'shift is open');
-  ok(await bigKb.count() === 1, 'no popup: big keyboard shown');
+  ok(await bigKb.count() === 0, 'no popup: big keyboard stays hidden until the search box is tapped');
+  await page.locator('.search-input').click(); await page.waitForTimeout(200);
+  ok(await bigKb.count() === 1, 'tapping the search box shows the big keyboard');
 
   await page.locator('.tile', { hasText: 'Bananas' }).click(); await page.waitForTimeout(300);
   const total = async () => (await page.locator('.r.total .num').textContent()).trim();

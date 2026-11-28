@@ -51,12 +51,35 @@ function onStorage(e: StorageEvent) {
 }
 
 // ── Messages from the POS
+// Standby: the POS turned the display off but the browser would not let this window close itself
+// (e.g. it was opened by hand or in kiosk mode). The screen goes dark until the POS turns it on again.
+const standby = ref(false);
 channel.onMessage((msg) => {
   if (msg.type === 'state') {
     state.value = msg.state;
     connected.value = true;
-  } else if (msg.type === 'hello') channel.send({ type: 'hello' });
+  } else if (msg.type === 'close') turnOff();
+  else if (msg.type === 'wake') turnOn();
+  else if (msg.type === 'hello' && !standby.value) channel.send({ type: 'hello' });
 });
+function turnOff() {
+  if (standby.value) return;
+  standby.value = true;
+  clearInterval(heartbeat);
+  bye();
+  window.close(); // works when the POS opened this window
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+}
+function turnOn() {
+  if (!standby.value) return;
+  standby.value = false;
+  startHeartbeat();
+  channel.send({ type: 'hello' });
+}
+function startHeartbeat() {
+  clearInterval(heartbeat);
+  heartbeat = setInterval(() => channel.send({ type: 'ping' }), 4000); // lets the POS know this screen is still open
+}
 
 const mode = computed(() => state.value?.mode ?? 'idle');
 const lines = computed(() => state.value?.lines ?? []);
@@ -101,7 +124,7 @@ async function fullscreen() {
   } catch { /* not allowed */ }
 }
 const onFs = () => (isFullscreen.value = !!document.fullscreenElement);
-const bye = () => channel.send({ type: 'bye' });
+function bye() { channel.send({ type: 'bye' }); }
 
 onMounted(() => {
   document.title = 'Customer display';
@@ -109,7 +132,7 @@ onMounted(() => {
   tick = setInterval(() => (now.value = new Date()), 1000);
   rotate = setInterval(() => promoIndex.value++, 6000);
   slideTimer = setInterval(() => slideIndex.value++, 8000);
-  heartbeat = setInterval(() => channel.send({ type: 'ping' }), 4000); // lets the POS know this screen is still open
+  startHeartbeat();
   window.addEventListener('storage', onStorage);
   window.addEventListener('pagehide', bye);
   document.addEventListener('fullscreenchange', onFs);
@@ -128,7 +151,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="cd" :class="['m-' + mode, { night: dark }]">
+  <div v-if="standby" class="off" data-test="display-off" />
+  <div v-else class="cd" :class="['m-' + mode, { night: dark }]">
     <button v-if="!isFullscreen" class="fs" @click="fullscreen"><i class="pi pi-window-maximize" /> Full screen</button>
     <div v-if="!channel.supported" class="warn">This browser cannot connect to the POS. Use Chrome or Edge.</div>
 
@@ -264,6 +288,7 @@ onBeforeUnmount(() => {
   height: 100vh; overflow: hidden; background: linear-gradient(180deg, var(--top) 0%, var(--bg) 100%); color: var(--text);
   font-size: clamp(16px, 1.6vw, 26px); position: relative; user-select: none;
 }
+.off { position: fixed; inset: 0; background: #000; cursor: none; }
 .fs { position: absolute; top: 14px; right: 14px; z-index: 5; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; opacity: .35; }
 .fs:hover { opacity: 1; }
 /* Night: deep espresso, warm caramel accents (when the POS is in dark mode) */

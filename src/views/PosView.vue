@@ -266,7 +266,8 @@ function confirmTable() {
   cart.tableNo = tableText.value.trim();
   tableDlg.value = false;
 }
-const kbOpen = ref(true);
+/** The on-screen keyboard shows only when the cashier taps the search box, not after every product tap or scroll. */
+const kbOpen = ref(false);
 // Big mode: the whole POS (and its pop-up windows) larger, still fitting the screen
 const big = useBigMode();
 function applyBig(on: boolean) {
@@ -959,9 +960,23 @@ const displayWatch = setInterval(() => {
 }, 2000);
 display.send({ type: 'hello' }); // ask an already-open display to say hello back
 
-async function openDisplay() {
-  const w = await openDisplayWindow(app.currentStoreId!);
-  if (!w) notify.error('The browser blocked the window. Allow pop-ups for this site and try again.');
+let displayWin: Window | null = null;
+/** Display off: open it (or wake a display left on standby). Display on: turn it off. */
+async function toggleDisplay() {
+  if (displayConnected.value) return closeDisplay();
+  // A display window still open on standby (closed from here before) wakes up and says hello.
+  const before = displaySeen;
+  display.send({ type: 'wake' });
+  await new Promise((r) => setTimeout(r, 400));
+  if (displaySeen > before) return;
+  displayWin = await openDisplayWindow(app.currentStoreId!);
+  if (!displayWin) notify.error('The browser blocked the window. Allow pop-ups for this site and try again.');
+}
+function closeDisplay() {
+  display.send({ type: 'close' });
+  try { displayWin?.close(); } catch { /* not ours */ }
+  displayWin = null;
+  displayConnected.value = false;
 }
 
 // ───────────── Offline queue panel ─────────────
@@ -1117,7 +1132,8 @@ async function logout() {
       <Button v-if="shift" icon="pi pi-file" label="X report" size="small" text :disabled="!online" v-tooltip.bottom="'Print the shift so far'" @click="openX" />
       <Button v-if="!auth.isManager" icon="pi pi-receipt" label="Sales" size="small" text v-tooltip.bottom="'Your sales: reprint, refund or void (manager PIN)'" @click="router.push('/sales')" />
       <Button icon="pi pi-print" label="Printers" size="small" text v-tooltip.bottom="'Receipt and kitchen printers of this till'" @click="openPrinters" />
-      <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text v-tooltip.bottom="'Open the customer-facing screen'" @click="openDisplay" />
+      <Button :icon="displayConnected ? 'pi pi-desktop' : 'pi pi-external-link'" :label="displayConnected ? 'Display on' : 'Customer display'" size="small" :severity="displayConnected ? 'success' : 'secondary'" text
+        :aria-pressed="displayConnected" v-tooltip.bottom="displayConnected ? 'Turn the customer screen off' : 'Open the customer-facing screen'" data-test="display-toggle" @click="toggleDisplay" />
       </div>
       <Button v-if="queue.length" :label="`${queue.length} to upload`" :icon="syncingQueue ? 'pi pi-spin pi-sync' : 'pi pi-cloud-upload'" size="small" :severity="failedCount ? 'danger' : 'warn'" outlined @click="queueDlg = true" />
       <Button v-if="shift" class="shift-chip" :label="(big ? '' : 'Shift since ') + new Date(shift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })" icon="pi pi-clock" size="small" severity="secondary" outlined v-tooltip.bottom="auth.isManager ? 'Shift summary in the admin' : 'Your shift so far (X report)'" @click="auth.isManager ? router.push(`/shifts?open=${shift.id}`) : openX()" />
@@ -1134,9 +1150,9 @@ async function logout() {
         <div class="search">
           <i class="pi pi-search" />
           <input ref="searchEl" v-model="search" class="search-input" placeholder="Scan barcode or search… (F2)   e.g. 3*8850000001 for 3 pcs"
-            autocomplete="off" :inputmode="touch ? 'none' : undefined" @keydown.enter.prevent="onSearchEnter" @keydown.esc="search = ''" @focus="kbOpen = true" @click="kbOpen = true" />
+            autocomplete="off" :inputmode="touch ? 'none' : undefined" @keydown.enter.prevent="onSearchEnter" @keydown.esc="search = ''" @click="kbOpen = true" />
           <button v-if="search" type="button" class="search-btn" aria-label="Clear search" @mousedown.prevent @click="search = ''"><i class="pi pi-times" /></button>
-          <KeyboardToggle @changed="kbOpen = true; focusSearch()" />
+          <KeyboardToggle @changed="(on) => { kbOpen = on; focusSearch(); }" />
           <span v-if="catalog.syncing.value" class="pi pi-spin pi-sync muted" v-tooltip="'Updating products'" />
         </div>
         <div class="cats">
@@ -1147,7 +1163,7 @@ async function logout() {
           <button class="chip" :class="{ on: !subCategory }" @click="subCategory = null">All {{ localName(categories.find((c) => c.id === category)!) }}</button>
           <button v-for="c in subCats" :key="c.id" class="chip" :class="{ on: subCategory === c.id }" @click="subCategory = subCategory === c.id ? null : c.id">{{ localName(c) }}</button>
         </div>
-        <div class="tiles">
+        <div class="tiles" @scroll.passive="kbOpen = false" @touchmove.passive="kbOpen = false">
           <button v-for="p in results" :key="p.id" class="tile" :class="{ out: p.trackStock && Number(p.stock) <= 0 }" :style="{ '--cat': catColor(p.categoryId) }" @click="addProduct(p); focusSearch()">
             <img v-if="p.imageUrl && !badImg.has(p.imageUrl)" :src="p.imageUrl" alt="" class="tile-img" loading="lazy" @error="badImg.add(p.imageUrl!)" />
             <span v-else class="tile-ini" aria-hidden="true" :data-ini="initials(localName(p as any))" />
@@ -1664,7 +1680,7 @@ async function logout() {
 
 <style scoped>
 .khr-total { font-weight: 700; color: var(--text-2); }
-.pos-screen { height: calc(100vh / var(--pos-zoom, 1)); display: flex; flex-direction: column; background: var(--bg); }
+.pos-screen { height: calc(100vh / var(--pos-zoom, 1)); height: calc(100dvh / var(--pos-zoom, 1)); display: flex; flex-direction: column; background: var(--bg); }
 
 /* Top bar */
 .bar { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); position: relative; z-index: 2; }

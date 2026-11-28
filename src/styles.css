@@ -107,7 +107,18 @@ a { color: var(--p-primary-color); }
 /* POS big mode (cashier's choice): the POS screen and its pop-up windows are zoomed; the screen keeps fitting
    the window because its size is divided by the zoom. */
 html.pos-big .pos-screen { zoom: var(--pos-zoom, 1); width: calc(100vw / var(--pos-zoom, 1)); }
-html.pos-big .p-dialog { zoom: var(--pos-zoom, 1); max-height: calc(90vh / var(--pos-zoom, 1)); }
+html.pos-big .p-dialog { zoom: var(--pos-zoom, 1); max-height: calc(90vh / var(--pos-zoom, 1)); max-height: calc(90dvh / var(--pos-zoom, 1)); }
+
+/* ── POS on touchscreen tills: pop-ups always fit the visible screen (also with the device keyboard up); a long
+      form scrolls inside its window, and scrolling never drags the page or the window itself around. */
+html:has(.pos-screen), html:has(.pos-screen) body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+body:not(.admin-ui) .p-dialog-mask { overscroll-behavior: contain; }
+body:not(.admin-ui) .p-dialog { max-height: 90vh; max-height: 90dvh; max-width: 98vw; }
+html.pos-big body:not(.admin-ui) .p-dialog { max-height: calc(90dvh / var(--pos-zoom, 1)); max-width: calc(98vw / var(--pos-zoom, 1)); }
+body:not(.admin-ui) .p-dialog .p-dialog-content { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; min-height: 0; }
+/* fields never wider than their window */
+body:not(.admin-ui) .p-dialog .p-dialog-content > *, body:not(.admin-ui) .p-dialog .field, body:not(.admin-ui) .p-dialog form > * { min-width: 0; }
+body:not(.admin-ui) .p-dialog .p-inputtext, body:not(.admin-ui) .p-dialog .p-inputnumber, body:not(.admin-ui) .p-dialog .p-select, body:not(.admin-ui) .p-dialog .p-password { max-width: 100%; }
 /* Big mode top bar: buttons keep their full label on one line; only the store name shortens; "Online" is a dot */
 html.pos-big .pos-screen .bar .p-button-label { white-space: nowrap; }
 html.pos-big .pos-screen .bar .p-button, html.pos-big .pos-screen .bar .net, html.pos-big .pos-screen .bar .tools { flex-shrink: 0; }
