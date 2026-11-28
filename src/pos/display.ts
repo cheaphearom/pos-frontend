@@ -53,7 +53,8 @@ export interface DisplayState {
   done?: { total: number; paid: number; change: number; changeUsd?: number; changeKhr?: number; receiptNo: string; pointsEarned: number; offline: boolean; queueNo?: string | null } | null;
 }
 
-type Msg = { type: 'state'; state: DisplayState } | { type: 'hello' } | { type: 'ping' } | { type: 'bye' };
+/** close: the POS turns the display off; wake: the POS turns it back on (a display left on standby answers with hello). */
+type Msg = { type: 'state'; state: DisplayState } | { type: 'hello' } | { type: 'ping' } | { type: 'bye' } | { type: 'close' } | { type: 'wake' };
 
 export function displayChannel(storeId: string) {
   const ch = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(`pos-display:${storeId}`) : null;
